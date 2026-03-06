@@ -164,6 +164,61 @@ const HOME_FAQ_ITEMS = [
   }
 ];
 
+const GOOGLE_REVIEWS_URL =
+  "https://www.google.com/maps/place/La+boutique+de+la+limpieza/@-34.6017654,-58.4449405,15.38z/data=!4m8!3m7!1s0x95bcca0b7931a1d1:0x1e26299fc19f8d61!8m2!3d-34.5997954!4d-58.4429719!9m1!1b1!16s%2Fg%2F11c61hcmzy";
+
+const HOME_GOOGLE_REVIEWS = [
+  {
+    author: "dylan de caso",
+    rating: 5,
+    when: "Hace 4 meses",
+    text:
+      "Hoy hice un pedido desde la pagina web para retirar en la tienda y funciono 10/10. Al llegar, el pedido estaba listo tal como me habian indicado. Ademas, la atencion de Griselda fue excelente: amable, rapida y muy profesional."
+  },
+  {
+    author: "Vanina Varela",
+    rating: 5,
+    when: "Hace 4 meses",
+    text:
+      "Excelente atencion y muy buenos productos y precios. Lo recomiendo."
+  },
+  {
+    author: "damian kouchoyan",
+    rating: 5,
+    when: "Hace 4 meses",
+    text:
+      "Excelente atencion, variedad de productos, super recomendable."
+  },
+  {
+    author: "gaston costabella",
+    rating: 5,
+    when: "Hace 4 meses",
+    text:
+      "Hice un pedido online para retirar y fue una muy buena experiencia. Aproveche el 10% de descuento en la primera compra y funciono perfecto."
+  },
+  {
+    author: "William Tamiche",
+    rating: 5,
+    when: "Hace 4 meses",
+    text:
+      "Excelente tienda, con mucha variedad de productos de limpieza y marcas de calidad. Muy buena atencion tambien."
+  },
+  {
+    author: "Geronimo Loza",
+    rating: 5,
+    when: "Hace 4 meses",
+    text:
+      "Muy buena variedad de productos, encontre todo lo que necesitaba y un sitio web facil de usar."
+  },
+  {
+    author: "J V",
+    rating: 4,
+    when: "Hace 5 anos",
+    text:
+      "Muy buena atencion, arregle todo por WhatsApp e hice la compra perfectamente. Muy buenos precios y variedad."
+  }
+];
+
 function createClientAnalyticsId(prefix) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -5304,6 +5359,79 @@ function App() {
                         </article>
                       );
                     })}
+                  </div>
+                </section>
+              )}
+
+              {isInicioActive && (
+                <section className="home-google-reviews" aria-label="Comentarios de Google">
+                  <div className="home-google-reviews-shell">
+                    <div className="home-google-reviews-bubbles" aria-hidden="true">
+                      <span className="home-google-bubble home-google-bubble-1" />
+                      <span className="home-google-bubble home-google-bubble-2" />
+                      <span className="home-google-bubble home-google-bubble-3" />
+                    </div>
+
+                    <div className="home-google-reviews-header">
+                      <p className="home-google-reviews-kicker">Resenas verificadas</p>
+                      <h2>Tu opinion nos importa</h2>
+                      <p className="home-google-reviews-lead">
+                        Ya compraste en <strong>La Boutique de la Limpieza</strong>?
+                      </p>
+                      <p>Calificacion general 4.6/5 basada en 46 opiniones publicas.</p>
+                      <p className="home-google-reviews-help">
+                        Tu resena nos ayuda a mejorar y tambien le sirve a otros clientes para conocernos.
+                      </p>
+
+                      <div className="home-google-reviews-metrics" aria-label="Resumen de resenas">
+                        <article className="home-google-reviews-metric">
+                          <strong>4.6</strong>
+                          <span>Promedio</span>
+                        </article>
+                        <article className="home-google-reviews-metric">
+                          <strong>46</strong>
+                          <span>Opiniones</span>
+                        </article>
+                        <article className="home-google-reviews-metric">
+                          <strong>93%</strong>
+                          <span>4 o 5 estrellas</span>
+                        </article>
+                      </div>
+
+                      <a
+                        className="home-google-reviews-link"
+                        href={GOOGLE_REVIEWS_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Deja tu resena en Google ↗
+                      </a>
+                    </div>
+
+                    <div className="home-google-reviews-list">
+                      {HOME_GOOGLE_REVIEWS.map((review) => (
+                        <article
+                          key={`${review.author}-${review.when}`}
+                          className="home-google-review-card"
+                        >
+                          <header className="home-google-review-head">
+                            <div className="home-google-review-author">
+                              <span className="home-google-review-avatar" aria-hidden="true">
+                                {review.author.charAt(0).toUpperCase()}
+                              </span>
+                              <strong>{review.author}</strong>
+                            </div>
+                            <span>{review.when}</span>
+                          </header>
+
+                          <p className="home-google-review-stars" aria-label={`${review.rating} de 5`}>
+                            {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                          </p>
+
+                          <p>{review.text}</p>
+                        </article>
+                      ))}
+                    </div>
                   </div>
                 </section>
               )}
