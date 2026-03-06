@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "export:db:snapshot": "node src/scripts/export-db-snapshot.js",
     "create:user:default-client": "node src/scripts/create-default-client-user.js",
     "import:wix": "node src/scripts/import-wix-products.js",
     "import:wix:orders": "node src/scripts/import-wix-orders.js",
