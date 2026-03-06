@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { bootstrapDatabase } from "./bootstrap.js";
 
 import authRouter from "./routes/auth.js";
@@ -12,8 +13,14 @@ import healthRouter from "./routes/health.js";
 import ordersRouter from "./routes/orders.js";
 import productsRouter from "./routes/products.js";
 import ticketsRouter from "./routes/tickets.js";
+import emailsRouter from "./routes/emails.js";
 
-dotenv.config();
+// Get current file directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from server directory
+dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -60,6 +67,7 @@ app.use("/api/products", productsRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/cart", cartRouter);
 app.use("/api/tickets", ticketsRouter);
+app.use("/api/emails", emailsRouter);
 
 async function startServer() {
   try {
