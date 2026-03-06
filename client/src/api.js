@@ -1,0 +1,772 @@
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+
+function getAuthHeaders(token) {
+  if (!token) {
+    return { "Content-Type": "application/json" };
+  }
+
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`
+  };
+}
+
+function getAuthOnlyHeaders(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function fetchHealth() {
+  const response = await fetch(`${API_URL}/health`);
+
+  if (!response.ok) {
+    throw new Error("No se pudo conectar con el backend");
+  }
+
+  return response.json();
+}
+
+export async function fetchProducts() {
+  const response = await fetch(`${API_URL}/products`);
+
+  if (!response.ok) {
+    throw new Error("No se pudieron cargar los productos");
+  }
+
+  return response.json();
+}
+
+export async function login(email, password) {
+  try {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo iniciar sesión");
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servidor. Verificá que la API esté levantada en puerto 4000.");
+    }
+
+    throw error;
+  }
+}
+
+export async function register(name, email, password, address) {
+  try {
+    const response = await fetch(`${API_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password, address })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo registrar la cuenta");
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servidor. Verificá que la API esté levantada en puerto 4000.");
+    }
+
+    throw error;
+  }
+}
+
+export async function updateMyAddress(token, address) {
+  const response = await fetch(`${API_URL}/auth/me/address`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ address })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo actualizar la dirección");
+  }
+
+  return data;
+}
+
+export async function updateMyProfile(token, profile) {
+  const response = await fetch(`${API_URL}/auth/me/profile`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(profile || {})
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo actualizar el perfil");
+  }
+
+  return data;
+}
+
+export async function createProduct(token, product) {
+  const response = await fetch(`${API_URL}/products`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(product)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo crear el producto");
+  }
+
+  return data;
+}
+
+export async function updateProduct(token, productId, product) {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(product)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo actualizar el producto");
+  }
+
+  return data;
+}
+
+export async function uploadProductMedia(token, files) {
+  const formData = new FormData();
+
+  for (const file of files || []) {
+    formData.append("files", file);
+  }
+
+  const response = await fetch(`${API_URL}/products/media/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron subir las imágenes");
+  }
+
+  return data;
+}
+
+export async function deleteProduct(token, productId) {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(token)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo eliminar el producto");
+  }
+
+  return data;
+}
+
+export async function fetchOrders(token) {
+  const response = await fetch(`${API_URL}/orders`, {
+    headers: getAuthHeaders(token)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar los pedidos");
+  }
+
+  return data;
+}
+
+export async function updateOrderStatus(token, orderId, status) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/status`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ status })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo actualizar el estado del pedido");
+  }
+
+  return data;
+}
+
+export async function ensureOrderInvoice(token, orderId) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/invoice`, {
+    method: "POST",
+    headers: getAuthHeaders(token)
+  });
+
+  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+  let data = null;
+
+  if (contentType.includes("application/json")) {
+    data = await response.json();
+  } else {
+    const bodyText = await response.text();
+    data = bodyText ? { error: bodyText } : {};
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo generar la factura");
+  }
+
+  return data;
+}
+
+export async function fetchProductVariants(productId) {
+  const response = await fetch(`${API_URL}/products/${productId}/variants`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar las variantes");
+  }
+
+  return data;
+}
+
+export async function createProductVariant(token, productId, payload) {
+  const response = await fetch(`${API_URL}/products/${productId}/variants`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo crear la variante");
+  }
+
+  return data;
+}
+
+export async function updateProductVariant(token, productId, variantId, payload) {
+  const response = await fetch(`${API_URL}/products/${productId}/variants/${variantId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo actualizar la variante");
+  }
+
+  return data;
+}
+
+export async function deleteProductVariant(token, productId, variantId) {
+  const response = await fetch(`${API_URL}/products/${productId}/variants/${variantId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(token)
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo eliminar la variante");
+  }
+
+  return data;
+}
+
+export async function fetchLowStockAlerts(token) {
+  const response = await fetch(`${API_URL}/products/alerts/low-stock`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar alertas de stock");
+  }
+
+  return data;
+}
+
+export async function fetchShippingRules(token) {
+  const response = await fetch(`${API_URL}/admin/shipping-rules`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar reglas de envío");
+  }
+
+  return data;
+}
+
+export async function fetchAdminCategories(token) {
+  const response = await fetch(`${API_URL}/admin/categories`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar categorías");
+  }
+
+  return data;
+}
+
+export async function createAdminCategory(token, payload) {
+  const response = await fetch(`${API_URL}/admin/categories`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo crear la categoría");
+  }
+
+  return data;
+}
+
+export async function deleteAdminCategory(token, categoryId) {
+  const response = await fetch(`${API_URL}/admin/categories/${categoryId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo eliminar la categoría");
+  }
+
+  return data;
+}
+
+export async function updateAdminCategory(token, categoryId, payload) {
+  const response = await fetch(`${API_URL}/admin/categories/${categoryId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo actualizar la categoría");
+  }
+
+  return data;
+}
+
+export async function updateShippingRule(token, ruleId, payload) {
+  const response = await fetch(`${API_URL}/admin/shipping-rules/${ruleId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo actualizar la regla");
+  }
+
+  return data;
+}
+
+export async function quoteShipping(zone, subtotal) {
+  const response = await fetch(`${API_URL}/admin/shipping/quote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ zone, subtotal })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo cotizar envío");
+  }
+
+  return data;
+}
+
+export async function fetchPromotions(token) {
+  const response = await fetch(`${API_URL}/admin/promotions`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar promociones");
+  }
+
+  return data;
+}
+
+export async function createPromotion(token, payload) {
+  const response = await fetch(`${API_URL}/admin/promotions`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo crear promoción");
+  }
+
+  return data;
+}
+
+export async function applyPromotion(code, subtotal, items, token = null) {
+  const response = await fetch(`${API_URL}/admin/promotions/apply`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ code, subtotal, items })
+  });
+  const data = await response.json();
+
+  if (response.ok && data?.valid === false) {
+    throw new Error(data.error || "No se pudo aplicar promoción");
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo aplicar promoción");
+  }
+
+  return data;
+}
+
+export async function fetchCustomersHistory(token) {
+  const response = await fetch(`${API_URL}/admin/customers/history`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo obtener historial de clientes");
+  }
+
+  return data;
+}
+
+export async function fetchAdministrators(token) {
+  const response = await fetch(`${API_URL}/admin/administrators`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo obtener administradores");
+  }
+
+  return data;
+}
+
+export async function fetchMembers(token) {
+  const response = await fetch(`${API_URL}/admin/members`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo obtener miembros");
+  }
+
+  return data;
+}
+
+export async function fetchCustomerReorderItems(token, customerId) {
+  const response = await fetch(`${API_URL}/admin/customers/${customerId}/reorder-items`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo obtener recompra rápida");
+  }
+
+  return data;
+}
+
+export async function fetchCustomerActivity(token, customerId) {
+  const response = await fetch(`${API_URL}/admin/customers/${customerId}/activity`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo obtener actividad del cliente");
+  }
+
+  return data;
+}
+
+export async function fetchSalesByProduct(token) {
+  const response = await fetch(`${API_URL}/admin/reports/sales-by-product`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo cargar reporte por producto");
+  }
+
+  return data;
+}
+
+export async function fetchSalesByBrand(token) {
+  const response = await fetch(`${API_URL}/admin/reports/sales-by-brand`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo cargar reporte por marca");
+  }
+
+  return data;
+}
+
+export async function fetchAdminAnalytics(token, period = "30d") {
+  const params = new URLSearchParams();
+
+  if (typeof period === "number" && Number.isFinite(period)) {
+    const safeDays = Math.max(1, Math.min(180, Number(period)));
+    params.set("days", String(safeDays));
+  } else {
+    const normalizedPeriod = String(period || "30d").trim().toLowerCase();
+    params.set("period", normalizedPeriod || "30d");
+  }
+
+  const response = await fetch(`${API_URL}/admin/analytics?${params.toString()}`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar analíticas");
+  }
+
+  return data;
+}
+
+export async function trackAnalyticsEvent(payload = {}) {
+  const endpoint = `${API_URL}/analytics/events`;
+  const body = JSON.stringify(payload || {});
+
+  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+    const blob = new Blob([body], { type: "application/json" });
+    const sent = navigator.sendBeacon(endpoint, blob);
+
+    if (sent) {
+      return { ok: true };
+    }
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function checkoutCart(payload, token = null) {
+  const response = await fetch(`${API_URL}/cart/checkout`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo confirmar la compra");
+  }
+
+  return data;
+}
+
+export async function fetchTickets(token, filters = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  });
+
+  const query = params.toString();
+  const response = await fetch(`${API_URL}/tickets${query ? `?${query}` : ""}`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar tickets");
+  }
+
+  return data;
+}
+
+export async function fetchTicketMetrics(token) {
+  const response = await fetch(`${API_URL}/tickets/metrics`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar métricas de tickets");
+  }
+
+  return data;
+}
+
+export async function createTicket(token, payload, files = []) {
+  const formData = new FormData();
+
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      formData.append(key, String(value));
+    }
+  });
+
+  for (const file of files) {
+    formData.append("files", file);
+  }
+
+  const response = await fetch(`${API_URL}/tickets`, {
+    method: "POST",
+    headers: getAuthOnlyHeaders(token),
+    body: formData
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo crear el ticket");
+  }
+
+  return data;
+}
+
+export async function submitLegalTicket(payload, files = []) {
+  const formData = new FormData();
+
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      formData.append(key, String(value));
+    }
+  });
+
+  for (const file of files) {
+    formData.append("files", file);
+  }
+
+  const response = await fetch(`${API_URL}/tickets/public/legal-request`, {
+    method: "POST",
+    body: formData
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo registrar la solicitud");
+  }
+
+  return data;
+}
+
+export async function updateTicket(token, ticketRef, payload) {
+  const response = await fetch(`${API_URL}/tickets/${ticketRef}`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo actualizar el ticket");
+  }
+
+  return data;
+}
+
+export async function addTicketComment(token, ticketRef, payload, files = []) {
+  const formData = new FormData();
+
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      formData.append(key, String(value));
+    }
+  });
+
+  for (const file of files) {
+    formData.append("files", file);
+  }
+
+  const response = await fetch(`${API_URL}/tickets/${ticketRef}/comments`, {
+    method: "POST",
+    headers: getAuthOnlyHeaders(token),
+    body: formData
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo agregar el comentario");
+  }
+
+  return data;
+}
+
+export async function closeTicket(token, ticketRef) {
+  const response = await fetch(`${API_URL}/tickets/${ticketRef}/close`, {
+    method: "POST",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo cerrar el ticket");
+  }
+
+  return data;
+}
+
+export async function deleteTicket(token, ticketRef) {
+  const response = await fetch(`${API_URL}/tickets/${ticketRef}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo borrar el ticket");
+  }
+
+  return data;
+}

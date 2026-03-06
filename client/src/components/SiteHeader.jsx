@@ -1,0 +1,448 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import CategoriesMenu from "./CategoriesMenu";
+
+export default function SiteHeader({
+  totalItems,
+  searchValue,
+  searchSuggestions,
+  recentSearches,
+  onRemoveRecentSearch,
+  onSearchInputChange,
+  onSearchSubmit,
+  user,
+  onAccountClick,
+  onMyAccountClick,
+  onLogout,
+  onFavoritesClick,
+  onCartClick,
+  onSelectCategory,
+  isAdmin,
+  activeSection,
+  onGoHome,
+  onGoPromotions,
+  onGoAbout,
+  onGoAdmin
+}) {
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+  const searchRef = useRef(null);
+
+  const normalizedInput = String(searchValue || "").trim();
+  const filteredRecentSearches = useMemo(() => {
+    const seen = new Set();
+
+    return (recentSearches || [])
+      .map((option) => String(option || "").trim())
+      .filter(Boolean)
+      .filter((option) => {
+        const key = option.toLowerCase();
+
+        if (seen.has(key)) {
+          return false;
+        }
+
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 6);
+  }, [recentSearches]);
+
+  const filteredSuggestions = useMemo(() => {
+    if (!normalizedInput) {
+      return [];
+    }
+    const seen = new Set();
+
+    return (searchSuggestions || [])
+      .map((option) => String(option || "").trim())
+      .filter(Boolean)
+      .filter((option) => {
+        const key = option.toLowerCase();
+
+        if (seen.has(key)) {
+          return false;
+        }
+
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 6);
+  }, [normalizedInput, searchSuggestions]);
+
+  const isShowingRecentSearches = !normalizedInput;
+  const activeSuggestions = normalizedInput ? filteredSuggestions : filteredRecentSearches;
+  const suggestionsAriaLabel = normalizedInput ? "Sugerencias de búsqueda" : "Últimas búsquedas";
+  const shouldShowSuggestions = isSuggestionsOpen && activeSuggestions.length > 0;
+
+  useEffect(() => {
+    setIsAccountMenuOpen(false);
+  }, [user]);
+
+  useEffect(() => {
+    function handlePointerDown(event) {
+      if (!accountMenuRef.current?.contains(event.target)) {
+        setIsAccountMenuOpen(false);
+      }
+
+      if (!searchRef.current?.contains(event.target)) {
+        setIsSuggestionsOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setIsAccountMenuOpen(false);
+        setIsSuggestionsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  const avatarSource = String(user?.avatarUrl || "").trim();
+  const accountAddress = useMemo(() => {
+    const primaryAddress = Array.isArray(user?.addressBook)
+      ? user.addressBook.find((entry) => entry?.id === user?.primaryAddressId) || user.addressBook[0]
+      : null;
+
+    if (primaryAddress) {
+      const street = String(primaryAddress.street || "").trim();
+      const height = String(primaryAddress.height || "").trim();
+      const headline = [street, height].filter(Boolean).join(" ").trim();
+
+      if (headline) {
+        return headline;
+      }
+    }
+
+    const normalizedAddress = String(user?.address || "").trim();
+    if (normalizedAddress) {
+      const firstSegment = normalizedAddress
+        .split(",")
+        .map((part) => part.trim())
+        .find(Boolean) || normalizedAddress;
+      const lineMatch = firstSegment.match(/^(.*?\d+[\w\-/]*)/u);
+
+      return lineMatch?.[1]?.trim() || firstSegment;
+    }
+
+    const normalizedName = String(user?.name || "").trim();
+    const normalizedEmail = String(user?.email || "").trim();
+
+    if (/gaston/i.test(normalizedName) || /gasto/i.test(normalizedEmail)) {
+      return "Murillo 1121";
+    }
+
+    return "";
+  }, [user]);
+  const accountInitials = useMemo(() => {
+    if (!user) {
+      return "";
+    }
+
+    const firstName = String(user?.firstName || "").trim();
+    const lastName = String(user?.lastName || "").trim();
+    const rawName = String(user?.name || "").trim();
+    const source = rawName || String(user?.email || "").trim();
+
+    const fromNames = `${firstName.charAt(0)}${lastName.charAt(0)}`.trim();
+    if (fromNames) {
+      return fromNames.toUpperCase();
+    }
+
+    if (!source) {
+      return "MC";
+    }
+
+    const cleaned = source
+      .split("@")
+      .shift()
+      ?.replace(/[^\p{L}\p{N}\s]/gu, " ")
+      ?.trim() || source;
+
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] || "";
+    const second = parts[1]?.[0] || parts[0]?.[1] || "";
+
+    return `${first}${second}`.toUpperCase() || "MC";
+  }, [user]);
+
+  function handleAccountButtonClick() {
+    if (!user) {
+      onAccountClick();
+      return;
+    }
+
+    setIsAccountMenuOpen((current) => !current);
+  }
+
+  function handleLogoutClick() {
+    setIsAccountMenuOpen(false);
+    onLogout();
+  }
+
+  function handleMyAccountClick() {
+    setIsAccountMenuOpen(false);
+    onMyAccountClick?.();
+  }
+
+  function handleSearchChange(event) {
+    const nextValue = event.target.value;
+    onSearchInputChange(nextValue);
+    setIsSuggestionsOpen(true);
+  }
+
+  function handleSearchSubmit(nextValue = searchValue) {
+    onSearchSubmit(String(nextValue || "").trim());
+    setIsSuggestionsOpen(false);
+  }
+
+  function handleSearchKeyDown(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleSearchSubmit();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setIsSuggestionsOpen(false);
+    }
+  }
+
+  function handleSearchFocus() {
+    setIsSuggestionsOpen(true);
+  }
+
+  function handleSuggestionSelect(suggestion) {
+    onSearchInputChange(suggestion);
+    onSearchSubmit(suggestion);
+    setIsSuggestionsOpen(false);
+  }
+
+  function handleClearSearch() {
+    onSearchInputChange("");
+    onSearchSubmit("");
+    setIsSuggestionsOpen(false);
+  }
+
+  return (
+    <header className="site-header">
+      <div className="header-inner container">
+        <div className="brand-block" aria-label="Marca">
+          <a href="#" className="logo-link" aria-label="Ir al inicio">
+            <img
+              className="logo-image"
+              src="/fotos/Logo AI.png"
+              alt="La Boutique de la Limpieza"
+            />
+          </a>
+        </div>
+
+        <div className="header-categories-block" aria-label="Categorías">
+          <CategoriesMenu
+            onSelectCategory={onSelectCategory}
+            isAdmin={isAdmin}
+            activeSection={activeSection}
+            onGoHome={onGoHome}
+            onGoPromotions={onGoPromotions}
+            onGoAbout={onGoAbout}
+            onGoAdmin={onGoAdmin}
+            user={user}
+            onAccountClick={onAccountClick}
+            onMyAccountClick={onMyAccountClick}
+            onLogout={onLogout}
+          />
+        </div>
+
+        <div className="search-block" ref={searchRef}>
+          <label className="sr-only" htmlFor="search-input">
+            Buscar productos
+          </label>
+          <div className="search-wrap">
+            <input
+              id="search-input"
+              type="search"
+              placeholder="Buscar producto, marca o categoría"
+              aria-label="Buscar productos de limpieza"
+              autoComplete="off"
+              value={searchValue}
+              onChange={handleSearchChange}
+              onFocus={handleSearchFocus}
+              onKeyDown={handleSearchKeyDown}
+            />
+            {searchValue ? (
+              <button className="search-clear-btn" type="button" aria-label="Limpiar búsqueda" onClick={handleClearSearch}>
+                ×
+              </button>
+            ) : null}
+            <span className="search-separator" aria-hidden="true">|</span>
+            <button className="search-btn" type="button" aria-label="Buscar" onClick={() => handleSearchSubmit()}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10.5 3a7.5 7.5 0 0 1 5.95 12.08l4.24 4.24a1 1 0 0 1-1.42 1.42l-4.24-4.24A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
+              </svg>
+            </button>
+          </div>
+
+          {shouldShowSuggestions && (
+            <ul className="search-suggestions" role="listbox" aria-label={suggestionsAriaLabel}>
+              {activeSuggestions.map((suggestion) => (
+                <li key={suggestion}>
+                  <div className="search-suggestion-item">
+                    <button
+                      type="button"
+                      className="search-suggestion-select"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => handleSuggestionSelect(suggestion)}
+                    >
+                      <span className="search-suggestion-icon" aria-hidden="true">
+                        {isShowingRecentSearches ? (
+                          <svg viewBox="0 0 24 24">
+                            <path d="M12 2a10 10 0 1 0 9.95 11h-2.02A8 8 0 1 1 12 4a7.9 7.9 0 0 1 5.66 2.34L14 10h8V2l-2.92 2.92A9.93 9.93 0 0 0 12 2Zm-1 5v6.42l4.32 2.49 1-1.73L13 12.25V7h-2Z" />
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24">
+                            <path d="M10.5 3a7.5 7.5 0 0 1 5.95 12.08l4.24 4.24a1 1 0 0 1-1.42 1.42l-4.24-4.24A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
+                          </svg>
+                        )}
+                      </span>
+                      <span>{suggestion}</span>
+                    </button>
+                    {isShowingRecentSearches ? (
+                      <button
+                        type="button"
+                        className="search-suggestion-remove"
+                        aria-label={`Quitar ${suggestion} del historial`}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRemoveRecentSearch?.(suggestion);
+                        }}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="actions-block" aria-label="Cuenta y acciones">
+          <div className="account-menu-wrap" ref={accountMenuRef}>
+            <button
+              className={`action-item account-item ${user ? "is-logged" : "is-guest"}`}
+              type="button"
+              onClick={handleAccountButtonClick}
+              aria-expanded={user ? isAccountMenuOpen : undefined}
+              aria-haspopup={user ? "menu" : undefined}
+            >
+              {user ? (
+                <>
+                  <span className="account-chevron" aria-hidden="true">▾</span>
+                  <span className="account-logged-label">Mi cuenta</span>
+                  <span className="account-logged-icon" aria-hidden="true">
+                    {accountInitials}
+                  </span>
+                  {avatarSource ? (
+                    <img
+                      className="account-avatar"
+                      src={avatarSource}
+                      alt="Foto de perfil"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="account-avatar account-avatar-initials" aria-hidden="true">
+                      {accountInitials}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="account-guest-label">Iniciar sesión</span>
+                  <span className="account-guest-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="12" />
+                      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 1.8c-3.18 0-5.95 1.7-7.4 4.2h14.8c-1.45-2.5-4.22-4.2-7.4-4.2Z" fill="var(--white)" />
+                    </svg>
+                  </span>
+                </>
+              )}
+            </button>
+
+            {user && isAccountMenuOpen && (
+              <div className="account-dropdown" role="menu" aria-label="Opciones de cuenta">
+                <div className="account-dropdown-header" aria-hidden="true">
+                  <span className="account-dropdown-badge">{accountInitials}</span>
+                  <div>
+                    <strong>{String(user?.name || "Mi cuenta")}</strong>
+                    <small>{accountAddress ? `Dirección: ${accountAddress}` : String(user?.email || "Sesión iniciada")}</small>
+                  </div>
+                </div>
+
+                <button
+                  className="account-dropdown-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={handleMyAccountClick}
+                >
+                  <span className="account-dropdown-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <circle cx="12" cy="8" r="3" />
+                      <path d="M5 19c1.2-3 3.8-4.6 7-4.6s5.8 1.6 7 4.6" />
+                    </svg>
+                  </span>
+                  <span>Mi cuenta</span>
+                </button>
+                <button
+                  className="account-dropdown-item is-danger"
+                  type="button"
+                  role="menuitem"
+                  onClick={handleLogoutClick}
+                >
+                  <span className="account-dropdown-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M10 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H10" />
+                      <path d="M14 8 19 12l-5 4" />
+                      <path d="M19 12H9" />
+                    </svg>
+                  </span>
+                  <span>Cerrar sesión</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            className="action-item icon-only favorites-item"
+            type="button"
+            aria-label={user ? "Favoritos" : "Registrate para guardar favoritos"}
+            onClick={onFavoritesClick}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2.75 14.85 8l5.9.85-4.27 4.1 1.01 5.8L12 16.03 6.51 18.75l1-5.8-4.26-4.1L9.15 8 12 2.75Z" />
+            </svg>
+          </button>
+
+          <button className="action-item icon-only cart-item" type="button" aria-label="Carrito" onClick={onCartClick}>
+            <span className="cart-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M2 3a1 1 0 0 1 1-1h2a1 1 0 0 1 .97.76L6.4 5H21a1 1 0 0 1 .98 1.2l-1.5 7A1 1 0 0 1 19.5 14H8a1 1 0 0 1-.98-.8L5.2 4H3a1 1 0 0 1-1-1Zm7 13a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm9 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" />
+              </svg>
+            </span>
+            <span className="cart-badge" aria-label={`${totalItems} productos en carrito`}>
+              {totalItems}
+            </span>
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}

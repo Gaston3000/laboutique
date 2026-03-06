@@ -1,0 +1,29 @@
+{
+  "name": "server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "create:user:default-client": "node src/scripts/create-default-client-user.js",
+    "import:wix": "node src/scripts/import-wix-products.js",
+    "import:wix:orders": "node src/scripts/import-wix-orders.js",
+    "import:wix:contacts": "node src/scripts/import-wix-contacts-users.js",
+    "seed:analytics:fake": "node src/scripts/seed-fake-analytics-events.js",
+    "clear:analytics:fake": "node src/scripts/clear-fake-analytics-events.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}
