@@ -22,7 +22,6 @@ const BrandsCarousel = () => {
   // Place the logo image in: client/public/fotos/logos marcas/
   // For logos in other folders, use customPath property
   const brands = [
-    { name: "La Boutique de la Limpieza", logo: "La boutique de la limpiezalogo.png", customPath: "/fotos" },
     { name: "Suiza", logo: "suiza.png" },
     { name: "Ariel", logo: "ariel.png" },
     { name: "Ayudin", logo: "ayudin.png" },

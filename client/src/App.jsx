@@ -906,6 +906,8 @@ function App() {
   const [appliedCartPromotion, setAppliedCartPromotion] = useState(null);
   const [cartNoteMessage, setCartNoteMessage] = useState("");
   const [welcomePromoMessage, setWelcomePromoMessage] = useState("");
+  const [showHeader, setShowHeader] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
   const productsRowRef = useRef(null);
   const similarProductsRowRef = useRef(null);
   const adminNotificationsRef = useRef(null);
@@ -1006,6 +1008,54 @@ function App() {
   useEffect(() => {
     refreshProducts()
       .catch(() => setProducts([]));
+  }, []);
+
+  // Scroll effect: hide header on scroll down, show on scroll up (Apple/Stripe style)
+  useEffect(() => {
+    let ticking = false;
+    let prevScrollPos = window.scrollY;
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollPos = window.scrollY;
+
+          // Always show header when at the very top
+          if (currentScrollPos < 10) {
+            setShowHeader(true);
+            setLastScrollY(currentScrollPos);
+            prevScrollPos = currentScrollPos;
+            ticking = false;
+            return;
+          }
+
+          // Detect scroll direction
+          const scrollingDown = currentScrollPos > prevScrollPos;
+          const scrollingUp = currentScrollPos < prevScrollPos;
+
+          // Only hide when scrolling down and past 80px
+          if (scrollingDown && currentScrollPos > 80) {
+            setShowHeader(false);
+          }
+          
+          // Show immediately when scrolling up
+          if (scrollingUp) {
+            setShowHeader(true);
+          }
+
+          setLastScrollY(currentScrollPos);
+          prevScrollPos = currentScrollPos;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   useEffect(() => {
@@ -3084,7 +3134,142 @@ function App() {
         onGoPromotions={handleGoPromotionsSection}
         onGoAbout={handleGoAboutSection}
         onGoAdmin={handleGoAdminSection}
+        showHeader={showHeader}
       />
+
+      <nav className={`nav-bar${showHeader ? "" : " nav-bar-hidden"}`}>
+        <div className="container nav-inner">
+          <button
+            type="button"
+            className="shipping-cta-btn"
+            aria-label="Elegí tu zona de envío"
+            onClick={handleOpenMyAddress}
+          >
+            <span className="shipping-cta-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z" />
+                <circle cx="12" cy="10" r="2.6" />
+              </svg>
+            </span>
+            <span>{shippingButtonLabel}</span>
+          </button>
+
+          <ul className="primary-nav nav-shortcuts" aria-label="Accesos rápidos">
+            {isAdmin ? (
+              <li className="admin-notifications-item" ref={adminNotificationsRef}>
+                <button
+                  type="button"
+                  className={`admin-nav-button nav-shortcut-btn admin-notifications-button ${isAdminNotificationsOpen ? "is-active" : ""}`}
+                  onClick={handleToggleAdminNotifications}
+                  aria-expanded={isAdminNotificationsOpen}
+                  aria-haspopup="menu"
+                  aria-label={`Notificaciones de administrador (${unseenAdminNotificationsCount} sin ver)`}
+                >
+                  <span className="nav-link-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 3a5 5 0 0 0-5 5v2.4c0 .8-.3 1.6-.8 2.2L4.6 15c-.6.7-.1 1.8.8 1.8h13.2c.9 0 1.4-1.1.8-1.8l-1.6-2.4a3.9 3.9 0 0 1-.8-2.2V8a5 5 0 0 0-5-5Z" />
+                      <path d="M9.5 18a2.5 2.5 0 0 0 5 0" />
+                    </svg>
+                  </span>
+                  {unseenAdminNotificationsCount > 0 && (
+                    <span className="admin-notifications-badge" aria-hidden="true">{adminNotificationsBadgeText}</span>
+                  )}
+                </button>
+
+                {isAdminNotificationsOpen && (
+                  <div className="admin-notifications-dropdown" role="menu" aria-label="Notificaciones de administrador">
+                    {visibleAdminNotifications.length ? (
+                      <ul className="admin-notifications-list">
+                        {visibleAdminNotifications.map((notification) => (
+                          <li key={notification.id} className="admin-notifications-list-item">
+                            <button
+                              type="button"
+                              className="admin-notification-entry"
+                              role="menuitem"
+                              onClick={() => handleOpenAdminFromNotification(notification)}
+                            >
+                              <strong>{notification.title}</strong>
+                              <span className="admin-notification-action">{notification.actionLabel}</span>
+                              <time>{formatNotificationRelativeDate(notification.createdAt)}</time>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="admin-notifications-empty">No tenés notificaciones nuevas.</p>
+                    )}
+                  </div>
+                )}
+              </li>
+            ) : null}
+
+            {isAdmin ? (
+              <li>
+                <button
+                  type="button"
+                  className={`admin-nav-button nav-shortcut-btn ${activeSection === "admin" ? "is-active" : ""}`}
+                  onClick={handleGoAdminSection}
+                >
+                  <span className="nav-link-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 3 3 7.5 12 12l9-4.5L12 3Z" />
+                      <path d="M5 10.5V16l7 3.5 7-3.5v-5.5" />
+                    </svg>
+                  </span>
+                  Admin
+                </button>
+              </li>
+            ) : null}
+            <li>
+              <button
+                type="button"
+                className={`admin-nav-button nav-shortcut-btn ${isInicioActive ? "is-active" : ""}`}
+                onClick={handleGoHomeSection}
+              >
+                <span className="nav-link-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 11.5 12 5l8 6.5" />
+                    <path d="M6.5 10.5V19h11v-8.5" />
+                    <path d="M10 19v-4h4v4" />
+                  </svg>
+                </span>
+                Inicio
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className={`admin-nav-button nav-shortcut-btn ${isPromotionsActive ? "is-active" : ""}`}
+                onClick={handleGoPromotionsSection}
+              >
+                <span className="nav-link-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <circle cx="8" cy="8" r="2" />
+                    <circle cx="16" cy="16" r="2" />
+                    <path d="M7 17 17 7" />
+                  </svg>
+                </span>
+                Promociones
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className={`admin-nav-button nav-shortcut-btn ${isAboutActive ? "is-active" : ""}`}
+                onClick={handleGoAboutSection}
+              >
+                <span className="nav-link-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="8" r="3" />
+                    <path d="M5 19c1.2-3 3.8-4.6 7-4.6s5.8 1.6 7 4.6" />
+                  </svg>
+                </span>
+                Sobre Nosotros
+              </button>
+            </li>
+          </ul>
+        </div>
+      </nav>
 
       {isAddPopupOpen && lastAddedProduct && (
         <aside
@@ -3255,140 +3440,6 @@ function App() {
         initialView={loginModalView}
         inviteMessage={loginInviteMessage}
       />
-
-      <nav className="nav-bar">
-        <div className="container nav-inner">
-          <button
-            type="button"
-            className="shipping-cta-btn"
-            aria-label="Elegí tu zona de envío"
-            onClick={handleOpenMyAddress}
-          >
-            <span className="shipping-cta-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z" />
-                <circle cx="12" cy="10" r="2.6" />
-              </svg>
-            </span>
-            <span>{shippingButtonLabel}</span>
-          </button>
-
-          <ul className="primary-nav nav-shortcuts" aria-label="Accesos rápidos">
-            {isAdmin ? (
-              <li className="admin-notifications-item" ref={adminNotificationsRef}>
-                <button
-                  type="button"
-                  className={`admin-nav-button nav-shortcut-btn admin-notifications-button ${isAdminNotificationsOpen ? "is-active" : ""}`}
-                  onClick={handleToggleAdminNotifications}
-                  aria-expanded={isAdminNotificationsOpen}
-                  aria-haspopup="menu"
-                  aria-label={`Notificaciones de administrador (${unseenAdminNotificationsCount} sin ver)`}
-                >
-                  <span className="nav-link-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M12 3a5 5 0 0 0-5 5v2.4c0 .8-.3 1.6-.8 2.2L4.6 15c-.6.7-.1 1.8.8 1.8h13.2c.9 0 1.4-1.1.8-1.8l-1.6-2.4a3.9 3.9 0 0 1-.8-2.2V8a5 5 0 0 0-5-5Z" />
-                      <path d="M9.5 18a2.5 2.5 0 0 0 5 0" />
-                    </svg>
-                  </span>
-                  {unseenAdminNotificationsCount > 0 && (
-                    <span className="admin-notifications-badge" aria-hidden="true">{adminNotificationsBadgeText}</span>
-                  )}
-                </button>
-
-                {isAdminNotificationsOpen && (
-                  <div className="admin-notifications-dropdown" role="menu" aria-label="Notificaciones de administrador">
-                    {visibleAdminNotifications.length ? (
-                      <ul className="admin-notifications-list">
-                        {visibleAdminNotifications.map((notification) => (
-                          <li key={notification.id} className="admin-notifications-list-item">
-                            <button
-                              type="button"
-                              className="admin-notification-entry"
-                              role="menuitem"
-                              onClick={() => handleOpenAdminFromNotification(notification)}
-                            >
-                              <strong>{notification.title}</strong>
-                              <span className="admin-notification-action">{notification.actionLabel}</span>
-                              <time>{formatNotificationRelativeDate(notification.createdAt)}</time>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="admin-notifications-empty">No tenés notificaciones nuevas.</p>
-                    )}
-                  </div>
-                )}
-              </li>
-            ) : null}
-
-            {isAdmin ? (
-              <li>
-                <button
-                  type="button"
-                  className={`admin-nav-button nav-shortcut-btn ${activeSection === "admin" ? "is-active" : ""}`}
-                  onClick={handleGoAdminSection}
-                >
-                  <span className="nav-link-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M12 3 3 7.5 12 12l9-4.5L12 3Z" />
-                      <path d="M5 10.5V16l7 3.5 7-3.5v-5.5" />
-                    </svg>
-                  </span>
-                  Admin
-                </button>
-              </li>
-            ) : null}
-            <li>
-              <button
-                type="button"
-                className={`admin-nav-button nav-shortcut-btn ${isInicioActive ? "is-active" : ""}`}
-                onClick={handleGoHomeSection}
-              >
-                <span className="nav-link-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M4 11.5 12 5l8 6.5" />
-                    <path d="M6.5 10.5V19h11v-8.5" />
-                    <path d="M10 19v-4h4v4" />
-                  </svg>
-                </span>
-                Inicio
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                className={`admin-nav-button nav-shortcut-btn ${isPromotionsActive ? "is-active" : ""}`}
-                onClick={handleGoPromotionsSection}
-              >
-                <span className="nav-link-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <circle cx="8" cy="8" r="2" />
-                    <circle cx="16" cy="16" r="2" />
-                    <path d="M7 17 17 7" />
-                  </svg>
-                </span>
-                Promociones
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                className={`admin-nav-button nav-shortcut-btn ${isAboutActive ? "is-active" : ""}`}
-                onClick={handleGoAboutSection}
-              >
-                <span className="nav-link-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="8" r="3" />
-                    <path d="M5 19c1.2-3 3.8-4.6 7-4.6s5.8 1.6 7 4.6" />
-                  </svg>
-                </span>
-                Sobre Nosotros
-              </button>
-            </li>
-          </ul>
-        </div>
-      </nav>
 
       <div className="container">
 
@@ -5446,7 +5497,7 @@ function App() {
       <footer className="site-footer" aria-label="Pie de página">
           <div className="site-footer-inner">
             <div className="site-footer-mobile-logo-wrap" aria-hidden="true">
-              <img className="site-footer-mobile-logo" src="/fotos/Logo AI.png" alt="" />
+              <img className="site-footer-mobile-logo" src="/fotos/logo/La boutique de la limpiezalogo.png" alt="" />
             </div>
 
             <div className="site-footer-top">
@@ -5473,7 +5524,7 @@ function App() {
                 className={`site-footer-contact${activeFooterMobileTab === "contact" ? " is-mobile-active" : ""}`}
                 aria-label="Contacto de la tienda"
               >
-                <img className="site-footer-logo" src="/fotos/Logo AI.png" alt="La Boutique de la Limpieza" />
+                <img className="site-footer-logo" src="/fotos/logo/La boutique de la limpiezalogo.png" alt="La Boutique de la Limpieza" />
 
                 <ul className="site-footer-contact-list">
                   <li>

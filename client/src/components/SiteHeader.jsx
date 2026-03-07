@@ -21,7 +21,8 @@ export default function SiteHeader({
   onGoHome,
   onGoPromotions,
   onGoAbout,
-  onGoAdmin
+  onGoAdmin,
+  showHeader
 }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
@@ -232,14 +233,26 @@ export default function SiteHeader({
     setIsSuggestionsOpen(false);
   }
 
+  function handleLogoClick(event) {
+    event.preventDefault();
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+    // Also trigger home navigation if needed
+    if (onGoHome) {
+      onGoHome();
+    }
+  }
+
   return (
-    <header className="site-header">
+    <header className={`site-header${showHeader ? "" : " header-hidden"}`}>
       <div className="header-inner container">
         <div className="brand-block" aria-label="Marca">
-          <a href="#" className="logo-link" aria-label="Ir al inicio">
+          <a href="#" className="logo-link" aria-label="Ir al inicio" onClick={handleLogoClick}>
             <img
               className="logo-image"
-              src="/fotos/Logo AI.png"
+              src="/fotos/logo/La boutique de la limpiezalogo.png"
               alt="La Boutique de la Limpieza"
             />
           </a>

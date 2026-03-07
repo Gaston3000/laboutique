@@ -36,7 +36,7 @@
 .brands-track {
   display: flex;
   gap: 100px;
-  animation: scroll-brands 60s linear infinite;
+  animation: scroll-brands 90s linear infinite;
   width: fit-content;
   align-items: center;
   padding: 0 50px;
@@ -110,7 +110,7 @@
 
   .brands-track {
     gap: 80px;
-    animation-duration: 55s;
+    animation-duration: 80s;
     padding: 0 40px;
   }
 
@@ -128,7 +128,7 @@
 
   .brands-track {
     gap: 60px;
-    animation-duration: 50s;
+    animation-duration: 70s;
     padding: 0 30px;
   }
 
@@ -146,7 +146,7 @@
 
   .brands-track {
     gap: 50px;
-    animation-duration: 45s;
+    animation-duration: 60s;
     padding: 0 20px;
   }
 
