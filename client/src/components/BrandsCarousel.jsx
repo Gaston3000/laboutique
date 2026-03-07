@@ -20,27 +20,34 @@ const BrandsCarousel = () => {
   // Brand logos array
   // TO ADD MORE BRANDS: Add a new object to this array with name and filename
   // Place the logo image in: client/public/fotos/logos marcas/
+  // For logos in other folders, use customPath property
   const brands = [
-    { name: "Marca 1", logo: "1.jpg" },
-    { name: "Marca 2", logo: "2.jpg" },
-    { name: "Marca 3", logo: "3.jpg" },
-    { name: "Marca 4", logo: "4.jpg" },
-    { name: "Suiza", logo: "5.jpg" },
-    { name: "Marca 6", logo: "6.jpg" },
-    { name: "Marca 7", logo: "7.jpg" },
-    { name: "Marca 8", logo: "8.jpg" },
-    { name: "Marca 9", logo: "9.jpg" },
-    { name: "Marca 10", logo: "10.jpg" },
-    { name: "Marca 11", logo: "11.jpg" },
-    { name: "Marca 12", logo: "12.jpg" },
-    { name: "Marca 13", logo: "13.jpg" },
-    { name: "Marca 14", logo: "14.jpg" },
-    { name: "Marca 15", logo: "15.jpg" },
-    { name: "Marca 16", logo: "16.jpg" },
-    { name: "Marca 17", logo: "17.jpg" },
-    { name: "Marca 18", logo: "18.jpg" },
-    { name: "Marca 19", logo: "19.jpg" },
-    { name: "Marca 20", logo: "20.jpg" },
+    { name: "La Boutique de la Limpieza", logo: "La boutique de la limpiezalogo.png", customPath: "/fotos" },
+    { name: "Suiza", logo: "suiza.png" },
+    { name: "Ariel", logo: "ariel.png" },
+    { name: "Ayudin", logo: "ayudin.png" },
+    { name: "Cif", logo: "cif.png" },
+    { name: "Glade", logo: "glade.png" },
+    { name: "Harpic", logo: "harpic.png" },
+    { name: "Lysoform", logo: "lysoform.png" },
+    { name: "Magistral", logo: "magistral.png" },
+    { name: "Mr Muscle", logo: "mrmuscle.png" },
+    { name: "OFF!", logo: "off.png" },
+    { name: "Poett", logo: "poett.png" },
+    { name: "Raid", logo: "raid.png" },
+    { name: "Saphirus", logo: "saphirus.png" },
+    { name: "Florida", logo: "florida.png" },
+    { name: "Blem", logo: "blem.png" },
+    { name: "Make", logo: "make.png" },
+    { name: "Procenex", logo: "procenex.png" },
+    { name: "Pato", logo: "pato.png" },
+    { name: "Ala", logo: "ala.png" },
+    { name: "Comfort", logo: "comfort.png" },
+    { name: "Downy", logo: "downy.png" },
+    { name: "Drive", logo: "drive.png" },
+    { name: "Finish", logo: "finish.png" },
+    { name: "Fuyi", logo: "fuyi.png" },
+    { name: "Qualibest", logo: "qualibest.png" },
   ];
 
   useEffect(() => {
@@ -66,7 +73,7 @@ const BrandsCarousel = () => {
             {brands.map((brand, index) => (
               <div key={`${brand.name}-${index}`} className="brand-item">
                 <img
-                  src={`/fotos/logos marcas/${brand.logo}`}
+                  src={brand.customPath ? `${brand.customPath}/${brand.logo}` : `/fotos/logos marcas/${brand.logo}`}
                   alt={`Logo de ${brand.name}`}
                   loading="lazy"
                   onError={(e) => {

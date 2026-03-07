@@ -245,13 +245,28 @@ function resolveLevelTwoIcon(itemName) {
  * Example: "Ariel" -> "/fotos/logos marcas/ariel.png"
  */
 function getBrandLogoPath(brandName) {
+  // Special case mappings for brands with different file names
+  const specialCases = {
+    "pato purific": "pato",
+    "mr muscle": "mrmuscle",
+    "media naranja": "medianaranja",
+  };
+  
   // Normalize brand name: lowercase, remove special chars, replace spaces with hyphens
-  const normalized = brandName
+  let normalized = brandName
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Remove accents
-    .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with hyphens
-    .replace(/^-+|-+$/g, ""); // Remove leading/trailing hyphens
+    .replace(/[^a-z0-9\s]+/g, "") // Remove special chars but keep spaces
+    .trim();
+  
+  // Check for special cases first
+  if (specialCases[normalized]) {
+    normalized = specialCases[normalized];
+  } else {
+    // Replace spaces with nothing (no hyphens) for standard cases
+    normalized = normalized.replace(/\s+/g, "");
+  }
   
   return `/fotos/logos marcas/${normalized}.png`;
 }

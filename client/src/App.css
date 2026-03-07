@@ -7091,10 +7091,10 @@ html {
 
 /* Brand logo styling for Marcas menu */
 .brand-logo-icon {
-  height: 22px;
+  height: 32px;
   width: auto;
-  max-width: 50px;
-  margin-right: 8px;
+  max-width: 70px;
+  margin-right: 12px;
   object-fit: contain;
   flex-shrink: 0;
   vertical-align: middle;
@@ -7489,9 +7489,9 @@ html {
 
 /* Mobile brand logo styling */
 .mega-menu-mobile .brand-logo-icon {
-  height: 26px;
-  max-width: 60px;
-  margin-right: 10px;
+  height: 36px;
+  max-width: 80px;
+  margin-right: 14px;
 }
 
 .mega-shortcuts-title,
