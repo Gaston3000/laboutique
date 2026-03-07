@@ -7089,6 +7089,23 @@ html {
   stroke-linejoin: round;
 }
 
+/* Brand logo styling for Marcas menu */
+.brand-logo-icon {
+  height: 22px;
+  width: auto;
+  max-width: 50px;
+  margin-right: 8px;
+  object-fit: contain;
+  flex-shrink: 0;
+  vertical-align: middle;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.menu-item:hover .brand-logo-icon {
+  transform: scale(1.05);
+  opacity: 1;
+}
+
 .menu-item:hover {
   background: rgba(24, 119, 242, 0.1);
   transform: translateX(1px);
@@ -7468,6 +7485,13 @@ html {
 .mega-menu-mobile .menu-item-icon svg {
   width: 18px;
   height: 18px;
+}
+
+/* Mobile brand logo styling */
+.mega-menu-mobile .brand-logo-icon {
+  height: 26px;
+  max-width: 60px;
+  margin-right: 10px;
 }
 
 .mega-shortcuts-title,

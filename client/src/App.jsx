@@ -47,6 +47,7 @@ import {
 } from "./api";
 import AdminPanel from "./components/AdminPanel";
 import AccountPanel from "./components/AccountPanel";
+import BrandsCarousel from "./components/BrandsCarousel";
 import HomeBanners from "./components/HomeBanners";
 import LoginModal from "./components/LoginModal";
 import PromoStrip from "./components/PromoStrip";
@@ -5013,6 +5014,8 @@ function App() {
                   onViewPromotions={handleGoPromotionsSection}
                 />
               )}
+
+              {isInicioActive && <BrandsCarousel />}
 
               {isInicioActive && (
                 <WelcomePromoSpotlight

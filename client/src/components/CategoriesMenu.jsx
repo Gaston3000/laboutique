@@ -240,6 +240,22 @@ function resolveLevelTwoIcon(itemName) {
   return matchedIcon?.icon || fallbackMenuIcon;
 }
 
+/**
+ * Convert brand name to logo file path
+ * Example: "Ariel" -> "/fotos/logos marcas/ariel.png"
+ */
+function getBrandLogoPath(brandName) {
+  // Normalize brand name: lowercase, remove special chars, replace spaces with hyphens
+  const normalized = brandName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with hyphens
+    .replace(/^-+|-+$/g, ""); // Remove leading/trailing hyphens
+  
+  return `/fotos/logos marcas/${normalized}.png`;
+}
+
 function normalizeItem(item) {
   if (typeof item === "string") {
     return { name: item, children: [] };
@@ -255,7 +271,7 @@ function hasChildren(item) {
   return Boolean(item) && Array.isArray(item.children) && item.children.length > 0;
 }
 
-function MenuButton({ item, isActive, onHover, onClick, showIcon = false, getIcon }) {
+function MenuButton({ item, isActive, onHover, onClick, showIcon = false, getIcon, brandLogo = null }) {
   const itemIcon = getIcon?.(item) || fallbackMenuIcon;
 
   return (
@@ -267,7 +283,17 @@ function MenuButton({ item, isActive, onHover, onClick, showIcon = false, getIco
       onClick={onClick}
     >
       <span className="menu-item-main">
-        {showIcon && (
+        {brandLogo ? (
+          <img 
+            src={brandLogo} 
+            alt={`${item.name} logo`}
+            className="brand-logo-icon"
+            onError={(e) => {
+              // Hide image if it fails to load
+              e.target.style.display = 'none';
+            }}
+          />
+        ) : showIcon && (
           <span className="menu-item-icon" aria-hidden="true">
             {itemIcon}
           </span>
@@ -688,8 +714,9 @@ export default function CategoriesMenu({
                         isActive={index === activeLevelTwoIndex}
                         onHover={() => setActiveLevelTwoIndex(index)}
                         onClick={() => handleCategorySelection(item.name)}
-                        showIcon
+                        showIcon={!isBrandsLayout}
                         getIcon={(levelTwoItem) => resolveLevelTwoIcon(levelTwoItem.name)}
+                        brandLogo={isBrandsLayout ? getBrandLogoPath(item.name) : null}
                       />
                     ))}
                   </div>

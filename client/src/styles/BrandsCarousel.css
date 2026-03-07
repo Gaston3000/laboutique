@@ -1,0 +1,157 @@
+/* ========================================
+   BRANDS CAROUSEL SECTION - MINIMAL DESIGN
+   ======================================== */
+
+/**
+ * Clean, minimal brand carousel - Amazon style
+ * Full-width edge-to-edge design with original logo colors
+ */
+
+.brands-carousel-section {
+  background: #ffffff;
+  padding: 40px 0;
+  margin: 0;
+  overflow: hidden;
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+}
+
+.brands-carousel-container {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Carousel wrapper */
+.brands-carousel {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+/* The scrolling track container */
+.brands-track {
+  display: flex;
+  gap: 100px;
+  animation: scroll-brands 60s linear infinite;
+  width: fit-content;
+  align-items: center;
+  padding: 0 50px;
+}
+
+/* Individual brand item - minimal container */
+.brand-item {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+/* Logo images - clean, original colors, larger size */
+.brand-item img {
+  height: 110px;
+  width: auto;
+  max-width: 240px;
+  object-fit: contain;
+  opacity: 0.85;
+  filter: none;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+/* Hover effects - subtle scale and full opacity */
+.brand-item:hover img {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* Pause animation on hover */
+.brands-carousel:hover .brands-track {
+  animation-play-state: paused;
+}
+
+/* Fallback text if image doesn't load */
+.brand-fallback {
+  font-size: 14px;
+  font-weight: 500;
+  color: #999;
+  text-align: center;
+}
+
+/* ========================================
+   ANIMATION KEYFRAMES
+   ======================================== */
+
+@keyframes scroll-brands {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    /* Move by 50% to create infinite loop (we duplicate items) */
+    transform: translateX(-50%);
+  }
+}
+
+/* ========================================
+   RESPONSIVE BREAKPOINTS
+   ======================================== */
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .brands-carousel-section {
+    padding: 35px 0;
+  }
+
+  .brands-track {
+    gap: 80px;
+    animation-duration: 55s;
+    padding: 0 40px;
+  }
+
+  .brand-item img {
+    height: 95px;
+    max-width: 200px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .brands-carousel-section {
+    padding: 30px 0;
+  }
+
+  .brands-track {
+    gap: 60px;
+    animation-duration: 50s;
+    padding: 0 30px;
+  }
+
+  .brand-item img {
+    height: 75px;
+    max-width: 160px;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  .brands-carousel-section {
+    padding: 25px 0;
+  }
+
+  .brands-track {
+    gap: 50px;
+    animation-duration: 45s;
+    padding: 0 20px;
+  }
+
+  .brand-item img {
+    height: 65px;
+    max-width: 140px;
+  }
+}
