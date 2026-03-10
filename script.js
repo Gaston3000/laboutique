@@ -134,16 +134,109 @@ const levelThreeList = document.getElementById("level-three-list");
 let activeLevelOneIndex = -1;
 let activeLevelTwoIndex = -1;
 
+const defaultMenuIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/></svg>`;
+
+function buildPublicAssetUrl(relativePath) {
+  const cleanedPath = String(relativePath || "").replace(/^\/+/, "");
+  const encoded = cleanedPath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `/${encoded}`;
+}
+
+const limpiezaHogarIcons = {
+  casa: {
+    type: "image",
+    src: buildPublicAssetUrl("fotos/icono limpieza del hogar/casa.png"),
+    alt: "Casa"
+  },
+  pisos: {
+    type: "image",
+    src: buildPublicAssetUrl("fotos/icono limpieza del hogar/pisosysuperficies.png"),
+    alt: "Pisos y superficies"
+  },
+  ropa: {
+    type: "image",
+    src: buildPublicAssetUrl("fotos/icono limpieza del hogar/cuidado de ropa.png"),
+    alt: "Cuidado de ropa"
+  },
+  cocina: {
+    type: "image",
+    src: buildPublicAssetUrl("fotos/icono limpieza del hogar/cocina.png"),
+    alt: "Cocina"
+  },
+  bano: {
+    type: "image",
+    src: buildPublicAssetUrl("fotos/icono limpieza del hogar/baño.png"),
+    alt: "Bano"
+  },
+  ambientes: {
+    type: "image",
+    src: buildPublicAssetUrl("fotos/icono limpieza del hogar/ambiente.png"),
+    alt: "Ambientes"
+  },
+  casaJardin: {
+    type: "image",
+    src: buildPublicAssetUrl("fotos/icono limpieza del hogar/casa y jardin.png"),
+    alt: "Casa y jardin"
+  }
+};
+
 const levelOneIcons = {
   "Todos los productos": `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="6" height="6" rx="1.2"/><rect x="14" y="5" width="6" height="6" rx="1.2"/><rect x="4" y="13" width="6" height="6" rx="1.2"/><rect x="14" y="13" width="6" height="6" rx="1.2"/></svg>`,
-  "Limpieza del hogar": `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4"/><path d="M10.5 4v4l-2.8 4.1V18h8.6v-5.9L13.5 8V4"/><path d="M8.4 12h7.2"/></svg>`,
+  "Limpieza del hogar": limpiezaHogarIcons.casa,
   "Productos específicos": `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12"/><path d="M8 6v5"/><path d="M16 6v5"/><path d="M7 11h10l-1.1 7H8.1L7 11Z"/><path d="M10 14h4"/></svg>`,
   Saphirus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v7"/><path d="M9 7h6"/><path d="M7.5 13.2c0-2.8 2-4.7 4.5-4.7s4.5 1.9 4.5 4.7c0 3-2.2 5.3-4.5 7.1-2.3-1.8-4.5-4.1-4.5-7.1Z"/></svg>`,
   Marcas: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 11.3 4h5.2L20 8.5v6.8L12 20l-8-4.7V8.5Z"/><path d="M9 10h6"/><path d="M9 13h4"/></svg>`
 };
 
+const levelTwoIconsByParent = {
+  "Todos los productos": {
+    "Ver todo el catálogo": `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="6" height="6" rx="1.1"/><rect x="14" y="5" width="6" height="6" rx="1.1"/><rect x="4" y="13" width="6" height="6" rx="1.1"/><rect x="14" y="13" width="6" height="6" rx="1.1"/></svg>`,
+    "Ofertas destacadas": `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16"/><path d="M8 8h1"/><path d="M15 16h1"/><path d="M10.5 6.5 7 10l3.5 3.5"/><path d="M13.5 17.5 17 14l-3.5-3.5"/></svg>`,
+    Novedades: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><circle cx="12" cy="12" r="4.3"/></svg>`
+  },
+  "Limpieza del hogar": {
+    "Pisos y Superficies": limpiezaHogarIcons.pisos,
+    "Cuidado de Ropa": limpiezaHogarIcons.ropa,
+    Cocina: limpiezaHogarIcons.cocina,
+    Baño: limpiezaHogarIcons.bano,
+    Ambientes: limpiezaHogarIcons.ambientes,
+    "Casa y Jardin": limpiezaHogarIcons.casaJardin
+  },
+  "Productos específicos": {
+    Accesorios: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9h10"/><path d="M8 9v9"/><path d="M16 9v9"/><path d="M6 18h12"/><path d="M9 6h6"/></svg>`,
+    "Limpieza Profunda": `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17h10"/><path d="M8 17V8l4-3 4 3v9"/><path d="M12 10v3"/></svg>`,
+    Otros: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="17" cy="12" r="1.6"/></svg>`
+  },
+  Saphirus: {
+    Aparatos: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="4" width="8" height="16" rx="2"/><path d="M10 8h4"/><path d="M10 12h4"/></svg>`,
+    Difusores: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v5"/><path d="M9 8.5h6"/><path d="M8 13h8l-1 6H9l-1-6Z"/></svg>`,
+    "Difusores Premium": `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v5"/><path d="M9 7.5h6"/><path d="M8 12.8h8l-1.2 7H9.2L8 12.8Z"/><path d="M16.5 5.5 18 7"/></svg>`,
+    Home: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 5l8 6"/><path d="M6 10.5V20h12v-9.5"/><path d="M10 20v-5h4v5"/></svg>`,
+    "Holder Sensaciones": `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h8"/><path d="M9 8v10h6V8"/><path d="M7 18h10"/></svg>`,
+    Sensaciones: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v8"/><path d="M9 8h6"/><path d="M7.8 14.5c0-2.2 1.6-3.8 4.2-3.8s4.2 1.6 4.2 3.8c0 2.4-1.8 4.3-4.2 5.8-2.4-1.5-4.2-3.4-4.2-5.8Z"/></svg>`,
+    Textil: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6.2 6.7 8 4.7 9.2l1.6 2.3L8.5 10V20h7V10l2.2 1.5 1.6-2.3L17.3 8l-1.8-1.8H8.5Z"/></svg>`
+  }
+};
+
 function getLevelOneIcon(name) {
-  return levelOneIcons[name] || `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/></svg>`;
+  return levelOneIcons[name] || defaultMenuIcon;
+}
+
+function getLevelTwoIcon(levelOneName, itemName) {
+  return levelTwoIconsByParent[levelOneName]?.[itemName] || defaultMenuIcon;
+}
+
+function renderMenuIcon(iconDefinition) {
+  if (iconDefinition && typeof iconDefinition === "object" && iconDefinition.type === "image" && iconDefinition.src) {
+    const alt = String(iconDefinition.alt || "");
+    return `<img class="menu-item-icon-image" src="${iconDefinition.src}" alt="${alt}" loading="lazy" decoding="async" />`;
+  }
+
+  return iconDefinition || defaultMenuIcon;
 }
 
 function normalizeItem(item) {
@@ -161,7 +254,9 @@ function hasChildren(item) {
   return Array.isArray(item.children) && item.children.length > 0;
 }
 
-function buildMenuColumn(container, items, itemClass, onEnter, showLevelOneIcons = false) {
+function buildMenuColumn(container, items, itemClass, onEnter, options = {}) {
+  const { showIcons = false, getIcon = null } = options;
+
   container.innerHTML = "";
 
   items.forEach((item, index) => {
@@ -170,8 +265,8 @@ function buildMenuColumn(container, items, itemClass, onEnter, showLevelOneIcons
     button.className = `${itemClass} menu-item`;
 
     const chevron = hasChildren(item) ? '<span class="chevron">›</span>' : "";
-    const iconMarkup = showLevelOneIcons
-      ? `<span class="menu-item-icon">${getLevelOneIcon(item.name)}</span>`
+    const iconMarkup = showIcons
+      ? `<span class="menu-item-icon">${renderMenuIcon(getIcon ? getIcon(item) : defaultMenuIcon)}</span>`
       : "";
 
     button.innerHTML = `
@@ -228,7 +323,10 @@ function buildLevelOne() {
 
   buildMenuColumn(levelOneList, levelOneItems, "category-item", (index) => {
     setActiveLevelOne(index);
-  }, true);
+  }, {
+    showIcons: true,
+    getIcon: (item) => getLevelOneIcon(item.name)
+  });
 }
 
 function setActiveLevelThree(index) {
@@ -263,6 +361,9 @@ function setActiveLevelOne(index) {
   levelTwoList.classList.remove("is-hidden");
   buildMenuColumn(levelTwoList, levelOneItem.children, "subcategory-item", (levelTwoIndex) => {
     setActiveLevelThree(levelTwoIndex);
+  }, {
+    showIcons: true,
+    getIcon: (item) => getLevelTwoIcon(levelOneItem.name, item.name)
   });
   hideLevelThree();
 }

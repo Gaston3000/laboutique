@@ -1,4 +1,19 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+const LOCAL_API_URL = "http://localhost:4000/api";
+
+function resolveApiUrl() {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  if (typeof window === "undefined") {
+    return LOCAL_API_URL;
+  }
+
+  const isLocalhost = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
+  return isLocalhost ? LOCAL_API_URL : `${window.location.origin}/api`;
+}
+
+const API_URL = resolveApiUrl();
 
 function getAuthHeaders(token) {
   if (!token) {
@@ -26,7 +41,17 @@ export async function fetchHealth() {
 }
 
 export async function fetchProducts() {
-  const response = await fetch(`${API_URL}/products`);
+  let response;
+
+  try {
+    response = await fetch(`${API_URL}/products`);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`No se pudo conectar con la API (${API_URL}).`);
+    }
+
+    throw error;
+  }
 
   if (!response.ok) {
     throw new Error("No se pudieron cargar los productos");

@@ -475,6 +475,13 @@ body {
   stroke-linejoin: round;
 }
 
+.menu-item-icon-image {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+}
+
 .menu-item:hover {
   background: rgba(24, 119, 242, 0.08);
 }

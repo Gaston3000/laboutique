@@ -3,6 +3,24 @@ import { categoryTree } from "./categoryTree";
 
 const MOBILE_MENU_BREAKPOINT = 1100;
 
+const limpiezaHogarIconPaths = {
+  "Limpieza del hogar": "/fotos/icono%20limpieza%20del%20hogar/casa.png",
+  "Pisos y Superficies": "/fotos/icono%20limpieza%20del%20hogar/pisosysuperficies.png",
+  "Cuidado de Ropa": "/fotos/icono%20limpieza%20del%20hogar/cuidado%20de%20ropa.png",
+  Cocina: "/fotos/icono%20limpieza%20del%20hogar/cocina.png",
+  "Baño": "/fotos/icono%20limpieza%20del%20hogar/ba%C3%B1o.png",
+  Ambientes: "/fotos/icono%20limpieza%20del%20hogar/ambiente.png",
+  "Casa y Jardin": "/fotos/icono%20limpieza%20del%20hogar/casa%20y%20jardin.png"
+};
+
+function renderMenuPngIcon(src) {
+  if (!src) {
+    return null;
+  }
+
+  return <img src={src} alt="" aria-hidden="true" className="menu-item-icon-image menu-item-icon-image-limpieza" />;
+}
+
 const levelOneIcons = {
   "Todos los productos": (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,13 +30,7 @@ const levelOneIcons = {
       <rect x="14" y="13" width="6" height="6" rx="1.2" />
     </svg>
   ),
-  "Limpieza del hogar": (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M10 4h4" />
-      <path d="M10.5 4v4l-2.8 4.1V18h8.6v-5.9L13.5 8V4" />
-      <path d="M8.4 12h7.2" />
-    </svg>
-  ),
+  "Limpieza del hogar": renderMenuPngIcon(limpiezaHogarIconPaths["Limpieza del hogar"]),
   "Productos específicos": (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M6 6h12" />
@@ -29,11 +41,12 @@ const levelOneIcons = {
     </svg>
   ),
   Saphirus: (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3v7" />
-      <path d="M9 7h6" />
-      <path d="M7.5 13.2c0-2.8 2-4.7 4.5-4.7s4.5 1.9 4.5 4.7c0 3-2.2 5.3-4.5 7.1-2.3-1.8-4.5-4.1-4.5-7.1Z" />
-    </svg>
+    <img
+      src="/fotos/iconos saphirus/iconosaphiruspng.png"
+      alt=""
+      aria-hidden="true"
+      className="menu-item-icon-image menu-item-icon-image-saphirus-brand"
+    />
   ),
   Marcas: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -49,6 +62,17 @@ const fallbackMenuIcon = (
     <rect x="4" y="4" width="16" height="16" rx="2" />
   </svg>
 );
+
+const saphirusIconFileByCategory = {
+  aparatos: "aparato.png",
+  difusores: "image.png",
+  "difusores premium": "difusorpremium.png",
+  home: "home.png",
+  holder: "icono_holder_clean.svg",
+  "holder sensaciones": "pruebaaaaa.png",
+  sensaciones: "iconosensaciones.png",
+  textil: "textil.png"
+};
 
 const shortcutIcons = {
   home: (
@@ -230,7 +254,22 @@ function normalizeLabel(value) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function resolveLevelTwoIcon(itemName) {
+function getSaphirusIconPath(itemName) {
+  const normalizedName = normalizeLabel(itemName);
+  const iconFileName = saphirusIconFileByCategory[normalizedName];
+
+  if (!iconFileName) {
+    return null;
+  }
+
+  return `/fotos/iconos saphirus/${iconFileName}`;
+}
+
+function resolveLevelTwoIcon(itemName, levelOneName = "") {
+  if (levelOneName === "Limpieza del hogar") {
+    return renderMenuPngIcon(limpiezaHogarIconPaths[itemName]) || fallbackMenuIcon;
+  }
+
   const normalizedName = normalizeLabel(itemName);
 
   const matchedIcon = levelTwoKeywordIcons.find(({ keywords }) =>
@@ -286,19 +325,42 @@ function hasChildren(item) {
   return Boolean(item) && Array.isArray(item.children) && item.children.length > 0;
 }
 
-function MenuButton({ item, isActive, onHover, onClick, showIcon = false, getIcon, brandLogo = null }) {
+function MenuButton({
+  item,
+  isActive,
+  onHover,
+  onClick,
+  showIcon = false,
+  getIcon,
+  customIconSrc = null,
+  brandLogo = null,
+  extraClassName = ""
+}) {
   const itemIcon = getIcon?.(item) || fallbackMenuIcon;
+  const menuItemClassName = `menu-item ${isActive ? "is-active" : ""} ${extraClassName}`.trim();
+  const isSaphirusDifusores = normalizeLabel(item?.name || "") === "difusores";
 
   return (
     <button
       type="button"
-      className={`menu-item ${isActive ? "is-active" : ""}`}
+      className={menuItemClassName}
       onMouseEnter={onHover}
       onFocus={onHover}
       onClick={onClick}
     >
       <span className="menu-item-main">
-        {brandLogo ? (
+        {customIconSrc ? (
+          <span className="menu-item-icon" aria-hidden="true">
+            <img
+              src={customIconSrc}
+              alt=""
+              aria-hidden="true"
+              className={`menu-item-icon-image menu-item-icon-image-saphirus ${
+                isSaphirusDifusores ? "menu-item-icon-image-saphirus-difusores" : ""
+              }`.trim()}
+            />
+          </span>
+        ) : brandLogo ? (
           <img 
             src={brandLogo} 
             alt={`${item.name} logo`}
@@ -358,6 +420,8 @@ export default function CategoriesMenu({
   const levelThreeItems = hasChildren(activeLevelTwo) ? activeLevelTwo.children : [];
   const isBrandsLayout =
     activeLevelOne?.name === "Marcas" && levelTwoItems.length > 0 && !levelThreeItems.length;
+  const isSaphirusLayout =
+    activeLevelOne?.name === "Saphirus" && levelTwoItems.length > 0 && !levelThreeItems.length;
 
   const mobileLevelState = useMemo(() => {
     let currentItems = levelOneItems;
@@ -494,7 +558,7 @@ export default function CategoriesMenu({
     }
 
     if (depth === 1) {
-      return resolveLevelTwoIcon(item.name);
+      return resolveLevelTwoIcon(item.name, mobileLevelState.currentNode?.name || "");
     }
 
     return fallbackMenuIcon;
@@ -692,7 +756,16 @@ export default function CategoriesMenu({
                   >
                     <span className="menu-item-main">
                       <span className="menu-item-icon" aria-hidden="true">
-                        {getMobileItemIcon(item, mobileLevelState.depth)}
+                        {mobileLevelState.depth === 1 && mobileLevelState.currentNode?.name === "Saphirus" ? (
+                          <img
+                            src={getSaphirusIconPath(item.name) || ""}
+                            alt=""
+                            aria-hidden="true"
+                            className="menu-item-icon-image menu-item-icon-image-saphirus"
+                          />
+                        ) : (
+                          getMobileItemIcon(item, mobileLevelState.depth)
+                        )}
                       </span>
                       <span className="menu-item-label">{item.name}</span>
                     </span>
@@ -730,8 +803,16 @@ export default function CategoriesMenu({
                         onHover={() => setActiveLevelTwoIndex(index)}
                         onClick={() => handleCategorySelection(item.name)}
                         showIcon={!isBrandsLayout}
-                        getIcon={(levelTwoItem) => resolveLevelTwoIcon(levelTwoItem.name)}
+                        getIcon={(levelTwoItem) => resolveLevelTwoIcon(levelTwoItem.name, activeLevelOne?.name || "")}
+                        customIconSrc={isSaphirusLayout ? getSaphirusIconPath(item.name) : null}
                         brandLogo={isBrandsLayout ? getBrandLogoPath(item.name) : null}
+                        extraClassName={
+                          isBrandsLayout
+                            ? "menu-item-brand"
+                            : isSaphirusLayout
+                              ? "menu-item-saphirus"
+                              : ""
+                        }
                       />
                     ))}
                   </div>

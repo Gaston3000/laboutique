@@ -8,8 +8,10 @@
  */
 
 .brands-carousel-section {
-  background: #ffffff;
-  padding: 40px 0;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(15, 102, 181, 0.08), transparent 38%),
+    linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%);
+  padding: 28px 0;
   margin: 0;
   overflow: hidden;
   position: relative;
@@ -34,12 +36,14 @@
 
 /* The scrolling track container */
 .brands-track {
-  display: flex;
-  gap: 100px;
-  animation: scroll-brands 90s linear infinite;
-  width: fit-content;
+  display: inline-flex;
+  gap: 58px;
+  animation: scroll-brands 44s linear infinite;
+  width: max-content;
+  min-width: max-content;
   align-items: center;
-  padding: 0 50px;
+  padding: 6px 28px;
+  will-change: transform;
 }
 
 /* Individual brand item - minimal container */
@@ -53,34 +57,47 @@
   border: none;
 }
 
+.brand-item-button {
+  align-items: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  margin: 0;
+  padding: 4px;
+}
+
 /* Logo images - clean, original colors, larger size */
 .brand-item img {
-  height: 110px;
+  height: 114px;
   width: auto;
-  max-width: 240px;
+  max-width: 225px;
   object-fit: contain;
-  opacity: 0.85;
+  opacity: 0.88;
   filter: none;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
 }
 
 /* Hover effects - subtle scale and full opacity */
-.brand-item:hover img {
+.brand-item:hover img,
+.brand-item-button:focus-visible img {
   opacity: 1;
-  transform: scale(1.1);
+  transform: scale(1.08);
 }
 
-/* Pause animation on hover */
-.brands-carousel:hover .brands-track {
-  animation-play-state: paused;
+.brand-item-button:focus-visible {
+  outline: 2px solid #1160a8;
+  outline-offset: 3px;
+  border-radius: 8px;
 }
 
 /* Fallback text if image doesn't load */
 .brand-fallback {
-  font-size: 14px;
-  font-weight: 500;
-  color: #999;
+  font-size: 15px;
+  font-weight: 600;
+  color: #4a5a76;
   text-align: center;
 }
 
@@ -105,17 +122,17 @@
 /* Tablet */
 @media (max-width: 1024px) {
   .brands-carousel-section {
-    padding: 35px 0;
+    padding: 24px 0;
   }
 
   .brands-track {
-    gap: 80px;
-    animation-duration: 80s;
-    padding: 0 40px;
+    gap: 46px;
+    animation-duration: 40s;
+    padding: 6px 24px;
   }
 
   .brand-item img {
-    height: 95px;
+    height: 102px;
     max-width: 200px;
   }
 }
@@ -123,35 +140,35 @@
 /* Mobile */
 @media (max-width: 640px) {
   .brands-carousel-section {
-    padding: 30px 0;
+    padding: 22px 0;
   }
 
   .brands-track {
-    gap: 60px;
-    animation-duration: 70s;
-    padding: 0 30px;
+    gap: 34px;
+    animation-duration: 34s;
+    padding: 5px 20px;
   }
 
   .brand-item img {
-    height: 75px;
-    max-width: 160px;
+    height: 88px;
+    max-width: 174px;
   }
 }
 
 /* Small mobile devices */
 @media (max-width: 480px) {
   .brands-carousel-section {
-    padding: 25px 0;
+    padding: 18px 0;
   }
 
   .brands-track {
-    gap: 50px;
-    animation-duration: 60s;
-    padding: 0 20px;
+    gap: 26px;
+    animation-duration: 28s;
+    padding: 4px 14px;
   }
 
   .brand-item img {
-    height: 65px;
-    max-width: 140px;
+    height: 74px;
+    max-width: 148px;
   }
 }

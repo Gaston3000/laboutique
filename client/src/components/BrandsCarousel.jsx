@@ -1,5 +1,33 @@
-import { useEffect, useRef } from "react";
+import { useMemo, useState } from "react";
 import "../styles/BrandsCarousel.css";
+
+const BRANDS = [
+  { name: "Suiza", logo: "suiza.png", category: "Suiza" },
+  { name: "Ariel", logo: "ariel.png", category: "Ariel" },
+  { name: "Ayudin", logo: "ayudin.png", category: "Ayudin" },
+  { name: "Cif", logo: "cif.png", category: "Cif" },
+  { name: "Glade", logo: "glade.png", category: "Glade" },
+  { name: "Harpic", logo: "harpic.png", category: "Harpic" },
+  { name: "Lysoform", logo: "lysoform.png", category: "Lysoform" },
+  { name: "Magistral", logo: "magistral.png", category: "Magistral" },
+  { name: "Mr Muscle", logo: "mrmuscle.png", category: "Mr Muscle" },
+  { name: "OFF!", logo: "off.png", category: "OFF!" },
+  { name: "Poett", logo: "poett.png", category: "Poett" },
+  { name: "Raid", logo: "raid.png", category: "Raid" },
+  { name: "Saphirus", logo: "saphirus.png", category: "Saphirus" },
+  { name: "Florida", logo: "florida.png", category: "Florida" },
+  { name: "Blem", logo: "blem.png", category: "Blem" },
+  { name: "Make", logo: "make.png", category: "Make" },
+  { name: "Procenex", logo: "procenex.png", category: "Procenex" },
+  { name: "Pato", logo: "pato.png", category: "Pato Purific" },
+  { name: "Ala", logo: "ala.png", category: "Ala" },
+  { name: "Comfort", logo: "comfort.png", category: "Comfort" },
+  { name: "Downy", logo: "downy.png", category: "Downy" },
+  { name: "Drive", logo: "drive.png", category: "Drive" },
+  { name: "Finish", logo: "finish.png", category: "Finish" },
+  { name: "Fuyi", logo: "fuyi.png", category: "Fuyi" },
+  { name: "Qualibest", logo: "qualibest.png", category: "Qualibest" }
+];
 
 /**
  * BrandsCarousel Component - Minimal Design
@@ -14,73 +42,47 @@ import "../styles/BrandsCarousel.css";
  * - Responsive design
  * - Subtle opacity and scale effects on hover
  */
-const BrandsCarousel = () => {
-  const carouselRef = useRef(null);
+const BrandsCarousel = ({ onSelectBrand }) => {
+  const [failedLogos, setFailedLogos] = useState({});
 
   // Brand logos array
   // TO ADD MORE BRANDS: Add a new object to this array with name and filename
   // Place the logo image in: client/public/fotos/logos marcas/
   // For logos in other folders, use customPath property
-  const brands = [
-    { name: "Suiza", logo: "suiza.png" },
-    { name: "Ariel", logo: "ariel.png" },
-    { name: "Ayudin", logo: "ayudin.png" },
-    { name: "Cif", logo: "cif.png" },
-    { name: "Glade", logo: "glade.png" },
-    { name: "Harpic", logo: "harpic.png" },
-    { name: "Lysoform", logo: "lysoform.png" },
-    { name: "Magistral", logo: "magistral.png" },
-    { name: "Mr Muscle", logo: "mrmuscle.png" },
-    { name: "OFF!", logo: "off.png" },
-    { name: "Poett", logo: "poett.png" },
-    { name: "Raid", logo: "raid.png" },
-    { name: "Saphirus", logo: "saphirus.png" },
-    { name: "Florida", logo: "florida.png" },
-    { name: "Blem", logo: "blem.png" },
-    { name: "Make", logo: "make.png" },
-    { name: "Procenex", logo: "procenex.png" },
-    { name: "Pato", logo: "pato.png" },
-    { name: "Ala", logo: "ala.png" },
-    { name: "Comfort", logo: "comfort.png" },
-    { name: "Downy", logo: "downy.png" },
-    { name: "Drive", logo: "drive.png" },
-    { name: "Finish", logo: "finish.png" },
-    { name: "Fuyi", logo: "fuyi.png" },
-    { name: "Qualibest", logo: "qualibest.png" },
-  ];
+  const marqueeBrands = useMemo(() => [...BRANDS, ...BRANDS], []);
 
-  useEffect(() => {
-    const carousel = carouselRef.current;
-    if (!carousel) return;
-
-    // Clone the brand items to create seamless infinite loop
-    const track = carousel.querySelector(".brands-track");
-    const items = Array.from(track.children);
-    
-    // Clone each item and append to create seamless loop
-    items.forEach(item => {
-      const clone = item.cloneNode(true);
-      track.appendChild(clone);
-    });
-  }, []);
+  function handleBrandClick(brand) {
+    if (typeof onSelectBrand === "function") {
+      onSelectBrand(brand.category || brand.name);
+    }
+  }
 
   return (
     <section className="brands-carousel-section" aria-label="Marcas que vendemos">
       <div className="brands-carousel-container">
-        <div className="brands-carousel" ref={carouselRef}>
+        <div className="brands-carousel">
           <div className="brands-track">
-            {brands.map((brand, index) => (
+            {marqueeBrands.map((brand, index) => (
               <div key={`${brand.name}-${index}`} className="brand-item">
-                <img
-                  src={brand.customPath ? `${brand.customPath}/${brand.logo}` : `/fotos/logos marcas/${brand.logo}`}
-                  alt={`Logo de ${brand.name}`}
-                  loading="lazy"
-                  onError={(e) => {
-                    // Fallback if image not found - show brand name
-                    e.target.style.display = 'none';
-                    e.target.parentElement.innerHTML = `<span class="brand-fallback">${brand.name}</span>`;
-                  }}
-                />
+                <button
+                  type="button"
+                  className="brand-item-button"
+                  aria-label={`Ver productos de ${brand.name}`}
+                  onClick={() => handleBrandClick(brand)}
+                >
+                  {failedLogos[brand.logo] ? (
+                    <span className="brand-fallback">{brand.name}</span>
+                  ) : (
+                    <img
+                      src={brand.customPath ? `${brand.customPath}/${brand.logo}` : `/fotos/logos marcas/${brand.logo}`}
+                      alt={`Logo de ${brand.name}`}
+                      loading="lazy"
+                      onError={() => {
+                        setFailedLogos((current) => ({ ...current, [brand.logo]: true }));
+                      }}
+                    />
+                  )}
+                </button>
               </div>
             ))}
           </div>

@@ -767,6 +767,7 @@ function formatNotificationRelativeDate(value) {
 
 function App() {
   const [products, setProducts] = useState([]);
+  const [productsLoadError, setProductsLoadError] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [recentSearches, setRecentSearches] = useState(() => {
@@ -910,6 +911,7 @@ function App() {
   const [lastScrollY, setLastScrollY] = useState(0);
   const productsRowRef = useRef(null);
   const similarProductsRowRef = useRef(null);
+  const saphirusProductsRowRef = useRef(null);
   const adminNotificationsRef = useRef(null);
   const [cart, setCart] = useState(() => {
     try {
@@ -923,6 +925,7 @@ function App() {
   async function refreshProducts() {
     const data = await fetchProducts();
     setProducts(data.items || []);
+    setProductsLoadError("");
   }
 
   async function refreshOrders(token) {
@@ -1007,7 +1010,10 @@ function App() {
 
   useEffect(() => {
     refreshProducts()
-      .catch(() => setProducts([]));
+      .catch((error) => {
+        setProducts([]);
+        setProductsLoadError(error?.message || "No se pudieron cargar los productos.");
+      });
   }, []);
 
   // Scroll effect: hide header on scroll down, show on scroll up (Apple/Stripe style)
@@ -1420,6 +1426,27 @@ function App() {
 
     return categoryFilteredProducts.filter((product) => matchesProductSearch(product, normalizedSearch));
   }, [products, searchTerm, selectedCategory]);
+
+  const saphirusGalleryProducts = useMemo(() => {
+    const saphirusProducts = (products || [])
+      .filter((product) => product?.isVisible !== false)
+      .filter((product) => {
+        const normalizedCategories = getProductCategoriesForSearch(product)
+          .map((category) => normalizeSearchText(category))
+          .filter(Boolean);
+
+        return normalizedCategories.some((category) => category.includes("saphirus"));
+      });
+
+    // Fisher-Yates para mostrar un mix aleatorio en cada carga/actualización del listado.
+    const shuffledProducts = [...saphirusProducts];
+    for (let index = shuffledProducts.length - 1; index > 0; index -= 1) {
+      const randomIndex = Math.floor(Math.random() * (index + 1));
+      [shuffledProducts[index], shuffledProducts[randomIndex]] = [shuffledProducts[randomIndex], shuffledProducts[index]];
+    }
+
+    return shuffledProducts;
+  }, [products]);
 
   const searchSuggestions = useMemo(() => {
     const normalizedInput = normalizeSearchText(searchInput);
@@ -2075,6 +2102,15 @@ function App() {
     setSearchInput("");
     setSearchTerm("");
     setActiveSection("home");
+  }
+
+  function handleSelectBrandFromCarousel(categoryName) {
+    handleSelectCategory(categoryName);
+
+    window.requestAnimationFrame(() => {
+      const catalogAnchor = document.getElementById("home-catalog-start");
+      catalogAnchor?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function handleSearchSubmit(nextSearchTerm) {
@@ -5066,7 +5102,7 @@ function App() {
                 />
               )}
 
-              {isInicioActive && <BrandsCarousel />}
+              {isInicioActive && <BrandsCarousel onSelectBrand={handleSelectBrandFromCarousel} />}
 
               {isInicioActive && (
                 <WelcomePromoSpotlight
@@ -5077,6 +5113,11 @@ function App() {
               <div id="home-catalog-start" />
               <h1>{isInicioActive ? "Inicio" : catalogHeading}</h1>
               <p className="subtitle">{catalogSubtitle}</p>
+              {productsLoadError && (
+                <p className="catalog-load-error" role="alert">
+                  {productsLoadError}
+                </p>
+              )}
               {isSearchActive && suggestedSearchCorrection && (
                 <p className="search-spell-suggestion">
                   Quizá quisiste decir{" "}
@@ -5326,6 +5367,133 @@ function App() {
 
               {isInicioActive && (
                 <DeliveryCoverageSection />
+              )}
+
+              {isInicioActive && (
+                <section className="saphirus-gallery" aria-label="Productos Saphirus">
+                  <header className="saphirus-gallery-header">
+                    <h2>Productos Saphirus</h2>
+                    <p>Explorá la galería de artículos Saphirus disponibles para sumar a tu pedido.</p>
+                  </header>
+
+                  {saphirusGalleryProducts.length ? (
+                    <section className="products-carousel saphirus-products-carousel" aria-label="Galería de productos Saphirus">
+                      <button
+                        type="button"
+                        className="carousel-arrow"
+                        onClick={() => scrollProductsRow("left", saphirusProductsRowRef)}
+                        aria-label="Ver productos Saphirus anteriores"
+                      >
+                        ‹
+                      </button>
+
+                      <div className="products-row saphirus-products-row" ref={saphirusProductsRowRef}>
+                        {saphirusGalleryProducts.map((product) => {
+                          const selectedQuantity = getCatalogQuantity(product.id);
+                          const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
+
+                          return (
+                            <article
+                              key={`saphirus-${product.id}`}
+                              className="product-card"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openProductPreview(product)}
+                              onKeyDown={(event) => {
+                                if (event.target !== event.currentTarget) {
+                                  return;
+                                }
+
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  openProductPreview(product);
+                                }
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className={`favorite-btn card-favorite-btn ${isProductFavorite(product.id) ? "is-active" : ""}`}
+                                onClick={(event) => handleToggleFavorite(product, event)}
+                                data-tooltip={isProductFavorite(product.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
+                                aria-label={isProductFavorite(product.id) ? `Quitar ${product.name} de favoritos` : `Agregar ${product.name} a favoritos`}
+                              >
+                                <span aria-hidden="true">★</span>
+                              </button>
+
+                              <figure className={`product-image-stack${secondaryImageUrl ? " has-hover-image" : ""}`}>
+                                <img
+                                  className="product-image product-image-primary"
+                                  src={primaryImageUrl}
+                                  alt={primaryImageAlt}
+                                />
+                                {secondaryImageUrl && (
+                                  <img
+                                    className="product-image product-image-secondary"
+                                    src={secondaryImageUrl}
+                                    alt={secondaryImageAlt}
+                                  />
+                                )}
+                              </figure>
+
+                              <div className="product-card-content">
+                                {product.brand && <p className="product-brand">{product.brand}</p>}
+                                <h3 className="product-title">{product.name}</h3>
+                                <p className="product-price">${Number(product.price).toLocaleString("es-AR")} ARS</p>
+
+                                <div className="product-qty" aria-label={`Cantidad para ${product.name}`}>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      updateCatalogQuantity(product.id, -1);
+                                    }}
+                                    aria-label={`Quitar una unidad de ${product.name}`}
+                                  >
+                                    -
+                                  </button>
+                                  <span>{selectedQuantity}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      updateCatalogQuantity(product.id, 1);
+                                    }}
+                                    aria-label={`Agregar una unidad de ${product.name}`}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className="product-add-btn"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    addToCart(product, selectedQuantity);
+                                  }}
+                                >
+                                  <span className="product-add-icon" aria-hidden="true">🛒</span>
+                                  <span>Agregar al carrito</span>
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="carousel-arrow"
+                        onClick={() => scrollProductsRow("right", saphirusProductsRowRef)}
+                        aria-label="Ver más productos Saphirus"
+                      >
+                        ›
+                      </button>
+                    </section>
+                  ) : (
+                    <p className="empty-results">No encontramos productos en la categoría Saphirus por el momento.</p>
+                  )}
+                </section>
               )}
 
               {isInicioActive && (
