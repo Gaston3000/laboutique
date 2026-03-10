@@ -9,9 +9,19 @@ const limpiezaHogarIconPaths = {
   "Cuidado de Ropa": "/fotos/icono%20limpieza%20del%20hogar/cuidado%20de%20ropa.png",
   Cocina: "/fotos/icono%20limpieza%20del%20hogar/cocina.png",
   "Baño": "/fotos/icono%20limpieza%20del%20hogar/ba%C3%B1o.png",
-  Ambientes: "/fotos/icono%20limpieza%20del%20hogar/ambiente.png",
+  Ambientes: "/fotos/icono%20limpieza%20del%20hogar/ambientes.png",
   "Casa y Jardin": "/fotos/icono%20limpieza%20del%20hogar/casa%20y%20jardin.png"
 };
+
+const productosEspecificosIconPath = "/fotos/IconoClientesEspecificos/productosespecificos.png";
+
+const productosEspecificosSubcategoryIconPaths = {
+  Accesorios: "/fotos/IconoClientesEspecificos/accesorios.png",
+  "Limpieza Profunda": "/fotos/IconoClientesEspecificos/limpiezaProfunda.png",
+  Otros: "/fotos/IconoClientesEspecificos/otros.png"
+};
+
+const marcasIconPath = "/fotos/logos marcas/marcas.png";
 
 function renderMenuPngIcon(src) {
   if (!src) {
@@ -31,30 +41,16 @@ const levelOneIcons = {
     </svg>
   ),
   "Limpieza del hogar": renderMenuPngIcon(limpiezaHogarIconPaths["Limpieza del hogar"]),
-  "Productos específicos": (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 6h12" />
-      <path d="M8 6v5" />
-      <path d="M16 6v5" />
-      <path d="M7 11h10l-1.1 7H8.1L7 11Z" />
-      <path d="M10 14h4" />
-    </svg>
-  ),
+  "Productos específicos": renderMenuPngIcon(productosEspecificosIconPath),
   Saphirus: (
     <img
-      src="/fotos/iconos saphirus/iconosaphiruspng.png"
+      src="/fotos/iconos saphirus/logoS.png"
       alt=""
       aria-hidden="true"
       className="menu-item-icon-image menu-item-icon-image-saphirus-brand"
     />
   ),
-  Marcas: (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 8.5 11.3 4h5.2L20 8.5v6.8L12 20l-8-4.7V8.5Z" />
-      <path d="M9 10h6" />
-      <path d="M9 13h4" />
-    </svg>
-  )
+  Marcas: renderMenuPngIcon(marcasIconPath)
 };
 
 const fallbackMenuIcon = (
@@ -270,6 +266,10 @@ function resolveLevelTwoIcon(itemName, levelOneName = "") {
     return renderMenuPngIcon(limpiezaHogarIconPaths[itemName]) || fallbackMenuIcon;
   }
 
+  if (levelOneName === "Productos específicos") {
+    return renderMenuPngIcon(productosEspecificosSubcategoryIconPaths[itemName]) || fallbackMenuIcon;
+  }
+
   const normalizedName = normalizeLabel(itemName);
 
   const matchedIcon = levelTwoKeywordIcons.find(({ keywords }) =>
@@ -338,7 +338,6 @@ function MenuButton({
 }) {
   const itemIcon = getIcon?.(item) || fallbackMenuIcon;
   const menuItemClassName = `menu-item ${isActive ? "is-active" : ""} ${extraClassName}`.trim();
-  const isSaphirusDifusores = normalizeLabel(item?.name || "") === "difusores";
 
   return (
     <button
@@ -355,9 +354,7 @@ function MenuButton({
               src={customIconSrc}
               alt=""
               aria-hidden="true"
-              className={`menu-item-icon-image menu-item-icon-image-saphirus ${
-                isSaphirusDifusores ? "menu-item-icon-image-saphirus-difusores" : ""
-              }`.trim()}
+              className="menu-item-icon-image menu-item-icon-image-saphirus"
             />
           </span>
         ) : brandLogo ? (
@@ -396,6 +393,7 @@ export default function CategoriesMenu({
   onLogout
 }) {
   const menuRef = useRef(null);
+  const previousHeaderZIndexRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [backdropTop, setBackdropTop] = useState(0);
   const [activeLevelOneIndex, setActiveLevelOneIndex] = useState(-1);
@@ -404,6 +402,7 @@ export default function CategoriesMenu({
   const [mobileRootView, setMobileRootView] = useState("home");
   const [mobileSlideDirection, setMobileSlideDirection] = useState("forward");
   const [mobileViewAnimationKey, setMobileViewAnimationKey] = useState(0);
+  const [hideLevelThreeScrollHint, setHideLevelThreeScrollHint] = useState(false);
   const [isCompactViewport, setIsCompactViewport] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -418,6 +417,7 @@ export default function CategoriesMenu({
   const levelTwoItems = activeLevelOne?.children || [];
   const activeLevelTwo = activeLevelTwoIndex >= 0 ? levelTwoItems[activeLevelTwoIndex] : null;
   const levelThreeItems = hasChildren(activeLevelTwo) ? activeLevelTwo.children : [];
+  const hasDenseLevelThreeItems = levelThreeItems.length >= 7;
   const isBrandsLayout =
     activeLevelOne?.name === "Marcas" && levelTwoItems.length > 0 && !levelThreeItems.length;
   const isSaphirusLayout =
@@ -502,6 +502,12 @@ export default function CategoriesMenu({
       setBackdropTop(Math.max(navBottom, headerBottom, triggerBottom, 0));
     }
 
+    const headerElement = menuRef.current?.closest(".site-header");
+    if (headerElement) {
+      previousHeaderZIndexRef.current = headerElement.style.zIndex;
+      headerElement.style.zIndex = "10001";
+    }
+
     syncBackdropTop();
     window.addEventListener("resize", syncBackdropTop);
     window.addEventListener("scroll", syncBackdropTop, { passive: true });
@@ -509,11 +515,15 @@ export default function CategoriesMenu({
     return () => {
       window.removeEventListener("resize", syncBackdropTop);
       window.removeEventListener("scroll", syncBackdropTop);
+
+      if (headerElement) {
+        headerElement.style.zIndex = previousHeaderZIndexRef.current || "";
+      }
     };
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isCompactViewport || !isOpen) {
+    if (!isOpen) {
       return undefined;
     }
 
@@ -523,7 +533,11 @@ export default function CategoriesMenu({
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isCompactViewport, isOpen]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    setHideLevelThreeScrollHint(false);
+  }, [isOpen, activeLevelOneIndex, activeLevelTwoIndex, hasDenseLevelThreeItems]);
 
   function toggleMenu() {
     setIsOpen((current) => !current);
@@ -603,6 +617,18 @@ export default function CategoriesMenu({
     setActiveLevelTwoIndex(-1);
     setMobilePath([]);
     setMobileRootView("home");
+  }
+
+  function handleLevelThreeScroll(event) {
+    const shouldHideHint = event.currentTarget.scrollTop > 10;
+
+    setHideLevelThreeScrollHint((currentValue) => {
+      if (currentValue === shouldHideHint) {
+        return currentValue;
+      }
+
+      return shouldHideHint;
+    });
   }
 
   const shortcutItems = [
@@ -819,7 +845,18 @@ export default function CategoriesMenu({
                 )}
 
                 {levelThreeItems.length > 0 && (
-                  <div className="mega-column level-three">
+                  <div
+                    className={`mega-column level-three ${hasDenseLevelThreeItems ? "has-scroll-hint" : ""}`}
+                    onScroll={handleLevelThreeScroll}
+                  >
+                    {hasDenseLevelThreeItems && (
+                      <div
+                        className={`mega-column-scroll-hint ${hideLevelThreeScrollHint ? "is-hidden" : ""}`}
+                        aria-hidden="true"
+                      >
+                        Desliza para ver mas
+                      </div>
+                    )}
                     {levelThreeItems.map((item) => (
                       <button
                         key={item.name}
