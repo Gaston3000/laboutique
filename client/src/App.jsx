@@ -5111,8 +5111,10 @@ function App() {
               )}
 
               <div id="home-catalog-start" />
-              <h1>{isInicioActive ? "Inicio" : catalogHeading}</h1>
-              <p className="subtitle">{catalogSubtitle}</p>
+              {!isInicioActive && <h1>{catalogHeading}</h1>}
+              <p className={`subtitle${isInicioActive ? " home-catalog-subtitle" : ""}`}>
+                {isInicioActive ? "ultimos productos subidos" : catalogSubtitle}
+              </p>
               {productsLoadError && (
                 <p className="catalog-load-error" role="alert">
                   {productsLoadError}
@@ -5242,7 +5244,7 @@ function App() {
                     )}
                   </>
                 ) : (
-                  <section className="products-carousel" aria-label="Productos">
+                  <section className={`products-carousel${isInicioActive ? " home-products-carousel" : ""}`} aria-label="Productos">
                     <button
                       type="button"
                       className="carousel-arrow"
