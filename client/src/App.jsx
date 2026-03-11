@@ -56,6 +56,13 @@ import DeliveryCoverageSection from "./components/DeliveryCoverageSection";
 import WelcomePromoSpotlight from "./components/WelcomePromoSpotlight";
 
 const CATEGORY_PAGE_SIZE = 8;
+const RESULTS_SORT_OPTIONS = [
+  { key: "recent", label: "Mas reciente" },
+  { key: "price-desc", label: "Precios mas alto" },
+  { key: "price-asc", label: "Precios mas bajo" },
+  { key: "name-asc", label: "Nombre, creciente" },
+  { key: "name-desc", label: "Nombre, decreciente" }
+];
 const RECENT_SEARCHES_STORAGE_KEY = "search:recent:queries";
 const RECENT_SEARCHES_LIMIT = 6;
 const ADDRESS_BOOK_STORAGE_PREFIX = "address-book";
@@ -791,6 +798,20 @@ function formatNotificationRelativeDate(value) {
   });
 }
 
+function getProductRecentValue(product) {
+  const createdAtValue = Date.parse(String(product?.createdAt || ""));
+  if (Number.isFinite(createdAtValue)) {
+    return createdAtValue;
+  }
+
+  const numericId = Number(product?.id);
+  if (Number.isFinite(numericId)) {
+    return numericId;
+  }
+
+  return 0;
+}
+
 function App() {
   const [products, setProducts] = useState([]);
   const [productsLoadError, setProductsLoadError] = useState("");
@@ -826,6 +847,8 @@ function App() {
   });
   const [selectedCategory, setSelectedCategory] = useState("Todos los productos");
   const [categoryVisibleCount, setCategoryVisibleCount] = useState(CATEGORY_PAGE_SIZE);
+  const [resultsSortKey, setResultsSortKey] = useState("recent");
+  const [isResultsFilterOpen, setIsResultsFilterOpen] = useState(false);
   const [auth, setAuth] = useState(() => {
     try {
       const raw = localStorage.getItem("auth");
@@ -1547,6 +1570,37 @@ function App() {
     return categoryFilteredProducts.filter((product) => matchesProductSearch(product, normalizedSearch));
   }, [products, searchTerm, selectedCategory]);
 
+  const sortedFilteredProducts = useMemo(() => {
+    const productsToSort = [...filteredProducts];
+
+    productsToSort.sort((left, right) => {
+      if (resultsSortKey === "price-desc") {
+        return Number(right?.price || 0) - Number(left?.price || 0);
+      }
+
+      if (resultsSortKey === "price-asc") {
+        return Number(left?.price || 0) - Number(right?.price || 0);
+      }
+
+      if (resultsSortKey === "name-asc") {
+        return String(left?.name || "").localeCompare(String(right?.name || ""), "es", { sensitivity: "base" });
+      }
+
+      if (resultsSortKey === "name-desc") {
+        return String(right?.name || "").localeCompare(String(left?.name || ""), "es", { sensitivity: "base" });
+      }
+
+      return getProductRecentValue(right) - getProductRecentValue(left);
+    });
+
+    return productsToSort;
+  }, [filteredProducts, resultsSortKey]);
+
+  const activeResultsSortLabel = useMemo(
+    () => RESULTS_SORT_OPTIONS.find((option) => option.key === resultsSortKey)?.label || "Mas reciente",
+    [resultsSortKey]
+  );
+
   const saphirusGalleryProducts = useMemo(() => {
     const saphirusProducts = (products || [])
       .filter((product) => product?.isVisible !== false)
@@ -1632,6 +1686,10 @@ function App() {
 
   useEffect(() => {
     setCategoryVisibleCount(CATEGORY_PAGE_SIZE);
+  }, [selectedCategory, searchTerm]);
+
+  useEffect(() => {
+    setIsResultsFilterOpen(false);
   }, [selectedCategory, searchTerm]);
 
   const getProductMediaItems = (product) => {
@@ -3032,10 +3090,10 @@ function App() {
   const isAboutActive = activeSection === "about";
   const shouldRenderGridProducts = isSpecificCategorySelected || isSearchActive;
   const visibleCategoryProducts = isSpecificCategorySelected
-    ? filteredProducts.slice(0, categoryVisibleCount)
-    : filteredProducts;
-  const visibleGridProducts = isSpecificCategorySelected ? visibleCategoryProducts : filteredProducts;
-  const canLoadMoreCategoryProducts = isSpecificCategorySelected && filteredProducts.length > categoryVisibleCount;
+    ? sortedFilteredProducts.slice(0, categoryVisibleCount)
+    : sortedFilteredProducts;
+  const visibleGridProducts = isSpecificCategorySelected ? visibleCategoryProducts : sortedFilteredProducts;
+  const canLoadMoreCategoryProducts = isSpecificCategorySelected && sortedFilteredProducts.length > categoryVisibleCount;
   const catalogSeoSummary = useMemo(() => {
     if (isSearchActive) {
       return `Resultados de limpieza para "${currentSearchLabel}". Encontrá opciones para hogar y comercio con stock actualizado, promociones y envío rápido.`;
@@ -5558,6 +5616,43 @@ function App() {
                   </button>
                   .
                 </p>
+              )}
+
+              {shouldRenderGridProducts && (
+                <div className="results-filter-toolbar" aria-label="Controles de resultados">
+                  <p className="results-filter-count">{sortedFilteredProducts.length} resultados</p>
+                  <div className="results-filter-wrap">
+                    <button
+                      type="button"
+                      className={`results-filter-btn${isResultsFilterOpen ? " is-open" : ""}`}
+                      onClick={() => setIsResultsFilterOpen((current) => !current)}
+                      aria-haspopup="true"
+                      aria-expanded={isResultsFilterOpen}
+                    >
+                      Filtro: {activeResultsSortLabel}
+                    </button>
+
+                    {isResultsFilterOpen && (
+                      <div className="results-filter-panel" role="menu" aria-label="Opciones de filtro">
+                        {RESULTS_SORT_OPTIONS.map((option) => (
+                          <button
+                            key={option.key}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={resultsSortKey === option.key}
+                            className={`results-filter-option${resultsSortKey === option.key ? " is-active" : ""}`}
+                            onClick={() => {
+                              setResultsSortKey(option.key);
+                              setIsResultsFilterOpen(false);
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {filteredProducts.length ? (

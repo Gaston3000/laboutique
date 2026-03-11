@@ -8607,6 +8607,89 @@ main h1 {
   transform: translateY(-1px);
 }
 
+.results-filter-toolbar {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.results-filter-count {
+  margin: 0;
+  color: rgba(45, 45, 45, 0.82);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.results-filter-wrap {
+  position: relative;
+}
+
+.results-filter-btn {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 45, 45, 0.22);
+  background: var(--white);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.results-filter-btn:hover,
+.results-filter-btn.is-open {
+  background: var(--surface-gray);
+  border-color: rgba(24, 119, 242, 0.36);
+}
+
+.results-filter-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(45, 45, 45, 0.14);
+  background: var(--white);
+  box-shadow: 0 14px 30px rgba(20, 30, 48, 0.16);
+  display: grid;
+  gap: 4px;
+  z-index: 40;
+}
+
+.results-filter-option {
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(45, 45, 45, 0.92);
+  text-align: left;
+  font: inherit;
+  font-size: 0.89rem;
+  font-weight: 600;
+  padding: 0 10px;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.results-filter-option:hover,
+.results-filter-option:focus-visible {
+  background: rgba(24, 119, 242, 0.1);
+  color: var(--blue);
+}
+
+.results-filter-option.is-active {
+  background: rgba(24, 119, 242, 0.14);
+  color: var(--blue);
+}
+
 .product-detail-view {
   display: grid;
   gap: 28px;
@@ -9054,6 +9137,24 @@ main h1 {
 @media (max-width: 640px) {
   .products-grid {
     grid-template-columns: 1fr;
+  }
+
+  .results-filter-toolbar {
+    align-items: stretch;
+  }
+
+  .results-filter-wrap {
+    width: 100%;
+  }
+
+  .results-filter-btn {
+    width: 100%;
+  }
+
+  .results-filter-panel {
+    left: 0;
+    right: 0;
+    min-width: 0;
   }
 }
 
