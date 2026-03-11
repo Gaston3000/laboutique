@@ -3296,13 +3296,37 @@ export default function AdminPanel({
               <form className="admin-product-editor" onSubmit={handleEditorSubmit} ref={editorRef}>
                 <header className="admin-product-editor-header">
                   <div>
-                    <h3>{editorMode === "create" ? "Nuevo producto" : "Editar producto"}</h3>
-                    <p>{editorMode === "create" ? "Completá los datos para crear el producto." : editorProduct?.name}</p>
+                    {editorMode === "create" ? (
+                      <>
+                        <h3>Nuevo producto</h3>
+                        <p>Completá los datos para crear el producto.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="admin-product-editor-subtitle">Editar producto</p>
+                        <h3 className="admin-product-editor-title">{editorProduct?.name || "Producto sin nombre"}</h3>
+                      </>
+                    )}
                   </div>
                   <div className="admin-product-editor-header-actions">
-                    <button type="submit">Guardar cambios</button>
+                    <button type="submit">
+                      <span className="admin-btn-icon" aria-hidden="true">
+                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M4 3H13L16 6V17H4V3Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M7 3V8H13V3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M7 13H13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                        </svg>
+                      </span>
+                      <span>Guardar cambios</span>
+                    </button>
                     <button type="button" className="secondary-btn" onClick={closeEditor}>
-                      Volver al listado
+                      <span className="admin-btn-icon" aria-hidden="true">
+                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M8 5L3 10L8 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M4 10H17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                        </svg>
+                      </span>
+                      <span>Volver al listado</span>
                     </button>
                   </div>
                 </header>

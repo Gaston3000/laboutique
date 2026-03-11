@@ -475,6 +475,7 @@ export default function TicketsPanel({
 
       setNotice(result?.notification?.message || "Ticket actualizado");
       setUpdateForm((current) => ({ ...current, duplicateOfTicketRef: "" }));
+      setSelectedTicketRef("");
     } catch (error) {
       setNotice(error.message || "No se pudo actualizar el ticket");
     } finally {

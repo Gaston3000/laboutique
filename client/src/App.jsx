@@ -932,6 +932,7 @@ function App() {
   const [cartPromoMessage, setCartPromoMessage] = useState("");
   const [appliedCartPromotion, setAppliedCartPromotion] = useState(null);
   const [cartNoteMessage, setCartNoteMessage] = useState("");
+  const [shouldFocusCartPromoInput, setShouldFocusCartPromoInput] = useState(false);
   const [welcomePromoMessage, setWelcomePromoMessage] = useState("");
   const [showHeader, setShowHeader] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
@@ -939,6 +940,7 @@ function App() {
   const similarProductsRowRef = useRef(null);
   const saphirusProductsRowRef = useRef(null);
   const adminNotificationsRef = useRef(null);
+  const cartPromoInputRef = useRef(null);
   const hasProcessedInitialProductQueryRef = useRef(false);
   const [cart, setCart] = useState(() => {
     try {
@@ -1499,6 +1501,23 @@ function App() {
 
     setCartPromoCode(WELCOME_PROMO_CODE);
   }, [activeSection, auth.user, cartPromoCode, appliedCartPromotion]);
+
+  useEffect(() => {
+    if (activeSection !== "cart" || !isCartPromoOpen || !shouldFocusCartPromoInput) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      if (!cartPromoInputRef.current) {
+        return;
+      }
+
+      cartPromoInputRef.current.focus();
+      cartPromoInputRef.current.select();
+    });
+
+    setShouldFocusCartPromoInput(false);
+  }, [activeSection, isCartPromoOpen, shouldFocusCartPromoInput]);
 
   const favoriteProducts = useMemo(() => {
     const favoriteIdSet = new Set(favoriteProductIds.map((id) => String(id)));
@@ -2306,8 +2325,14 @@ function App() {
     setOpenInfoSection((current) => (current === section ? "" : section));
   }
 
-  function handleGoToCartPage() {
+  function handleGoToCartPage(options = {}) {
+    const { openPromotion = false } = options;
+
     setActiveSection("cart");
+    if (openPromotion) {
+      setIsCartPromoOpen(true);
+      setShouldFocusCartPromoInput(true);
+    }
     closeCartDrawer();
   }
 
@@ -3809,7 +3834,11 @@ function App() {
             </div>
 
             <footer className="cart-drawer-footer">
-              <button type="button" className="cart-promo-btn" onClick={handleGoToCartPage}>
+              <button
+                type="button"
+                className="cart-promo-btn"
+                onClick={() => handleGoToCartPage({ openPromotion: true })}
+              >
                 <span className="cart-promo-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M4 12.5 12.5 4H20v7.5L11.5 20 4 12.5Z" />
@@ -4703,6 +4732,7 @@ function App() {
                       {isCartPromoOpen && (
                         <div className="cart-extra-panel" aria-label="Código promocional">
                           <input
+                            ref={cartPromoInputRef}
                             type="text"
                             placeholder="P. ej., OFERTA50"
                             value={cartPromoCode}
