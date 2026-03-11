@@ -115,8 +115,9 @@ const levelTwoKeywordIcons = [
     keywords: ["oferta", "promo", "descuento", "2x1"],
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 9.5 12 4l7 5.5v8.2L12 20l-7-2.3V9.5Z" />
-        <path d="M9 12h6" />
+        <circle cx="8" cy="8" r="2" />
+        <circle cx="16" cy="16" r="2" />
+        <path d="M7 17 17 7" />
       </svg>
     )
   },

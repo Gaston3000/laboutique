@@ -223,7 +223,13 @@ export default function HomeBanners({ onExploreProducts, onViewPromotions }) {
               <span>Explorar productos</span>
             </button>
             <button type="button" className="home-banners-secondary" onClick={onViewPromotions}>
-              <span className="home-banners-btn-icon" aria-hidden="true">🏷️</span>
+              <span className="home-banners-btn-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <circle cx="8" cy="8" r="2" />
+                  <circle cx="16" cy="16" r="2" />
+                  <path d="M7 17 17 7" />
+                </svg>
+              </span>
               <span>Ver promociones</span>
             </button>
           </div>

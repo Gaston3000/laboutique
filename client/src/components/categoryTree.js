@@ -7,15 +7,11 @@ export const categoryTree = [
         children: ["Todos los artículos", "Productos destacados", "Nuevos ingresos"]
       },
       {
-        name: "Ofertas destacadas",
-        children: ["2x1", "Descuentos por volumen", "Promos del mes"]
-      },
-      {
         name: "Novedades",
         children: ["Nuevos lanzamientos", "Nuevas marcas", "Nuevas fragancias"]
       },
-      "Más vendidos",
-      "Productos con envío rápido"
+      "Ofertas destacadas",
+      "Más vendidos"
     ]
   },
   {

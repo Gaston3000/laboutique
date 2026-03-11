@@ -4,6 +4,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrapDatabase } from "./bootstrap.js";
+import { query } from "./db.js";
 
 import authRouter from "./routes/auth.js";
 import adminRouter from "./routes/admin.js";
@@ -57,6 +58,92 @@ app.get("/", (_req, res) => {
     name: "La Boutique de la Limpieza API",
     version: "1.0.0"
   });
+});
+
+function xmlEscape(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function toSeoSlug(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function getPublicSiteBaseUrl() {
+  const configured = String(process.env.PUBLIC_SITE_URL || process.env.CLIENT_URL || "").trim();
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  return "http://localhost:5173";
+}
+
+app.get("/robots.txt", (_req, res) => {
+  const siteBaseUrl = getPublicSiteBaseUrl();
+  const body = [
+    "User-agent: *",
+    "Allow: /",
+    "",
+    `Sitemap: ${siteBaseUrl}/sitemap.xml`
+  ].join("\n");
+
+  res.type("text/plain; charset=utf-8").send(body);
+});
+
+app.get("/sitemap.xml", async (_req, res) => {
+  try {
+    const siteBaseUrl = getPublicSiteBaseUrl();
+    const result = await query(
+      `SELECT id, name, seo, created_at
+       FROM products
+       WHERE is_visible = TRUE
+       ORDER BY id ASC`
+    );
+
+    const staticUrls = [
+      { loc: `${siteBaseUrl}/`, changefreq: "daily", priority: "1.0" },
+      { loc: `${siteBaseUrl}/?seccion=promociones`, changefreq: "weekly", priority: "0.8" }
+    ];
+
+    const productUrls = result.rows.map((row) => {
+      const seo = row.seo && typeof row.seo === "object" ? row.seo : {};
+      const explicitSlug = String(seo.slug || "").trim();
+      const fallbackSlug = toSeoSlug(`${String(row.name || "")} ${String(row.id || "")}`);
+      const slug = explicitSlug || fallbackSlug;
+      const loc = `${siteBaseUrl}/?producto=${encodeURIComponent(slug)}`;
+      const lastmod = row.created_at ? new Date(row.created_at).toISOString() : null;
+
+      return {
+        loc,
+        changefreq: "weekly",
+        priority: "0.7",
+        lastmod
+      };
+    });
+
+    const allUrls = [...staticUrls, ...productUrls]
+      .map((entry) => {
+        const lastmodTag = entry.lastmod ? `<lastmod>${xmlEscape(entry.lastmod)}</lastmod>` : "";
+        return `<url><loc>${xmlEscape(entry.loc)}</loc>${lastmodTag}<changefreq>${entry.changefreq}</changefreq><priority>${entry.priority}</priority></url>`;
+      })
+      .join("");
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${allUrls}</urlset>`;
+    res.type("application/xml; charset=utf-8").send(xml);
+  } catch {
+    res.status(500).type("application/xml; charset=utf-8").send("<?xml version=\"1.0\" encoding=\"UTF-8\"?><error>no se pudo generar sitemap</error>");
+  }
 });
 
 app.use("/api/health", healthRouter);

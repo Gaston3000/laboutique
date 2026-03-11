@@ -62,6 +62,7 @@ const ADDRESS_BOOK_STORAGE_PREFIX = "address-book";
 const MAX_ACCOUNT_ADDRESSES = 5;
 const WELCOME_PROMO_CODE = "PRIMERACOMPRA10";
 const ADMIN_NOTIFICATIONS_SEEN_STORAGE_KEY = "admin:notifications:seen:v1";
+const FREE_SHIPPING_TARGET_ARS = 50000;
 
 const FOOTER_ACCOUNT_LINKS = [
   "Mi Cuenta",
@@ -270,6 +271,31 @@ function normalizeSearchText(value) {
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function toSeoSlug(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function getProductSeoSlug(product) {
+  const explicitSlug = String(product?.seo?.slug || "").trim();
+  if (explicitSlug) {
+    return explicitSlug;
+  }
+
+  const fromNameAndBrand = toSeoSlug(`${String(product?.name || "")} ${String(product?.brand || "")}`);
+  if (fromNameAndBrand) {
+    return fromNameAndBrand;
+  }
+
+  return String(product?.id || "").trim();
 }
 
 function normalizeOrthography(value) {
@@ -913,6 +939,7 @@ function App() {
   const similarProductsRowRef = useRef(null);
   const saphirusProductsRowRef = useRef(null);
   const adminNotificationsRef = useRef(null);
+  const hasProcessedInitialProductQueryRef = useRef(false);
   const [cart, setCart] = useState(() => {
     try {
       const savedCart = localStorage.getItem("cart");
@@ -1101,6 +1128,65 @@ function App() {
     const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash || ""}`;
     window.history.replaceState({}, "", nextUrl);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || hasProcessedInitialProductQueryRef.current || !products.length) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const requestedSlug = String(params.get("producto") || "").trim().toLowerCase();
+    hasProcessedInitialProductQueryRef.current = true;
+
+    if (!requestedSlug) {
+      return;
+    }
+
+    const matchedProduct = products.find((product) => {
+      const productSlug = String(getProductSeoSlug(product) || "").trim().toLowerCase();
+      return productSlug === requestedSlug;
+    });
+
+    if (!matchedProduct) {
+      return;
+    }
+
+    setSelectedProduct(matchedProduct);
+    setSelectedProductImageIndex(0);
+    setOpenInfoSection("description");
+    setActiveSection("product");
+  }, [products]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const currentProductParam = String(params.get("producto") || "").trim();
+    const isViewingProduct = activeSection === "product" && Boolean(selectedProduct);
+
+    if (!isViewingProduct) {
+      if (!currentProductParam) {
+        return;
+      }
+
+      params.delete("producto");
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash || ""}`;
+      window.history.replaceState({}, "", nextUrl);
+      return;
+    }
+
+    const nextSlug = getProductSeoSlug(selectedProduct);
+    if (!nextSlug || currentProductParam === nextSlug) {
+      return;
+    }
+
+    params.set("producto", nextSlug);
+    const nextUrl = `${window.location.pathname}?${params.toString()}${window.location.hash || ""}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, [activeSection, selectedProduct]);
 
   useEffect(() => {
     localStorage.setItem("auth", JSON.stringify(auth));
@@ -1328,6 +1414,21 @@ function App() {
     () => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
     [cart]
   );
+
+  const freeShippingProgressPercent = useMemo(() => {
+    if (!FREE_SHIPPING_TARGET_ARS) {
+      return 0;
+    }
+
+    return Math.min(100, Math.max(0, (cartSubtotal / FREE_SHIPPING_TARGET_ARS) * 100));
+  }, [cartSubtotal]);
+
+  const freeShippingRemaining = useMemo(
+    () => Math.max(0, FREE_SHIPPING_TARGET_ARS - cartSubtotal),
+    [cartSubtotal]
+  );
+
+  const hasReachedFreeShipping = freeShippingRemaining <= 0;
 
   const cartDiscount = useMemo(
     () => Number(appliedCartPromotion?.discount || 0),
@@ -1573,6 +1674,8 @@ function App() {
 
   useEffect(() => {
     const defaultTitle = "La Boutique de la Limpieza";
+    const defaultDescription = "Productos de limpieza para hogar y comercios en La Boutique de la Limpieza.";
+    const siteName = "La Boutique de la Limpieza";
 
     function upsertMeta(attrName, key, content) {
       if (!content) {
@@ -1587,6 +1690,13 @@ function App() {
       }
 
       element.setAttribute("content", content);
+    }
+
+    function removeMeta(attrName, key) {
+      const element = document.head.querySelector(`meta[${attrName}="${key}"]`);
+      if (element) {
+        element.remove();
+      }
     }
 
     function setCanonical(canonicalHref) {
@@ -1604,13 +1714,65 @@ function App() {
       canonicalLink.setAttribute("href", canonicalHref);
     }
 
-    const existingScript = document.getElementById("product-seo-jsonld");
-    if (existingScript) {
-      existingScript.remove();
+    const existingProductScript = document.getElementById("product-seo-jsonld");
+    const existingSiteScript = document.getElementById("site-seo-jsonld");
+    const existingBreadcrumbScript = document.getElementById("product-breadcrumb-jsonld");
+    if (existingProductScript) {
+      existingProductScript.remove();
+    }
+    if (existingSiteScript) {
+      existingSiteScript.remove();
+    }
+    if (existingBreadcrumbScript) {
+      existingBreadcrumbScript.remove();
     }
 
     if (activeSection !== "product" || !selectedProduct) {
       document.title = defaultTitle;
+      const defaultImage = `${window.location.origin}/fotos/foto-inicio.png`;
+      upsertMeta("name", "description", defaultDescription);
+      upsertMeta("name", "robots", "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1");
+      upsertMeta("property", "og:type", "website");
+      upsertMeta("property", "og:title", defaultTitle);
+      upsertMeta("property", "og:description", defaultDescription);
+      upsertMeta("property", "og:url", `${window.location.origin}${window.location.pathname}`);
+      upsertMeta("property", "og:site_name", siteName);
+      upsertMeta("property", "og:locale", "es_AR");
+      upsertMeta("property", "og:image", defaultImage);
+      upsertMeta("name", "twitter:card", "summary_large_image");
+      upsertMeta("name", "twitter:title", defaultTitle);
+      upsertMeta("name", "twitter:description", defaultDescription);
+      upsertMeta("name", "twitter:image", defaultImage);
+      removeMeta("name", "keywords");
+      removeMeta("property", "product:price:amount");
+      removeMeta("property", "product:price:currency");
+      setCanonical(`${window.location.origin}${window.location.pathname}`);
+
+      const siteJsonLdScript = document.createElement("script");
+      siteJsonLdScript.id = "site-seo-jsonld";
+      siteJsonLdScript.type = "application/ld+json";
+      siteJsonLdScript.text = JSON.stringify({
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            name: siteName,
+            url: `${window.location.origin}${window.location.pathname}`,
+            logo: `${window.location.origin}/fotos/Logo%20AI.png`
+          },
+          {
+            "@type": "WebSite",
+            name: siteName,
+            url: `${window.location.origin}${window.location.pathname}`,
+            potentialAction: {
+              "@type": "SearchAction",
+              target: `${window.location.origin}${window.location.pathname}?q={search_term_string}`,
+              "query-input": "required name=search_term_string"
+            }
+          }
+        ]
+      });
+      document.head.appendChild(siteJsonLdScript);
       return;
     }
 
@@ -1640,9 +1802,18 @@ function App() {
     upsertMeta("name", "twitter:image", selectedProductImages[0] || "/fotos/foto-inicio.png");
 
     const canonicalFromSeo = String(seo.canonicalUrl || "").trim();
-    const slug = String(seo.slug || "").trim();
-    const canonicalHref = canonicalFromSeo || (slug ? `${window.location.origin}/producto/${slug}` : "");
+    const slug = String(getProductSeoSlug(selectedProduct) || "").trim();
+    const canonicalHref = canonicalFromSeo
+      || (slug
+        ? `${window.location.origin}${window.location.pathname}?producto=${encodeURIComponent(slug)}`
+        : `${window.location.origin}${window.location.pathname}`);
     setCanonical(canonicalHref);
+    upsertMeta("name", "robots", "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1");
+    upsertMeta("property", "og:url", canonicalHref);
+    upsertMeta("property", "og:site_name", siteName);
+    upsertMeta("property", "og:locale", "es_AR");
+    upsertMeta("property", "product:price:amount", String(Number(selectedProduct.price || 0)));
+    upsertMeta("property", "product:price:currency", "ARS");
 
     const jsonLdScript = document.createElement("script");
     jsonLdScript.id = "product-seo-jsonld";
@@ -1651,24 +1822,73 @@ function App() {
       "@context": "https://schema.org",
       "@type": "Product",
       name: baseName,
+      url: canonicalHref,
       description,
       image: selectedProductImages.filter(Boolean),
+      sku: String(selectedProduct.id || ""),
+      category: Array.isArray(selectedProduct.categories) ? selectedProduct.categories[0] : undefined,
       brand: selectedProduct.brand ? { "@type": "Brand", name: selectedProduct.brand } : undefined,
       offers: {
         "@type": "Offer",
+        url: canonicalHref,
         priceCurrency: "ARS",
         price: Number(selectedProduct.price || 0),
         availability: Number(selectedProduct.stock || 0) > 0
           ? "https://schema.org/InStock"
-          : "https://schema.org/OutOfStock"
+          : "https://schema.org/OutOfStock",
+        itemCondition: "https://schema.org/NewCondition",
+        seller: {
+          "@type": "Organization",
+          name: siteName
+        }
       }
     });
     document.head.appendChild(jsonLdScript);
 
+    const productCategory = Array.isArray(selectedProduct.categories)
+      ? String(selectedProduct.categories[0] || "").trim()
+      : "";
+
+    if (productCategory) {
+      const categorySlug = encodeURIComponent(toSeoSlug(productCategory));
+      const breadcrumbScript = document.createElement("script");
+      breadcrumbScript.id = "product-breadcrumb-jsonld";
+      breadcrumbScript.type = "application/ld+json";
+      breadcrumbScript.text = JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Inicio",
+            item: `${window.location.origin}${window.location.pathname}`
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: productCategory,
+            item: `${window.location.origin}${window.location.pathname}?categoria=${categorySlug}`
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: baseName,
+            item: canonicalHref
+          }
+        ]
+      });
+      document.head.appendChild(breadcrumbScript);
+    }
+
     return () => {
-      const scriptElement = document.getElementById("product-seo-jsonld");
-      if (scriptElement) {
-        scriptElement.remove();
+      const productScript = document.getElementById("product-seo-jsonld");
+      const breadcrumbScript = document.getElementById("product-breadcrumb-jsonld");
+      if (productScript) {
+        productScript.remove();
+      }
+      if (breadcrumbScript) {
+        breadcrumbScript.remove();
       }
     };
   }, [activeSection, selectedProduct, selectedProductImages]);
@@ -2093,6 +2313,11 @@ function App() {
 
   function handleSelectCategory(categoryName) {
     const normalizedCategory = String(categoryName || "Todos los productos").trim() || "Todos los productos";
+
+    if (normalizeSearchText(normalizedCategory) === "ofertas destacadas") {
+      handleGoPromotionsSection();
+      return;
+    }
 
     sendAnalytics("category_select", {
       categoryName: normalizedCategory
@@ -2786,6 +3011,139 @@ function App() {
     : filteredProducts;
   const visibleGridProducts = isSpecificCategorySelected ? visibleCategoryProducts : filteredProducts;
   const canLoadMoreCategoryProducts = isSpecificCategorySelected && filteredProducts.length > categoryVisibleCount;
+  const catalogSeoSummary = useMemo(() => {
+    if (isSearchActive) {
+      return `Resultados de limpieza para "${currentSearchLabel}". Encontrá opciones para hogar y comercio con stock actualizado, promociones y envío rápido.`;
+    }
+
+    if (isSpecificCategorySelected) {
+      return `Explorá ${selectedCategory} en La Boutique de la Limpieza. Compará marcas, presentaciones y precios para comprar online con entrega rápida.`;
+    }
+
+    return "Catálogo de productos de limpieza para hogar, comercio e industria ligera con envíos y promociones semanales.";
+  }, [isSearchActive, currentSearchLabel, isSpecificCategorySelected, selectedCategory]);
+  const topCatalogCategories = useMemo(() => {
+    const map = new Map();
+
+    for (const product of products) {
+      const categoriesList = Array.isArray(product?.categories) ? product.categories : [];
+      for (const category of categoriesList) {
+        const name = String(category || "").trim();
+        if (!name) {
+          continue;
+        }
+
+        map.set(name, (map.get(name) || 0) + 1);
+      }
+    }
+
+    return Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name, count]) => ({ name, count }));
+  }, [products]);
+
+    useEffect(() => {
+      const existingCatalogScript = document.getElementById("catalog-seo-jsonld");
+      if (existingCatalogScript) {
+        existingCatalogScript.remove();
+      }
+
+      if (activeSection !== "home" || (!isSpecificCategorySelected && !isSearchActive)) {
+        return;
+      }
+
+      const siteName = "La Boutique de la Limpieza";
+      const baseTitle = isSearchActive
+        ? `${currentSearchLabel} | Resultados de limpieza | ${siteName}`
+        : `${selectedCategory} | Catálogo de limpieza | ${siteName}`;
+      const title = baseTitle.length > 68 ? `${baseTitle.slice(0, 68).trim()}...` : baseTitle;
+      const description = catalogSeoSummary;
+      const robots = "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1";
+      const query = new URLSearchParams(window.location.search);
+
+      if (isSearchActive) {
+        query.set("q", currentSearchLabel);
+        query.delete("categoria");
+      } else {
+        query.set("categoria", toSeoSlug(selectedCategory));
+        query.delete("q");
+      }
+
+      const canonicalHref = `${window.location.origin}${window.location.pathname}?${query.toString()}`;
+
+      const upsertMeta = (attrName, key, content) => {
+        if (!content) {
+          return;
+        }
+
+        let element = document.head.querySelector(`meta[${attrName}="${key}"]`);
+        if (!element) {
+          element = document.createElement("meta");
+          element.setAttribute(attrName, key);
+          document.head.appendChild(element);
+        }
+
+        element.setAttribute("content", content);
+      };
+
+      let canonicalLink = document.head.querySelector("link[rel='canonical']");
+      if (!canonicalLink) {
+        canonicalLink = document.createElement("link");
+        canonicalLink.setAttribute("rel", "canonical");
+        document.head.appendChild(canonicalLink);
+      }
+
+      document.title = title;
+      canonicalLink.setAttribute("href", canonicalHref);
+      upsertMeta("name", "description", description);
+      upsertMeta("name", "robots", robots);
+      upsertMeta("property", "og:type", "website");
+      upsertMeta("property", "og:title", title);
+      upsertMeta("property", "og:description", description);
+      upsertMeta("property", "og:url", canonicalHref);
+      upsertMeta("name", "twitter:title", title);
+      upsertMeta("name", "twitter:description", description);
+
+      const itemListElements = visibleGridProducts.slice(0, 24).map((product, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: `${window.location.origin}${window.location.pathname}?producto=${encodeURIComponent(getProductSeoSlug(product))}`,
+        name: String(product?.name || "Producto")
+      }));
+
+      const catalogScript = document.createElement("script");
+      catalogScript.id = "catalog-seo-jsonld";
+      catalogScript.type = "application/ld+json";
+      catalogScript.text = JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        name: title,
+        description,
+        url: canonicalHref,
+        mainEntity: {
+          "@type": "ItemList",
+          numberOfItems: itemListElements.length,
+          itemListElement: itemListElements
+        }
+      });
+      document.head.appendChild(catalogScript);
+
+      return () => {
+        const scriptElement = document.getElementById("catalog-seo-jsonld");
+        if (scriptElement) {
+          scriptElement.remove();
+        }
+      };
+    }, [
+      activeSection,
+      isSpecificCategorySelected,
+      isSearchActive,
+      currentSearchLabel,
+      selectedCategory,
+      catalogSeoSummary,
+      visibleGridProducts
+    ]);
   const userAddressBook = Array.isArray(auth.user?.addressBook)
     ? auth.user.addressBook
       .map((entry, index) => normalizeAddressBookEntry(entry, `addr-${index + 1}`))
@@ -3368,6 +3726,28 @@ function App() {
               </button>
             </header>
 
+            <section className={`cart-free-shipping ${hasReachedFreeShipping ? "is-complete" : ""}`} aria-live="polite">
+              <p className="cart-free-shipping-message">
+                {hasReachedFreeShipping
+                  ? "Ya desbloqueaste el envio gratis en este pedido."
+                  : `Te faltan $${freeShippingRemaining.toLocaleString("es-AR")} ARS para tener envio gratis.`}
+              </p>
+              <div
+                className="cart-free-shipping-track"
+                role="progressbar"
+                aria-label="Progreso para envio gratis"
+                aria-valuemin={0}
+                aria-valuemax={FREE_SHIPPING_TARGET_ARS}
+                aria-valuenow={Math.round(Math.min(cartSubtotal, FREE_SHIPPING_TARGET_ARS))}
+              >
+                <span
+                  className="cart-free-shipping-fill"
+                  style={{ width: `${freeShippingProgressPercent.toFixed(2)}%` }}
+                />
+              </div>
+              <p className="cart-free-shipping-caption">Envio gratis a partir de $50.000 ARS</p>
+            </section>
+
             <div className="cart-drawer-body">
               {!cart.length ? (
                 <p className="empty-results">Tu carrito está vacío.</p>
@@ -3444,10 +3824,6 @@ function App() {
                   <span>Total estimado</span>
                   <strong>${cartSubtotal.toLocaleString("es-AR")} ARS</strong>
                 </div>
-                <p>
-                  Los gastos de envío y los impuestos aplicables se determinan al finalizar la compra.
-                  Los precios exhibidos incluyen IVA.
-                </p>
               </div>
 
               <button type="button" className="cart-pay-btn" onClick={handleGoToCartPage}>
@@ -5113,8 +5489,27 @@ function App() {
               <div id="home-catalog-start" />
               {!isInicioActive && <h1>{catalogHeading}</h1>}
               <p className={`subtitle${isInicioActive ? " home-catalog-subtitle" : ""}`}>
-                {isInicioActive ? "ultimos productos subidos" : catalogSubtitle}
+                {isInicioActive ? "Últimos productos subidos" : catalogSubtitle}
               </p>
+              {!isInicioActive && (
+                <section className="catalog-seo-copy" aria-label="Información de catálogo">
+                  <p className="catalog-seo-copy-text">{catalogSeoSummary}</p>
+                  {topCatalogCategories.length > 0 && (
+                    <div className="catalog-seo-links" aria-label="Categorías destacadas">
+                      {topCatalogCategories.map((category) => (
+                        <button
+                          type="button"
+                          key={`catalog-seo-category-${category.name}`}
+                          className="catalog-seo-link"
+                          onClick={() => handleSelectCategory(category.name)}
+                        >
+                          {category.name} ({category.count})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
               {productsLoadError && (
                 <p className="catalog-load-error" role="alert">
                   {productsLoadError}

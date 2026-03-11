@@ -2983,10 +2983,24 @@ export default function AdminPanel({
     }
   }
 
+  const hasProductListFilters =
+    adminProductSearch.trim().length > 0 ||
+    productStockFilter !== "all" ||
+    productCategoryFilter !== "all" ||
+    productVisibilityFilter !== "all";
+
+  const hasInventoryListFilters =
+    adminProductSearch.trim().length > 0 ||
+    inventoryStockFilter !== "all" ||
+    inventoryCategoryFilter !== "all" ||
+    inventoryVisibilityFilter !== "all";
+
   const sectionTitle =
-    activeSection === "Productos" || activeSection === "Inventario"
-      ? `${activeSection} (${products.length})`
-      : activeSection;
+    activeSection === "Productos"
+      ? `Productos (${filteredCatalogProducts.length}${hasProductListFilters ? ` de ${products.length}` : ""})`
+      : activeSection === "Inventario"
+        ? `Inventario (${filteredInventoryProducts.length}${hasInventoryListFilters ? ` de ${products.length}` : ""})`
+        : activeSection;
 
   const analyticsSummary = analytics?.summary || {};
   const analyticsComparison = analytics?.comparison || {};

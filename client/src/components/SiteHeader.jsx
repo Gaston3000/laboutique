@@ -359,7 +359,11 @@ export default function SiteHeader({
             >
               {user ? (
                 <>
-                  <span className="account-chevron" aria-hidden="true">▾</span>
+                  <span className="account-chevron" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <path d="M7 10.5 12 15.5 17 10.5" />
+                    </svg>
+                  </span>
                   <span className="account-logged-label">Mi cuenta</span>
                   <span className="account-logged-icon" aria-hidden="true">
                     {accountInitials}

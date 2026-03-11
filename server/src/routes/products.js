@@ -102,6 +102,37 @@ function normalizeText(value) {
   return value.trim();
 }
 
+async function findDuplicateProductId({ name, brand, excludeId = null }) {
+  const normalizedName = normalizeText(name);
+  const normalizedBrand = normalizeText(brand) || null;
+
+  const params = [normalizedName, normalizedBrand];
+  let sql = `
+    SELECT id
+    FROM products
+    WHERE lower(trim(name)) = lower(trim($1))
+      AND lower(trim(COALESCE(brand, ''))) = lower(trim(COALESCE($2, '')))
+  `;
+
+  if (excludeId) {
+    params.push(excludeId);
+    sql += " AND id <> $3";
+  }
+
+  sql += " ORDER BY id ASC LIMIT 1";
+
+  const result = await query(sql, params);
+  return result.rows[0]?.id || null;
+}
+
+function buildMediaAlt({ name, brand, index }) {
+  const normalizedName = normalizeText(name) || "Producto";
+  const normalizedBrand = normalizeText(brand);
+  const suffix = index > 0 ? ` foto ${index + 1}` : "";
+  const brandPart = normalizedBrand ? ` ${normalizedBrand}` : "";
+  return `${normalizedName}${brandPart}${suffix}`.trim();
+}
+
 function parseOptionalInteger(value, fallback = 0) {
   if (value === undefined || value === null || value === "") {
     return fallback;
@@ -164,12 +195,13 @@ function parseCategories(value) {
   return Array.from(unique);
 }
 
-function parseMedia(value) {
+function parseMedia(value, context = {}) {
   if (!Array.isArray(value)) {
     return [];
   }
 
   const normalized = [];
+  let imageIndex = 0;
 
   for (const item of value) {
     if (!item || typeof item !== "object") {
@@ -182,7 +214,19 @@ function parseMedia(value) {
     }
 
     const type = normalizeText(item.type).toLowerCase() === "video" ? "video" : "image";
-    const alt = normalizeText(item.alt);
+    let alt = normalizeText(item.alt);
+
+    if (type === "image" && !alt) {
+      alt = buildMediaAlt({
+        name: context.name,
+        brand: context.brand,
+        index: imageIndex
+      });
+      imageIndex += 1;
+    } else if (type === "image") {
+      imageIndex += 1;
+    }
+
     normalized.push({ url, type, alt });
   }
 
@@ -336,7 +380,7 @@ productsRouter.post("/", requireAuth, requireAdmin, async (req, res) => {
   const parsedThreshold = parseOptionalInteger(lowStockThreshold, 10);
   const parsedVisible = parseBoolean(isVisible, true);
   const parsedCategories = parseCategories(categories);
-  const parsedMedia = parseMedia(media);
+  const parsedMedia = parseMedia(media, { name: normalizedName, brand: normalizedBrand });
   const parsedSeo = parseSeo(seo);
 
   if (parsedMedia === null) {
@@ -348,6 +392,13 @@ productsRouter.post("/", requireAuth, requireAdmin, async (req, res) => {
   }
 
   try {
+    const duplicateId = await findDuplicateProductId({ name: normalizedName, brand: normalizedBrand });
+    if (duplicateId) {
+      return res.status(409).json({
+        error: "Ya existe un producto con el mismo nombre y marca"
+      });
+    }
+
     const result = await query(
       `INSERT INTO products (
          name, brand, short_description, long_description,
@@ -391,7 +442,7 @@ productsRouter.put("/:id", requireAuth, requireAdmin, async (req, res) => {
   const parsedThreshold = parseOptionalInteger(lowStockThreshold, 10);
   const parsedVisible = parseBoolean(isVisible, true);
   const parsedCategories = parseCategories(categories);
-  const parsedMedia = parseMedia(media);
+  const parsedMedia = parseMedia(media, { name: normalizedName, brand: normalizedBrand });
   const parsedSeo = parseSeo(seo);
 
   if (parsedMedia === null) {
@@ -407,6 +458,18 @@ productsRouter.put("/:id", requireAuth, requireAdmin, async (req, res) => {
   }
 
   try {
+    const duplicateId = await findDuplicateProductId({
+      name: normalizedName,
+      brand: normalizedBrand,
+      excludeId: productId
+    });
+
+    if (duplicateId) {
+      return res.status(409).json({
+        error: "Ya existe un producto con el mismo nombre y marca"
+      });
+    }
+
     const result = await query(
       `UPDATE products
        SET name = $1,

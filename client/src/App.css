@@ -172,6 +172,16 @@ html {
   transition: transform 0.24s ease;
 }
 
+.home-banners-btn-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .home-banners-primary:hover .home-banners-btn-icon,
 .home-banners-secondary:hover .home-banners-btn-icon {
   transform: translateX(-3px);
@@ -1609,16 +1619,31 @@ html {
 }
 
 .account-chevron {
-  font-size: 1.15rem;
-  line-height: 1;
-  color: rgba(45, 45, 45, 0.75);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #3f3f3f;
   transition: transform 0.2s ease;
-  transform-origin: center;
-  transform: rotate(180deg);
+  transform: rotate(0deg);
 }
 
 .account-item.is-logged[aria-expanded="true"] .account-chevron {
-  transform: rotate(0deg);
+  transform: rotate(180deg);
+}
+
+.account-chevron svg {
+  width: 100%;
+  height: 100%;
+}
+
+.account-chevron path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .account-avatar {
@@ -2399,7 +2424,7 @@ html {
   backdrop-filter: blur(1px);
   display: flex;
   justify-content: flex-end;
-  z-index: 95;
+  z-index: 101;
   animation: cart-backdrop-fade-in 240ms ease-out;
 }
 
@@ -2482,6 +2507,68 @@ html {
   stroke: currentColor;
   stroke-width: 1.9;
   stroke-linecap: round;
+}
+
+.cart-free-shipping {
+  padding: 12px 18px 14px;
+  border-bottom: 1px solid rgba(45, 45, 45, 0.1);
+  background:
+    radial-gradient(circle at 12% -60%, rgba(60, 130, 246, 0.2), transparent 68%),
+    linear-gradient(180deg, rgba(245, 249, 255, 0.9) 0%, rgba(255, 255, 255, 1) 100%);
+  display: grid;
+  gap: 8px;
+}
+
+.cart-free-shipping-message {
+  margin: 0;
+  font-size: 0.93rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #1f355f;
+}
+
+.cart-free-shipping-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(49, 90, 168, 0.15);
+  overflow: hidden;
+  position: relative;
+}
+
+.cart-free-shipping-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #37b36a 0%, #7dcc3f 54%, #4aae44 100%);
+  box-shadow: 0 0 0 1px rgba(31, 101, 63, 0.15) inset;
+  transition: width 260ms ease;
+}
+
+.cart-free-shipping-caption {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(31, 53, 95, 0.78);
+}
+
+.cart-free-shipping.is-complete {
+  background:
+    radial-gradient(circle at 12% -60%, rgba(85, 179, 88, 0.25), transparent 68%),
+    linear-gradient(180deg, rgba(242, 252, 243, 0.94) 0%, rgba(255, 255, 255, 1) 100%);
+}
+
+.cart-free-shipping.is-complete .cart-free-shipping-message {
+  color: #22592c;
+}
+
+.cart-free-shipping.is-complete .cart-free-shipping-track {
+  background: rgba(80, 165, 84, 0.22);
+}
+
+.cart-free-shipping.is-complete .cart-free-shipping-caption {
+  color: rgba(34, 89, 44, 0.82);
 }
 
 .cart-drawer-body {
@@ -8400,6 +8487,7 @@ main h1 {
   font-size: 1.04rem;
   font-weight: 700;
   letter-spacing: 0.01em;
+  color: #000;
 }
 
 .catalog-load-error {
@@ -8432,6 +8520,48 @@ main h1 {
 .search-spell-suggestion-btn:hover,
 .search-spell-suggestion-btn:focus-visible {
   opacity: 0.82;
+  transform: translateY(-1px);
+}
+
+.catalog-seo-copy {
+  margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(241, 249, 255, 0.9));
+  border: 1px solid rgba(15, 78, 122, 0.14);
+}
+
+.catalog-seo-copy-text {
+  margin: 0;
+  color: rgba(24, 39, 56, 0.9);
+  font-size: 0.96rem;
+  line-height: 1.55;
+}
+
+.catalog-seo-links {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.catalog-seo-link {
+  border: 1px solid rgba(15, 78, 122, 0.22);
+  background: #fff;
+  color: rgba(15, 78, 122, 0.92);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.catalog-seo-link:hover,
+.catalog-seo-link:focus-visible {
+  border-color: rgba(15, 78, 122, 0.4);
+  box-shadow: 0 6px 16px rgba(15, 78, 122, 0.16);
   transform: translateY(-1px);
 }
 
