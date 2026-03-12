@@ -2748,8 +2748,6 @@ html {
   outline-offset: 2px;
 }
 
-}
-
 .cart-promo-btn {
   min-height: 44px;
   border: 0;
@@ -2793,17 +2791,22 @@ html {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .cart-drawer-total-row span {
-  font-size: 1rem;
+  font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .cart-drawer-total-row strong {
-  font-size: 1.6rem;
-  font-weight: 500;
+  font-size: 1.15rem;
+  font-weight: 600;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cart-drawer-total-wrap p {
@@ -2812,42 +2815,44 @@ html {
   line-height: 1.35;
 }
 
-/* Cart Drawer Discount Styles - Ultra Compact Single Line */
-.cart-drawer-discount-compact {
+/* Cart Drawer Discount Rows */
+.cart-drawer-discount-row-a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 8px;
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border-radius: 4px;
+  border-radius: 5px;
   border: 1px solid #93c5fd;
 }
 
-.cart-drawer-discount-left {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.cart-drawer-discount-row-a-label {
   font-size: 0.75rem;
-  font-weight: 600;
-  color: #1e40af;
-}
-
-.cart-drawer-discount-text {
   font-weight: 700;
+  color: #1e40af;
   letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 
-.cart-drawer-discount-timer {
+.cart-drawer-discount-row-a-amount {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #059669;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.cart-drawer-discount-row-b {
   display: flex;
   align-items: center;
-  gap: 2px;
-  font-size: 0.68rem;
-  font-weight: 500;
-  opacity: 0.85;
-  margin-left: 2px;
-}
-
-.cart-drawer-discount-amount {
-  color: #059669 !important;
-  font-size: 0.95rem !important;
-  font-weight: 700 !important;
+  gap: 5px;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-radius: 5px;
+  border: 1px solid #fed7aa;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #92400e;
 }
 
 .cart-drawer-timer-row {
@@ -2885,12 +2890,12 @@ html {
 }
 
 .cart-drawer-final-total span {
-  font-size: 1.25rem;
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
 .cart-drawer-final-total strong {
-  font-size: 2.2rem !important;
+  font-size: 1.4rem !important;
   color: #10b981;
   font-weight: 700 !important;
 }
