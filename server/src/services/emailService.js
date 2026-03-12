@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 
 // Email sender configuration
-const FROM_EMAIL = "La Boutique de la Limpieza <onboarding@resend.dev>";
+const FROM_EMAIL = "La Boutique de la Limpieza <noreply@send.emailtestt.com>";
 
 // Lazy initialization of Resend to ensure env vars are loaded
 let resendInstance = null;
@@ -535,6 +535,111 @@ export async function sendMarketingEmail(userEmail, marketingContent) {
   } catch (error) {
     console.error("❌ Error sending marketing email:", error);
     throw new Error(`Failed to send marketing email: ${error.message}`);
+  }
+}
+
+/**
+ * Send welcome email after email verification
+ * @param {string} userEmail - User email address
+ * @param {string} userName - User name
+ * @returns {Promise<object>} Resend API response
+ */
+export async function sendWelcomeEmail(userEmail, userName) {
+  try {
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>¡Bienvenido/a!</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 0;">
+        <table role="presentation" style="width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1a4ac8 0%, #2563eb 100%); padding: 40px 30px; text-align: center;">
+              <div style="font-size: 52px; margin-bottom: 10px;">🎉</div>
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: bold;">¡Cuenta Verificada!</h1>
+              <p style="margin: 10px 0 0 0; color: #e0e7ff; font-size: 16px;">Bienvenido/a a La Boutique de la Limpieza</p>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <p style="margin: 0 0 20px 0; font-size: 16px; color: #333333;">Hola <strong>${userName}</strong>,</p>
+
+              <p style="margin: 0 0 30px 0; font-size: 16px; color: #666666; line-height: 1.6;">
+                Tu cuenta fue verificada exitosamente. Ya podés disfrutar de todos los beneficios de nuestra tienda.
+              </p>
+
+              <!-- Welcome Discount Box -->
+              <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #1a4ac8; border-radius: 12px; padding: 25px; text-align: center; margin: 30px 0;">
+                <p style="margin: 0 0 8px 0; font-size: 14px; color: #374151; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Tu descuento de bienvenida</p>
+                <p style="margin: 0 0 8px 0; font-size: 40px; font-weight: bold; color: #1a4ac8;">10% OFF</p>
+                <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: bold; color: #1f2937; letter-spacing: 2px; font-family: monospace;">PRIMERACOMPRA10</p>
+                <p style="margin: 0; font-size: 13px; color: #6b7280;">Válido por 24 horas · Una sola vez · Aplica al total del pedido</p>
+              </div>
+
+              <!-- Benefits -->
+              <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin: 30px 0;">
+                <h3 style="margin: 0 0 15px 0; color: #1f2937; font-size: 16px;">✨ Lo que podés hacer ahora:</h3>
+                <ul style="margin: 0; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.8;">
+                  <li>Explorar más de 500 productos de limpieza</li>
+                  <li>Guardar tus productos favoritos</li>
+                  <li>Envíos gratis desde \$50.000 ARS</li>
+                  <li>Entregas en CABA y Gran Buenos Aires</li>
+                </ul>
+              </div>
+
+              <!-- CTA -->
+              <table role="presentation" style="margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}"
+                       style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #1a4ac8 0%, #2563eb 100%); color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                      Ir a la tienda
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0 0 10px 0; font-size: 16px; color: #1f2937; font-weight: 600;">La Boutique de la Limpieza</p>
+              <p style="margin: 0; font-size: 14px; color: #6b7280;">Tu tienda de productos de limpieza de confianza</p>
+              <p style="margin: 20px 0 0 0; font-size: 12px; color: #9ca3af;">Este es un email automático, por favor no respondas a este mensaje.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const result = await getResend().emails.send({
+      from: FROM_EMAIL,
+      to: userEmail,
+      subject: "🎉 ¡Bienvenido/a a La Boutique de la Limpieza! Tu cuenta está activa",
+      html: htmlContent
+    });
+
+    console.log("✅ Welcome email sent:", result);
+    return result;
+
+  } catch (error) {
+    console.error("❌ Error sending welcome email:", error);
+    throw new Error(`Failed to send welcome email: ${error.message}`);
   }
 }
 

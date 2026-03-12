@@ -3,7 +3,7 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { query } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
-import { sendVerificationCodeEmail } from "../services/emailService.js";
+import { sendVerificationCodeEmail, sendWelcomeEmail } from "../services/emailService.js";
 
 const authRouter = Router();
 const USER_SELECT_FIELDS = "id, name, first_name, last_name, profile_title, phone, avatar_url, email, role, address, email_verified, welcome_discount_active, welcome_discount_expires_at, welcome_discount_used";
@@ -304,6 +304,11 @@ authRouter.post("/verify-email", async (req, res) => {
 
     const verifiedUser = mapUserRow(updatedUserResult.rows[0]);
     const token = signToken(verifiedUser);
+
+    // Send welcome email (don't block response if email fails)
+    sendWelcomeEmail(verifiedUser.email, verifiedUser.name).catch((err) =>
+      console.error("Failed to send welcome email:", err.message)
+    );
 
     return res.json({
       message: "Email verificado exitosamente",
