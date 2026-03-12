@@ -4,15 +4,20 @@ export default function LoginModal({
   isOpen,
   onClose,
   onSubmit,
+  onVerifyEmail,
+  onResendCode,
   isLoading,
   error,
   initialView = "register",
-  inviteMessage = ""
+  inviteMessage = "",
+  verificationEmail = ""
 }) {
-  const [name, setName] = useState("Gaston");
-  const [email, setEmail] = useState("admin@laboutique.com");
-  const [password, setPassword] = useState("Balto");
-  const [address, setAddress] = useState("Murillo 1121");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [view, setView] = useState("register");
   const [registerStep, setRegisterStep] = useState("options");
@@ -20,11 +25,12 @@ export default function LoginModal({
 
   useEffect(() => {
     if (isOpen) {
-      setView(initialView === "login" ? "login" : "register");
-      setRegisterStep("options");
+      setView(initialView === "login" ? "login" : verificationEmail ? "verify" : "register");
+      setRegisterStep(verificationEmail ? "verify" : "options");
       setLocalMessage("");
+      setVerificationCode("");
     }
-  }, [isOpen, initialView]);
+  }, [isOpen, initialView, verificationEmail]);
 
   if (!isOpen) {
     return null;
@@ -39,6 +45,7 @@ export default function LoginModal({
         name,
         email,
         password,
+        phone,
         address
       });
       return;
@@ -133,6 +140,16 @@ export default function LoginModal({
                   required
                 />
 
+                <label htmlFor="register-phone">Teléfono</label>
+                <input
+                  id="register-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="Ej: 11 1234-5678"
+                  required
+                />
+
                 <label htmlFor="register-address">Dirección</label>
                 <input
                   id="register-address"
@@ -197,6 +214,58 @@ export default function LoginModal({
             {localMessage ? <p className="form-info">{localMessage}</p> : null}
             <p className="register-disclaimer">
               La dirección solo es obligatoria al momento de concretar una compra.
+            </p>
+          </>
+        ) : view === "verify" ? (
+          <>
+            <h2>Verificá tu Email</h2>
+            <p className="register-intro">
+              Te enviamos un código de 6 dígitos a <strong>{verificationEmail || email}</strong>
+            </p>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (onVerifyEmail) {
+                onVerifyEmail(verificationEmail || email, verificationCode);
+              }
+            }}>
+              <label htmlFor="verify-code">Código de Verificación</label>
+              <input
+                id="verify-code"
+                type="text"
+                value={verificationCode}
+                onChange={(event) => setVerificationCode(event.target.value)}
+                placeholder="000000"
+                maxLength={6}
+                pattern="[0-9]{6}"
+                required
+                autoFocus
+                style={{ fontSize: "24px", textAlign: "center", letterSpacing: "8px" }}
+              />
+
+              {error && <p className="form-error">{error}</p>}
+
+              <div className="modal-actions">
+                <button type="submit" disabled={isLoading || verificationCode.length !== 6}>
+                  {isLoading ? "Verificando..." : "Verificar"}
+                </button>
+              </div>
+            </form>
+
+            <p className="register-intro" style={{ marginTop: "20px" }}>
+              ¿No recibiste el código?{" "}
+              <button 
+                type="button" 
+                className="premium-login-link" 
+                onClick={() => {
+                  if (onResendCode) {
+                    onResendCode(verificationEmail || email);
+                  }
+                }}
+                disabled={isLoading}
+              >
+                Reenviar código
+              </button>
             </p>
           </>
         ) : (

@@ -84,18 +84,66 @@ export async function login(email, password) {
   }
 }
 
-export async function register(name, email, password, address) {
+export async function register(name, email, password, phone, address) {
   try {
     const response = await fetch(`${API_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, address })
+      body: JSON.stringify({ name, email, password, phone, address })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
       throw new Error(data.error || "No se pudo registrar la cuenta");
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servidor. Verificá que la API esté levantada en puerto 4000.");
+    }
+
+    throw error;
+  }
+}
+
+export async function verifyEmail(email, code) {
+  try {
+    const response = await fetch(`${API_URL}/auth/verify-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo verificar el código");
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servidor. Verificá que la API esté levantada en puerto 4000.");
+    }
+
+    throw error;
+  }
+}
+
+export async function resendVerificationCode(email) {
+  try {
+    const response = await fetch(`${API_URL}/auth/resend-verification`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo reenviar el código");
     }
 
     return data;

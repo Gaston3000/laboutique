@@ -3,9 +3,15 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { query } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
+import { sendVerificationCodeEmail } from "../services/emailService.js";
 
 const authRouter = Router();
-const USER_SELECT_FIELDS = "id, name, first_name, last_name, profile_title, phone, avatar_url, email, role, address";
+const USER_SELECT_FIELDS = "id, name, first_name, last_name, profile_title, phone, avatar_url, email, role, address, email_verified, welcome_discount_active, welcome_discount_expires_at, welcome_discount_used";
+
+// Generate 6-digit verification code
+function generateVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 function normalizeAddress(address) {
   return String(address || "").trim();
@@ -35,7 +41,11 @@ function mapUserRow(row) {
     avatarUrl: row.avatar_url || "",
     email: row.email,
     role: row.role,
-    address: row.address
+    address: row.address,
+    emailVerified: row.email_verified || false,
+    welcomeDiscountActive: row.welcome_discount_active || false,
+    welcomeDiscountExpiresAt: row.welcome_discount_expires_at || null,
+    welcomeDiscountUsed: row.welcome_discount_used || false
   };
 }
 
@@ -51,7 +61,10 @@ function signToken(user) {
       phone: user.phone,
       avatarUrl: user.avatarUrl,
       email: user.email,
-      address: user.address
+      address: user.address,
+      welcomeDiscountActive: user.welcomeDiscountActive,
+      welcomeDiscountExpiresAt: user.welcomeDiscountExpiresAt,
+      welcomeDiscountUsed: user.welcomeDiscountUsed
     },
     process.env.JWT_SECRET || "dev-secret",
     { expiresIn: "12h" }
@@ -59,14 +72,19 @@ function signToken(user) {
 }
 
 authRouter.post("/register", async (req, res) => {
-  const { name, email, password, address } = req.body || {};
+  const { name, email, password, phone, address } = req.body || {};
   const normalizedName = normalizeText(name);
   const normalizedEmail = String(email || "").toLowerCase().trim();
+  const normalizedPhone = normalizeOptionalText(phone);
   const normalizedAddress = normalizeAddress(address);
   const addressForStorage = normalizedAddress || null;
 
   if (!normalizedName || !normalizedEmail || !password) {
     return res.status(400).json({ error: "Nombre, email y contraseña son obligatorios" });
+  }
+
+  if (!normalizedPhone) {
+    return res.status(400).json({ error: "El teléfono es obligatorio" });
   }
 
   if (String(password).length < 4) {
@@ -81,19 +99,34 @@ authRouter.post("/register", async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(String(password), 10);
+    const verificationCode = generateVerificationCode();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
     const createdUserResult = await query(
-      `INSERT INTO users (name, email, role, password_hash, address)
-       VALUES ($1, $2, 'client', $3, $4)
+      `INSERT INTO users (name, email, role, password_hash, phone, address, verification_code, verification_code_expires_at, email_verified)
+       VALUES ($1, $2, 'client', $3, $4, $5, $6, $7, FALSE)
        RETURNING ${USER_SELECT_FIELDS}`,
-      [normalizedName, normalizedEmail, passwordHash, addressForStorage]
+      [normalizedName, normalizedEmail, passwordHash, normalizedPhone, addressForStorage, verificationCode, codeExpiresAt]
     );
 
     const createdUser = mapUserRow(createdUserResult.rows[0]);
-    const token = signToken(createdUser);
+    
+    // Send verification email (don't block response if email fails)
+    sendVerificationCodeEmail(normalizedEmail, {
+      userName: normalizedName,
+      verificationCode
+    }).catch((err) => {
+      console.error("Failed to send verification email:", err);
+    });
 
+    // Return user data but without token - they need to verify first
     return res.status(201).json({
-      token,
-      user: createdUser
+      message: "Cuenta creada. Por favor verificá tu email.",
+      user: {
+        email: createdUser.email,
+        emailVerified: false
+      },
+      requiresVerification: true
     });
   } catch {
     return res.status(500).json({ error: "No se pudo registrar la cuenta" });
@@ -209,6 +242,130 @@ authRouter.patch("/me/profile", requireAuth, async (req, res) => {
     return res.json({ token, user: updatedUser });
   } catch {
     return res.status(500).json({ error: "No se pudo actualizar el perfil" });
+  }
+});
+
+// Verify email with code
+authRouter.post("/verify-email", async (req, res) => {
+  const { email, code } = req.body || {};
+  const normalizedEmail = String(email || "").toLowerCase().trim();
+  const normalizedCode = String(code || "").trim();
+
+  if (!normalizedEmail || !normalizedCode) {
+    return res.status(400).json({ error: "Email y código son obligatorios" });
+  }
+
+  try {
+    const userResult = await query(
+      `SELECT ${USER_SELECT_FIELDS}, password_hash, verification_code, verification_code_expires_at
+       FROM users 
+       WHERE email = $1 
+       LIMIT 1`,
+      [normalizedEmail]
+    );
+
+    const userRow = userResult.rows[0];
+
+    if (!userRow) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    if (userRow.email_verified) {
+      return res.status(400).json({ error: "Esta cuenta ya está verificada" });
+    }
+
+    if (!userRow.verification_code) {
+      return res.status(400).json({ error: "No hay código de verificación activo" });
+    }
+
+    if (new Date() > new Date(userRow.verification_code_expires_at)) {
+      return res.status(400).json({ error: "El código expiró. Solicitá uno nuevo." });
+    }
+
+    if (userRow.verification_code !== normalizedCode) {
+      return res.status(400).json({ error: "Código incorrecto" });
+    }
+
+    // Mark email as verified, clear verification code, and activate welcome discount (24h)
+    const welcomeDiscountExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    const updatedUserResult = await query(
+      `UPDATE users 
+       SET email_verified = TRUE,
+           verification_code = NULL,
+           verification_code_expires_at = NULL,
+           welcome_discount_active = TRUE,
+           welcome_discount_expires_at = $2,
+           welcome_discount_used = FALSE
+       WHERE id = $1
+       RETURNING ${USER_SELECT_FIELDS}`,
+      [userRow.id, welcomeDiscountExpiresAt]
+    );
+
+    const verifiedUser = mapUserRow(updatedUserResult.rows[0]);
+    const token = signToken(verifiedUser);
+
+    return res.json({
+      message: "Email verificado exitosamente",
+      token,
+      user: verifiedUser,
+      welcomeDiscountActivated: true
+    });
+  } catch (error) {
+    console.error("Verification error:", error);
+    return res.status(500).json({ error: "No se pudo verificar el email" });
+  }
+});
+
+// Resend verification code
+authRouter.post("/resend-verification", async (req, res) => {
+  const { email } = req.body || {};
+  const normalizedEmail = String(email || "").toLowerCase().trim();
+
+  if (!normalizedEmail) {
+    return res.status(400).json({ error: "Email es obligatorio" });
+  }
+
+  try {
+    const userResult = await query(
+      `SELECT id, name, email, email_verified FROM users WHERE email = $1 LIMIT 1`,
+      [normalizedEmail]
+    );
+
+    const user = userResult.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    if (user.email_verified) {
+      return res.status(400).json({ error: "Esta cuenta ya está verificada" });
+    }
+
+    // Generate new code
+    const verificationCode = generateVerificationCode();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await query(
+      `UPDATE users 
+       SET verification_code = $1,
+           verification_code_expires_at = $2
+       WHERE id = $3`,
+      [verificationCode, codeExpiresAt, user.id]
+    );
+
+    // Send email
+    await sendVerificationCodeEmail(normalizedEmail, {
+      userName: user.name,
+      verificationCode
+    });
+
+    return res.json({
+      message: "Código de verificación reenviado"
+    });
+  } catch (error) {
+    console.error("Resend verification error:", error);
+    return res.status(500).json({ error: "No se pudo reenviar el código" });
   }
 });
 

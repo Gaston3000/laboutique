@@ -450,8 +450,9 @@ export default function SiteHeader({
 
           <button className="action-item icon-only cart-item" type="button" aria-label="Carrito" onClick={onCartClick}>
             <span className="cart-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M2 3a1 1 0 0 1 1-1h2a1 1 0 0 1 .97.76L6.4 5H21a1 1 0 0 1 .98 1.2l-1.5 7A1 1 0 0 1 19.5 14H8a1 1 0 0 1-.98-.8L5.2 4H3a1 1 0 0 1-1-1Zm7 13a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm9 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" />
+              <svg viewBox="0 0 50 50">
+                <path fill="#1877f2" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                <path fill="#1877f2" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
               </svg>
             </span>
             <span className="cart-badge" aria-label={`${totalItems} productos en carrito`}>

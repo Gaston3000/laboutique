@@ -33,6 +33,8 @@ import {
   fetchShippingRules,
   login,
   register,
+  resendVerificationCode,
+  verifyEmail,
   quoteShipping,
   updateTicket,
   updateMyAddress,
@@ -54,6 +56,8 @@ import PromoStrip from "./components/PromoStrip";
 import SiteHeader from "./components/SiteHeader";
 import DeliveryCoverageSection from "./components/DeliveryCoverageSection";
 import WelcomePromoSpotlight from "./components/WelcomePromoSpotlight";
+import WelcomeDiscountModal from "./components/WelcomeDiscountModal";
+import WelcomeDiscountTimer from "./components/WelcomeDiscountTimer";
 
 const CATEGORY_PAGE_SIZE = 8;
 const RESULTS_SORT_OPTIONS = [
@@ -862,6 +866,8 @@ function App() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [loginModalView, setLoginModalView] = useState("register");
   const [loginInviteMessage, setLoginInviteMessage] = useState("");
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [isWelcomeDiscountModalOpen, setIsWelcomeDiscountModalOpen] = useState(false);
   const [pendingWelcomePromoFocus, setPendingWelcomePromoFocus] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -1477,9 +1483,26 @@ function App() {
     return 0;
   }, [checkoutForm.shippingMethod, checkoutForm.shippingZone]);
 
+  const welcomeDiscountAmount = useMemo(() => {
+    if (!auth.user?.welcomeDiscountActive || auth.user?.welcomeDiscountUsed) {
+      return 0;
+    }
+
+    // Check if discount has expired
+    if (auth.user?.welcomeDiscountExpiresAt) {
+      const expiresAt = new Date(auth.user.welcomeDiscountExpiresAt);
+      if (new Date() > expiresAt) {
+        return 0;
+      }
+    }
+
+    // Apply 10% discount to cart subtotal (after promo codes but before shipping)
+    return Math.round(cartSubtotalAfterDiscount * 0.10);
+  }, [auth.user, cartSubtotalAfterDiscount]);
+
   const checkoutTotal = useMemo(
-    () => cartSubtotalAfterDiscount + checkoutShippingCost,
-    [cartSubtotalAfterDiscount, checkoutShippingCost]
+    () => cartSubtotalAfterDiscount - welcomeDiscountAmount + checkoutShippingCost,
+    [cartSubtotalAfterDiscount, welcomeDiscountAmount, checkoutShippingCost]
   );
 
   const checkoutShippingSummaryLabel = useMemo(() => {
@@ -2386,6 +2409,15 @@ function App() {
   function handleGoToCartPage(options = {}) {
     const { openPromotion = false } = options;
 
+    // Verificar si el usuario está autenticado antes de ir al carrito
+    if (!auth.token || !auth.user) {
+      setLoginInviteMessage("Para continuar con tu compra, necesitamos que te registres. Así podremos enviarte información sobre tu pedido.");
+      setLoginModalView("register");
+      setIsLoginOpen(true);
+      closeCartDrawer();
+      return;
+    }
+
     setActiveSection("cart");
     if (openPromotion) {
       setIsCartPromoOpen(true);
@@ -2546,10 +2578,12 @@ function App() {
         : null;
       const customerName = String(joinedName || checkoutForm.customerName || auth.user?.name || "Cliente web").trim();
       const customerPhone = String(checkoutForm.customerPhone || auth.user?.phone || "").trim();
+      const contactEmail = String(auth.user?.email || "").trim();
 
       const payload = {
         customerName,
         customerPhone,
+        contactEmail,
         customerAddress: resolvedCustomerAddress,
         shippingMethod: checkoutForm.shippingMethod,
         shippingZone,
@@ -2580,6 +2614,14 @@ function App() {
   function handleOpenCheckoutDetails() {
     if (!cart.length) {
       setCheckoutMessage("El carrito está vacío.");
+      return;
+    }
+
+    // Verificar si el usuario está autenticado antes de continuar al checkout
+    if (!auth.token || !auth.user) {
+      setLoginInviteMessage("Para finalizar tu compra, necesitamos que te registres. Así podremos contactarte sobre tu pedido.");
+      setLoginModalView("register");
+      setIsLoginOpen(true);
       return;
     }
 
@@ -2646,6 +2688,7 @@ function App() {
     const email = String(authPayload?.email || "").trim();
     const password = String(authPayload?.password || "");
     const name = String(authPayload?.name || "").trim();
+    const phone = String(authPayload?.phone || "").trim();
     const address = String(authPayload?.address || "").trim();
 
     setIsAuthLoading(true);
@@ -2653,8 +2696,17 @@ function App() {
 
     try {
       const data = mode === "register"
-        ? await register(name, email, password, address)
+        ? await register(name, email, password, phone, address)
         : await login(email, password);
+
+      // Check if verification is required
+      if (data.requiresVerification) {
+        setVerificationEmail(email);
+        setLoginModalView("verify");
+        setAuthError("");
+        setIsAuthLoading(false);
+        return;
+      }
 
       const storedAddressData = readStoredAddressBook(data.user || {});
       const hasStoredBook = storedAddressData.addressBook.length > 0;
@@ -2690,6 +2742,68 @@ function App() {
       }
       setIsLoginOpen(false);
       setLoginInviteMessage("");
+      setVerificationEmail("");
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
+  async function handleVerifyEmail(email, code) {
+    setIsAuthLoading(true);
+    setAuthError("");
+
+    try {
+      const data = await verifyEmail(email, code);
+
+      const storedAddressData = readStoredAddressBook(data.user || {});
+      const hasStoredBook = storedAddressData.addressBook.length > 0;
+      const validPrimaryAddressId = hasStoredBook
+        ? (storedAddressData.addressBook.some((entry) => entry.id === storedAddressData.primaryAddressId)
+          ? storedAddressData.primaryAddressId
+          : storedAddressData.addressBook[0]?.id || "")
+        : "";
+      const primaryEntry = hasStoredBook
+        ? (storedAddressData.addressBook.find((entry) => entry.id === validPrimaryAddressId) || storedAddressData.addressBook[0])
+        : null;
+      const userWithAddresses = {
+        ...(data.user || {}),
+        address: primaryEntry ? buildAddressFromEntry(primaryEntry) : String(data.user?.address || "").trim(),
+        addressBook: hasStoredBook ? storedAddressData.addressBook : (Array.isArray(data.user?.addressBook) ? data.user.addressBook : []),
+        primaryAddressId: hasStoredBook ? validPrimaryAddressId : String(data.user?.primaryAddressId || "").trim()
+      };
+
+      sendAnalytics("email_verified", {
+        role: userWithAddresses?.role || "client"
+      });
+
+      setAuth({ token: data.token, user: userWithAddresses });
+      await refreshTicketsData(data.token, userWithAddresses?.role || "client");
+      setIsLoginOpen(false);
+      setLoginInviteMessage("");
+      setVerificationEmail("");
+      
+      // Show welcome discount modal if activated
+      if (data.welcomeDiscountActivated && userWithAddresses?.welcomeDiscountActive) {
+        setTimeout(() => {
+          setIsWelcomeDiscountModalOpen(true);
+        }, 500);
+      }
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
+  async function handleResendVerificationCode(email) {
+    setIsAuthLoading(true);
+    setAuthError("");
+
+    try {
+      await resendVerificationCode(email);
+      setAuthError("Código reenviado. Revisá tu email.");
     } catch (error) {
       setAuthError(error.message);
     } finally {
@@ -3831,67 +3945,8 @@ function App() {
               <p className="cart-free-shipping-caption">Envio gratis a partir de $50.000 ARS</p>
             </section>
 
-            <div className="cart-drawer-body">
-              {!cart.length ? (
-                <p className="empty-results">Tu carrito está vacío.</p>
-              ) : (
-                <ul className="cart-drawer-list">
-                  {cart.map((item) => (
-                    <li key={item.cartKey || `${item.id}:base`} className="cart-drawer-line">
-                      <img className="cart-drawer-image" src={getProductImageUrl(item)} alt={getProductImageAlt(item, 0)} />
-
-                      <div className="cart-drawer-info">
-                        <h3>{item.name}</h3>
-                        {(item.variantPresentation || item.variantName) && (
-                          <p className="cart-drawer-unit-price">
-                            {item.variantPresentation ? `${item.variantPresentation}: ` : ""}
-                            {item.variantName}
-                          </p>
-                        )}
-                        <p className="cart-drawer-unit-price">${Number(item.price).toLocaleString("es-AR")} ARS</p>
-
-                        <div className="cart-drawer-line-footer">
-                          <div className="cart-qty-control" aria-label={`Cantidad de ${item.name}`}>
-                            <button
-                              type="button"
-                              onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity - 1)}
-                              aria-label={`Quitar una unidad de ${item.name}`}
-                            >
-                              -
-                            </button>
-                            <span>{item.quantity}</span>
-                            <button
-                              type="button"
-                              onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity + 1)}
-                              aria-label={`Agregar una unidad de ${item.name}`}
-                            >
-                              +
-                            </button>
-                          </div>
-
-                          <strong className="cart-drawer-line-total">
-                            ${(Number(item.price) * item.quantity).toLocaleString("es-AR")} ARS
-                          </strong>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="cart-drawer-remove"
-                        onClick={() => removeFromCart(item.cartKey || `${item.id}:base`)}
-                        aria-label={`Eliminar ${item.name}`}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M8 7V5h8v2M5 7h14M9 10v7M15 10v7M7 7l1 12h8l1-12" />
-                        </svg>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <footer className="cart-drawer-footer">
+            <div className="cart-drawer-content-grid">
+              <footer className="cart-drawer-footer">
               <button
                 type="button"
                 className="cart-promo-btn"
@@ -3908,9 +3963,29 @@ function App() {
 
               <div className="cart-drawer-total-wrap">
                 <div className="cart-drawer-total-row">
-                  <span>Total estimado</span>
+                  <span>Subtotal</span>
                   <strong>${cartSubtotal.toLocaleString("es-AR")} ARS</strong>
                 </div>
+
+                {welcomeDiscountAmount > 0 && (
+                  <>
+                    <div className="cart-drawer-total-row cart-drawer-discount-compact">
+                      <span className="cart-drawer-discount-left">
+                        <span className="cart-drawer-discount-text">10% OFF</span>
+                        {auth.user?.welcomeDiscountExpiresAt && (
+                          <span className="cart-drawer-discount-timer">
+                            <WelcomeDiscountTimer expiresAt={auth.user.welcomeDiscountExpiresAt} mode="compact" />
+                          </span>
+                        )}
+                      </span>
+                      <strong className="cart-drawer-discount-amount">-${welcomeDiscountAmount.toLocaleString("es-AR")}</strong>
+                    </div>
+                    <div className="cart-drawer-total-row cart-drawer-final-total">
+                      <span>Total</span>
+                      <strong>${(cartSubtotal - welcomeDiscountAmount).toLocaleString("es-AR")} ARS</strong>
+                    </div>
+                  </>
+                )}
               </div>
 
               <button type="button" className="cart-pay-btn" onClick={handleGoToCartPage}>
@@ -3918,10 +3993,78 @@ function App() {
               </button>
 
               <p className="cart-secure-note">
-                <span aria-hidden="true">🔒</span>
+                <span aria-hidden="true" style={{display: 'inline-flex', alignItems: 'center', marginRight: '0.35em'}}>
+                  <svg viewBox="0 0 50 50" style={{width: '1.2em', height: '1.2em', display: 'block'}}>
+                    <g fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
+                      <path stroke="#344054" d="M25 35.417v-2.084m3.125-3.125a3.125 3.125 0 1 1-6.25 0a3.125 3.125 0 0 1 6.25 0"/>
+                      <path stroke="#1877f2" d="M39.583 41.667V20.833c0-1.15-.932-2.083-2.083-2.083h-25c-1.15 0-2.083.933-2.083 2.083v20.834c0 1.15.932 2.083 2.083 2.083h25c1.15 0 2.083-.933 2.083-2.083m-6.25-22.917v-4.167a8.333 8.333 0 1 0-16.666 0v4.167"/>
+                    </g>
+                  </svg>
+                </span>
                 <span>Pago seguro</span>
               </p>
             </footer>
+
+              <div className="cart-drawer-body">
+                {!cart.length ? (
+                  <p className="empty-results">Tu carrito está vacío.</p>
+                ) : (
+                  <ul className="cart-drawer-list">
+                    {cart.map((item) => (
+                      <li key={item.cartKey || `${item.id}:base`} className="cart-drawer-line">
+                        <img className="cart-drawer-image" src={getProductImageUrl(item)} alt={getProductImageAlt(item, 0)} />
+
+                        <div className="cart-drawer-info">
+                          <h3>{item.name}</h3>
+                          {(item.variantPresentation || item.variantName) && (
+                            <p className="cart-drawer-unit-price">
+                              {item.variantPresentation ? `${item.variantPresentation}: ` : ""}
+                              {item.variantName}
+                            </p>
+                          )}
+                          <p className="cart-drawer-unit-price">${Number(item.price).toLocaleString("es-AR")} ARS</p>
+
+                          <div className="cart-drawer-line-footer">
+                            <div className="cart-qty-control" aria-label={`Cantidad de ${item.name}`}>
+                              <button
+                                type="button"
+                                onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity - 1)}
+                                aria-label={`Quitar una unidad de ${item.name}`}
+                              >
+                                -
+                              </button>
+                              <span>{item.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity + 1)}
+                                aria-label={`Agregar una unidad de ${item.name}`}
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            <strong className="cart-drawer-line-total">
+                              ${(Number(item.price) * item.quantity).toLocaleString("es-AR")} ARS
+                            </strong>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="cart-drawer-remove"
+                          onClick={() => removeFromCart(item.cartKey || `${item.id}:base`)}
+                          aria-label={`Eliminar ${item.name}`}
+                        >
+                          <svg viewBox="0 0 32 32" aria-hidden="true">
+                            <path fill="none" stroke="#1877f2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M28 6H6l2 24h16l2-24H4m12 6v12m5-12l-1 12m-9-12l1 12m0-18l1-4h6l1 4"/>
+                          </svg>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           </aside>
         </div>
       )}
@@ -3931,13 +4074,23 @@ function App() {
         onClose={() => {
           setIsLoginOpen(false);
           setLoginInviteMessage("");
+          setVerificationEmail("");
           setPendingWelcomePromoFocus(false);
         }}
         onSubmit={handleLogin}
+        onVerifyEmail={handleVerifyEmail}
+        onResendCode={handleResendVerificationCode}
         isLoading={isAuthLoading}
         error={authError}
         initialView={loginModalView}
         inviteMessage={loginInviteMessage}
+        verificationEmail={verificationEmail}
+      />
+
+      <WelcomeDiscountModal
+        isOpen={isWelcomeDiscountModalOpen}
+        onClose={() => setIsWelcomeDiscountModalOpen(false)}
+        expiresAt={auth.user?.welcomeDiscountExpiresAt}
       />
 
       <div className="container">
@@ -4771,7 +4924,9 @@ function App() {
                               onClick={() => removeFromCart(item.cartKey || `${item.id}:base`)}
                               aria-label={`Eliminar ${item.name}`}
                             >
-                              🗑
+                              <svg viewBox="0 0 32 32" aria-hidden="true" style={{width: '1.2em', height: '1.2em'}}>
+                                <path fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M28 6H6l2 24h16l2-24H4m12 6v12m5-12l-1 12m-9-12l1 12m0-18l1-4h6l1 4"/>
+                              </svg>
                             </button>
                           </div>
                         </li>
@@ -4886,6 +5041,29 @@ function App() {
                           </select>
                         </label>
 
+                        {welcomeDiscountAmount > 0 && (
+                          <div className="checkout-summary-row" style={{ background: '#eff6ff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #1a4ac8' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                              <span style={{ fontWeight: 600, color: '#1a4ac8', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <svg viewBox="0 0 64 64" style={{width: '15px', height: '15px', display: 'block'}}>
+                                  <path fill="#1877f2" d="M51.429 15.856c4.558-4.299-.715-9.875-10.687-6.421c-.587.204-1.133.419-1.648.642c.977-1.876 2.42-3.924 4.58-5.885c0 0-4.034 1.449-5.898 1.082C35.464 4.819 34.739 2 34.739 2s-2.405 5.238-3.63 9.349c-1.754-3.532-3.697-6.969-3.697-6.969s-1.037 2.404-2.936 3.318c-1.531.74-7.829 1.378-7.829 1.378c2.1 1.074 3.903 2.401 5.433 3.774c-1.609-.426-3.446-.746-5.547-.898c-8.344-.605-11.621 2.372-10.505 5.313L2 17.394l2.192 8.219L5.554 26c3.232 10.949 2.45 23.098 2.44 23.235l-.055.792l.754.222C20.766 53.805 31.735 62 31.735 62s14.222-9.412 22.042-11.753l.684-.205l.014-.72c.004-.17.346-15.334 4.271-25.218c.276-.039.536-.07.759-.084l.827-.05l.083-.832c.003-.033.341-4.796 1.586-6.739zM4.587 19.7l6.483 1.759v4.063l-5.381-1.528zm10.074 30.512a70 70 0 0 0-4.681-1.63c.128-2.822.313-12.549-2.233-21.96l4.71 1.338c.912 4.023 2.426 12.311 2.204 22.252m7.893-35.169c8.094.586 9.517 4.764 9.517 4.764s-4.931 1.803-7.978 1.803c-9.942 0-11.378-7.28-1.539-6.567m9.988 5.379l8.126.921l-10.13 2.451l-5.786-1.293zm-9.729 3.661l6.76 1.51v5.184l-6.979-1.947zm8.041 34.937c-1.476-1.096-3.936-2.787-7.202-4.6c.259-4.777.29-17.541.291-23.198l6.911 1.963zm9.046-4.356a138 138 0 0 0-7.1 4.496V32.29a511 511 0 0 1 8.162-2.917c-.587 5.658-.954 20.424-1.062 25.291m3.28-27.832s-9.738 3.125-11.659 3.834V25.58l11.811-2.858zm-1.2-7.461c-4.559 1.168-9.408.344-9.408.344s-.909-4.465 6.451-7.014c8.946-3.099 12.483 4.229 2.957 6.67m6.711-1.699l5.796.326l-3.481.843l-4.157-.41c.673-.234 1.284-.49 1.842-.759m3.856 30.9c-1.447.473-2.973 1.092-4.511 1.793c.011-4.684.297-15.066 2.467-24.145c2.231-.688 4.299-1.275 5.987-1.672c-3.227 8.986-3.838 20.96-3.943 24.024m6.038-26.431s-3.201.938-5.245 1.502l.514-3.468l5.565-1.346c-.456 1.255-.834 3.312-.834 3.312"/>
+                                </svg>
+                                Descuento de Bienvenida (10%)
+                              </span>
+                              <span style={{ fontSize: '11px', color: '#374151', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <svg viewBox="0 0 24 24" style={{width: '12px', height: '12px', display: 'block'}}>
+                                  <path fill="#92400e" fillRule="evenodd" d="m12.6 11.503l3.891 3.891l-.848.849L11.4 12V6h1.2zM12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m0-1.2a8.8 8.8 0 1 0 0-17.6a8.8 8.8 0 0 0 0 17.6"/>
+                                  <path className="clock-animated" fill="#92400e" fillRule="evenodd" d="m12.6 11.503l3.891 3.891l-.848.849L11.4 12V6h1.2z" style={{transformOrigin: '12px 12px'}}/>
+                                </svg>
+                                Expira en: <WelcomeDiscountTimer expiresAt={auth.user?.welcomeDiscountExpiresAt} compact />
+                              </span>
+                            </div>
+                            <span style={{ fontWeight: 700, color: '#059669', fontSize: '1.1rem' }}>
+                              -${welcomeDiscountAmount.toLocaleString("es-AR")} ARS
+                            </span>
+                          </div>
+                        )}
+
                         <div className="checkout-summary-row checkout-total-row">
                           <span>Total</span>
                           <strong>{checkoutTotal.toLocaleString("es-AR")},00 ARS</strong>
@@ -4895,7 +5073,15 @@ function App() {
                           Finalizar compra
                         </button>
 
-                        <p className="checkout-security-note">🔒 Pago seguro</p>
+                        <p className="checkout-security-note">
+                          <svg viewBox="0 0 50 50" aria-hidden="true" style={{width: '1.2em', height: '1.2em', display: 'inline-block', verticalAlign: 'middle', marginRight: '0.35em', transform: 'translateY(-0.05em)'}}>
+                            <g fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
+                              <path stroke="#344054" d="M25 35.417v-2.084m3.125-3.125a3.125 3.125 0 1 1-6.25 0a3.125 3.125 0 0 1 6.25 0"/>
+                              <path stroke="#1877f2" d="M39.583 41.667V20.833c0-1.15-.932-2.083-2.083-2.083h-25c-1.15 0-2.083.933-2.083 2.083v20.834c0 1.15.932 2.083 2.083 2.083h25c1.15 0 2.083-.933 2.083-2.083m-6.25-22.917v-4.167a8.333 8.333 0 1 0-16.666 0v4.167"/>
+                            </g>
+                          </svg>
+                          Pago seguro
+                        </p>
                       </aside>
                     </form>
                   </section>
@@ -5132,6 +5318,22 @@ function App() {
                   <div className="checkout-details-totals">
                     <p><span>Subtotal</span><strong>{cartSubtotal.toLocaleString("es-AR")},00 ARS</strong></p>
                     {cartDiscount > 0 && <p><span>Descuento</span><strong>-{cartDiscount.toLocaleString("es-AR")} ARS</strong></p>}
+                    {welcomeDiscountAmount > 0 && (
+                      <p style={{ background: '#eff6ff', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1a4ac8', margin: '8px 0' }}>
+                        <span style={{ color: '#1a4ac8', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <svg viewBox="0 0 64 64" style={{width: '15px', height: '15px', display:'block', flexShrink: 0}}>
+                            <path fill="#1877f2" d="M51.429 15.856c4.558-4.299-.715-9.875-10.687-6.421c-.587.204-1.133.419-1.648.642c.977-1.876 2.42-3.924 4.58-5.885c0 0-4.034 1.449-5.898 1.082C35.464 4.819 34.739 2 34.739 2s-2.405 5.238-3.63 9.349c-1.754-3.532-3.697-6.969-3.697-6.969s-1.037 2.404-2.936 3.318c-1.531.74-7.829 1.378-7.829 1.378c2.1 1.074 3.903 2.401 5.433 3.774c-1.609-.426-3.446-.746-5.547-.898c-8.344-.605-11.621 2.372-10.505 5.313L2 17.394l2.192 8.219L5.554 26c3.232 10.949 2.45 23.098 2.44 23.235l-.055.792l.754.222C20.766 53.805 31.735 62 31.735 62s14.222-9.412 22.042-11.753l.684-.205l.014-.72c.004-.17.346-15.334 4.271-25.218c.276-.039.536-.07.759-.084l.827-.05l.083-.832c.003-.033.341-4.796 1.586-6.739zM4.587 19.7l6.483 1.759v4.063l-5.381-1.528zm10.074 30.512a70 70 0 0 0-4.681-1.63c.128-2.822.313-12.549-2.233-21.96l4.71 1.338c.912 4.023 2.426 12.311 2.204 22.252m7.893-35.169c8.094.586 9.517 4.764 9.517 4.764s-4.931 1.803-7.978 1.803c-9.942 0-11.378-7.28-1.539-6.567m9.988 5.379l8.126.921l-10.13 2.451l-5.786-1.293zm-9.729 3.661l6.76 1.51v5.184l-6.979-1.947zm8.041 34.937c-1.476-1.096-3.936-2.787-7.202-4.6c.259-4.777.29-17.541.291-23.198l6.911 1.963zm9.046-4.356a138 138 0 0 0-7.1 4.496V32.29a511 511 0 0 1 8.162-2.917c-.587 5.658-.954 20.424-1.062 25.291m3.28-27.832s-9.738 3.125-11.659 3.834V25.58l11.811-2.858zm-1.2-7.461c-4.559 1.168-9.408.344-9.408.344s-.909-4.465 6.451-7.014c8.946-3.099 12.483 4.229 2.957 6.67m6.711-1.699l5.796.326l-3.481.843l-4.157-.41c.673-.234 1.284-.49 1.842-.759m3.856 30.9c-1.447.473-2.973 1.092-4.511 1.793c.011-4.684.297-15.066 2.467-24.145c2.231-.688 4.299-1.275 5.987-1.672c-3.227 8.986-3.838 20.96-3.943 24.024m6.038-26.431s-3.201.938-5.245 1.502l.514-3.468l5.565-1.346c-.456 1.255-.834 3.312-.834 3.312"/>
+                          </svg>
+                          <span style={{flex: 1}}>Descuento Bienvenida (10%)
+                          <br />
+                          <span style={{ fontSize: '11px', fontWeight: 400 }}>
+                            Expira en: <WelcomeDiscountTimer expiresAt={auth.user?.welcomeDiscountExpiresAt} compact />
+                          </span>
+                          </span>
+                        </span>
+                        <strong style={{ color: '#059669' }}>-{welcomeDiscountAmount.toLocaleString("es-AR")} ARS</strong>
+                      </p>
+                    )}
                     <p><span>Entrega/envío</span><strong>{checkoutShippingCost.toLocaleString("es-AR")},00 ARS</strong></p>
                     <p className="is-total"><span>Total</span><strong>{checkoutTotal.toLocaleString("es-AR")},00 ARS</strong></p>
                   </div>
@@ -5229,7 +5431,12 @@ function App() {
                               addToCart(product, selectedQuantity);
                             }}
                           >
-                            <span className="product-add-icon" aria-hidden="true">🛒</span>
+                            <span className="product-add-icon" aria-hidden="true">
+                              <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                              </svg>
+                            </span>
                             <span>Agregar al carrito</span>
                           </button>
                         </div>
@@ -5373,7 +5580,12 @@ function App() {
                       onClick={handleAddSelectedProductToCart}
                       disabled={Number.isFinite(Number(selectedProductEffectiveStock)) && Number(selectedProductEffectiveStock) <= 0}
                     >
-                      <span className="product-add-icon" aria-hidden="true">🛒</span>
+                      <span className="product-add-icon" aria-hidden="true">
+                        <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                          <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                          <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                        </svg>
+                      </span>
                       <span>Agregar al carrito</span>
                     </button>
 
@@ -5531,7 +5743,12 @@ function App() {
                                   addToCart(product, selectedQuantity);
                                 }}
                               >
-                                <span className="product-add-icon" aria-hidden="true">🛒</span>
+                                <span className="product-add-icon" aria-hidden="true">
+                                  <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                    <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                    <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                                  </svg>
+                                </span>
                                 <span>Agregar al carrito</span>
                               </button>
                             </div>
@@ -5742,7 +5959,12 @@ function App() {
                                   addToCart(product, selectedQuantity);
                                 }}
                               >
-                                <span className="product-add-icon" aria-hidden="true">🛒</span>
+                                <span className="product-add-icon" aria-hidden="true">
+                                  <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                    <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                    <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                                  </svg>
+                                </span>
                                 <span>Agregar al carrito</span>
                               </button>
                             </div>
@@ -5860,7 +6082,12 @@ function App() {
                                 addToCart(product, selectedQuantity);
                               }}
                             >
-                              <span className="product-add-icon" aria-hidden="true">🛒</span>
+                              <span className="product-add-icon" aria-hidden="true">
+                                <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                  <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                  <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                                </svg>
+                              </span>
                               <span>Agregar al carrito</span>
                             </button>
                           </div>
@@ -5994,7 +6221,12 @@ function App() {
                                     addToCart(product, selectedQuantity);
                                   }}
                                 >
-                                  <span className="product-add-icon" aria-hidden="true">🛒</span>
+                                  <span className="product-add-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                      <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                      <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                                    </svg>
+                                  </span>
                                   <span>Agregar al carrito</span>
                                 </button>
                               </div>
