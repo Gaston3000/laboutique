@@ -76,11 +76,11 @@ const ADMIN_NOTIFICATIONS_SEEN_STORAGE_KEY = "admin:notifications:seen:v1";
 const FREE_SHIPPING_TARGET_ARS = 50000;
 
 const FOOTER_ACCOUNT_LINKS = [
-  "Mi Cuenta",
-  "Mis Pedidos",
-  "Mi Dirección",
-  "Billetera",
-  "Productos Favoritos"
+  { key: "cuenta", label: "Mi Cuenta" },
+  { key: "pedidos", label: "Mis Pedidos" },
+  { key: "direccion", label: "Mi Dirección" },
+  { key: "billetera", label: "Billetera" },
+  { key: "favoritos", label: "Productos Favoritos" }
 ];
 
 const FOOTER_CATEGORY_LINKS = [
@@ -1538,6 +1538,20 @@ function App() {
     () => Number(appliedCartPromotion?.discount || 0),
     [appliedCartPromotion]
   );
+
+  const appliedCartPromoPercent = useMemo(() => {
+    if (!appliedCartPromotion || cartSubtotal <= 0 || cartDiscount <= 0) {
+      return null;
+    }
+
+    const percent = (cartDiscount / cartSubtotal) * 100;
+
+    if (!Number.isFinite(percent) || percent <= 0) {
+      return null;
+    }
+
+    return Number(percent.toFixed(percent >= 10 ? 0 : 1));
+  }, [appliedCartPromotion, cartDiscount, cartSubtotal]);
 
   const cartSubtotalAfterDiscount = useMemo(
     () => Math.max(0, Number((cartSubtotal - cartDiscount).toFixed(2))),
@@ -3169,6 +3183,31 @@ function App() {
     setActiveSection("account");
   }
 
+  function handleFooterMobileTabChange(tabId) {
+    if (tabId === "account" && !auth.user) {
+      openLoginModal("login", "Iniciá sesión para acceder a Mi Cuenta.");
+      return;
+    }
+
+    setActiveFooterMobileTab(tabId);
+  }
+
+  function handleFooterAccountLinkClick(tabKey) {
+    if (!auth.user) {
+      openLoginModal("login", "Iniciá sesión para acceder a tu cuenta.");
+      return;
+    }
+
+    if (tabKey === "favoritos") {
+      setActiveSection("favorites");
+    } else {
+      setAccountInitialTab(tabKey);
+      setActiveSection("account");
+    }
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleCreateProduct(payload) {
     try {
       await createProduct(auth.token, payload);
@@ -4343,6 +4382,9 @@ function App() {
                 </div>
               )}
               {isCartPromoOpen && cartPromoMessage && <p className="cart-drawer-promo-message">{cartPromoMessage}</p>}
+              {isCartPromoOpen && appliedCartPromoPercent !== null && (
+                <p className="cart-drawer-promo-percent">Descuento aplicado: {appliedCartPromoPercent}%</p>
+              )}
 
               <div className="cart-drawer-checkout-bottom">
                 <div className="cart-drawer-total-wrap">
@@ -5346,6 +5388,9 @@ function App() {
                         </div>
                       )}
                       {isCartPromoOpen && cartPromoMessage && <p className="cart-promo-message">{cartPromoMessage}</p>}
+                      {isCartPromoOpen && appliedCartPromoPercent !== null && (
+                        <p className="cart-promo-percent">Descuento aplicado: {appliedCartPromoPercent}%</p>
+                      )}
 
                       <button
                         type="button"
@@ -5698,6 +5743,9 @@ function App() {
                     </div>
                   )}
                   {isCheckoutPromoOpen && cartPromoMessage && <p className="cart-promo-message">{cartPromoMessage}</p>}
+                  {isCheckoutPromoOpen && appliedCartPromoPercent !== null && (
+                    <p className="cart-promo-percent">Descuento aplicado: {appliedCartPromoPercent}%</p>
+                  )}
 
                   <div className="checkout-details-totals">
                     <p><span>Subtotal</span><strong>{cartSubtotal.toLocaleString("es-AR")},00 ARS</strong></p>
@@ -6869,7 +6917,7 @@ function App() {
                       role="tab"
                       aria-selected={isActive}
                       className={`site-footer-mobile-tab${isActive ? " is-active" : ""}`}
-                      onClick={() => setActiveFooterMobileTab(tab.id)}
+                      onClick={() => handleFooterMobileTabChange(tab.id)}
                     >
                       {tab.label}
                     </button>
@@ -6953,8 +7001,14 @@ function App() {
                 <h3>Mi Cuenta</h3>
                 <ul>
                   {FOOTER_ACCOUNT_LINKS.map((item) => (
-                    <li key={item}>
-                      <a href="#">{item}</a>
+                    <li key={item.key}>
+                      <button
+                        type="button"
+                        className="site-footer-link-btn"
+                        onClick={() => handleFooterAccountLinkClick(item.key)}
+                      >
+                        {item.label}
+                      </button>
                     </li>
                   ))}
                 </ul>

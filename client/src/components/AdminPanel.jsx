@@ -1468,6 +1468,10 @@ export default function AdminPanel({
   const [isOrderActionsOpen, setIsOrderActionsOpen] = useState(false);
   const [isOrderPrintMenuOpen, setIsOrderPrintMenuOpen] = useState(false);
   const [orderActionMessage, setOrderActionMessage] = useState("");
+  const [fulfillmentConfirmOrder, setFulfillmentConfirmOrder] = useState(null);
+  const [fulfillmentConfirmMarkPaid, setFulfillmentConfirmMarkPaid] = useState(false);
+  const [fulfillmentConfirmSendReadyEmail, setFulfillmentConfirmSendReadyEmail] = useState(false);
+  const [isSubmittingFulfillmentConfirm, setIsSubmittingFulfillmentConfirm] = useState(false);
   const [isOrderFiltersOpen, setIsOrderFiltersOpen] = useState(false);
   const [orderCreatedDateMode, setOrderCreatedDateMode] = useState("all");
   const [orderCreatedDateFromFilter, setOrderCreatedDateFromFilter] = useState("");
@@ -2367,8 +2371,27 @@ export default function AdminPanel({
   useEffect(() => {
     setIsOrderActionsOpen(false);
     setIsOrderPrintMenuOpen(false);
+    setFulfillmentConfirmOrder(null);
+    setIsSubmittingFulfillmentConfirm(false);
     setOrderActionMessage("");
   }, [selectedOrderId]);
+
+  useEffect(() => {
+    if (!fulfillmentConfirmOrder) {
+      return;
+    }
+
+    function handleEscapeKey(event) {
+      if (event.key === "Escape" && !isSubmittingFulfillmentConfirm) {
+        setFulfillmentConfirmOrder(null);
+      }
+    }
+
+    document.addEventListener("keydown", handleEscapeKey);
+    return () => {
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, [fulfillmentConfirmOrder, isSubmittingFulfillmentConfirm]);
 
   useEffect(() => {
     if (selectedOrders.length > 0) {
@@ -2630,9 +2653,408 @@ export default function AdminPanel({
 
     const orderNumber = order.wixOrderNumber || order.id;
 
+    function isStorePickupOrder(targetOrder) {
+      const normalized = [
+        targetOrder?.shippingMethod,
+        targetOrder?.shippingZone,
+        targetOrder?.deliveryTime,
+        targetOrder?.customerAddress
+      ]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .join(" ");
+
+      return (
+        normalized.includes("pickup")
+        || normalized.includes("retiro")
+        || normalized.includes("retirar")
+        || normalized.includes("tienda")
+        || normalized.includes("local")
+        || normalized.includes("sucursal")
+      );
+    }
+
+    function openReadyForPickupEmailPreview(targetOrder) {
+      if (typeof window === "undefined") {
+        return false;
+      }
+
+      const popup = window.open("", "_blank", "width=980,height=860,scrollbars=yes,resizable=yes");
+      if (!popup) {
+        setOrderActionMessage("No se pudo abrir la previsualización. Revisá el bloqueador de ventanas.");
+        return false;
+      }
+
+      const targetOrderNumber = String(targetOrder.wixOrderNumber || targetOrder.id || "-");
+      const orderDate = (() => {
+        const parsed = new Date(targetOrder.createdAt || Date.now());
+        if (Number.isNaN(parsed.getTime())) {
+          return "-";
+        }
+
+        return parsed.toLocaleDateString("es-AR", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric"
+        });
+      })();
+
+      const currency = String(targetOrder.currency || "ARS").toUpperCase();
+      const lines = Array.isArray(targetOrder.lines) ? targetOrder.lines : [];
+      const itemsSubtotal = lines.reduce((acc, line) => acc + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0);
+      const shippingCost = Number(targetOrder.shippingCost || 0);
+      const taxTotal = Number(targetOrder.taxTotal || 0);
+      const orderTotal = Number(targetOrder.total || 0) > 0
+        ? Number(targetOrder.total || 0)
+        : Math.max(0, itemsSubtotal + shippingCost + taxTotal - Number(targetOrder.discount || 0));
+
+      const formatMoney = (value) => Number(value || 0).toLocaleString("es-AR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+
+      const pickupAddress = "Acevedo 200, C1414, Ciudad Autónoma de Buenos Aires, Argentina";
+      const pickupInstructions = hasValue(targetOrder.deliveryTime)
+        ? targetOrder.deliveryTime
+        : "Lunes a viernes de 9:00 a 17:00. Traé tu número de pedido y DNI.";
+
+      const lineRows = lines
+        .map((line, index) => {
+          const quantity = Number(line.quantity || 0);
+          const unitPrice = Number(line.unitPrice || 0);
+          const lineTotal = quantity * unitPrice;
+          const imageUrl = resolveOrderLineImageUrl(line, products);
+
+          return `
+            <tr>
+              <td>
+                <div class="item-grid">
+                  <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(line.productName || "Producto")}" class="item-image" />
+                  <div>
+                    <strong>Producto n.° ${index + 1}</strong>
+                    <p>${escapeHtml(line.productName || "Producto")}</p>
+                    <p>Tamaño: ${escapeHtml(line.variant || "-")}</p>
+                    <p>Precio: ${escapeHtml(`${formatMoney(unitPrice)} ${currency}`)}</p>
+                  </div>
+                </div>
+              </td>
+              <td>Cant.: ${quantity}</td>
+              <td>${escapeHtml(`${formatMoney(lineTotal)} ${currency}`)}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const html = `
+        <!doctype html>
+        <html lang="es">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Previsualización email retiro en local</title>
+            <style>
+              * { box-sizing: border-box; }
+              body {
+                margin: 0;
+                background: #08123a;
+                font-family: "Segoe UI", Arial, sans-serif;
+                color: #111827;
+              }
+              .preview-shell {
+                min-height: 100vh;
+                padding: 28px 16px;
+                display: grid;
+                place-items: center;
+              }
+              .email-card {
+                width: min(760px, 100%);
+                background: #ffffff;
+                border: 1px solid #d7deea;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.28);
+                padding: 26px;
+              }
+              .email-brand {
+                margin: 0 0 18px;
+                text-align: center;
+                font-size: 1.15rem;
+                letter-spacing: 0.18em;
+                text-transform: uppercase;
+              }
+              .email-title {
+                margin: 0 0 12px;
+                text-align: center;
+                font-size: 2rem;
+                font-weight: 400;
+              }
+              .email-lead {
+                margin: 0 0 4px;
+                text-align: center;
+                font-size: 1.22rem;
+              }
+              .email-body {
+                margin: 0;
+                text-align: center;
+                line-height: 1.45;
+              }
+              .meta-grid {
+                margin-top: 18px;
+                border-top: 1px solid #d1d5db;
+                border-bottom: 1px solid #d1d5db;
+                padding: 10px 0;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+                font-size: 0.9rem;
+              }
+              .pickup-grid {
+                margin-top: 10px;
+                border-bottom: 1px solid #d1d5db;
+                padding-bottom: 10px;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 12px;
+              }
+              .pickup-grid h4 {
+                margin: 0 0 6px;
+                font-size: 0.88rem;
+                color: #4b5563;
+              }
+              .pickup-grid p {
+                margin: 0;
+                font-size: 0.9rem;
+                line-height: 1.34;
+              }
+              .items-title {
+                margin: 14px 0 8px;
+                font-size: 0.92rem;
+              }
+              .items-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.9rem;
+              }
+              .items-table td {
+                border-bottom: 1px solid #dfe4ee;
+                padding: 10px 0;
+                vertical-align: top;
+              }
+              .items-table td:nth-child(2),
+              .items-table td:nth-child(3) {
+                white-space: nowrap;
+                text-align: right;
+                padding-left: 10px;
+              }
+              .item-grid {
+                display: grid;
+                grid-template-columns: 58px minmax(0, 1fr);
+                gap: 10px;
+                align-items: start;
+              }
+              .item-grid p {
+                margin: 0;
+                line-height: 1.25;
+              }
+              .item-image {
+                width: 58px;
+                height: 58px;
+                object-fit: cover;
+                border: 1px solid #d7deea;
+                background: #f3f4f6;
+              }
+              .totals {
+                margin-top: 10px;
+                margin-left: auto;
+                width: min(100%, 240px);
+                font-size: 0.9rem;
+              }
+              .totals-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 3px 0;
+              }
+              .totals-row.is-total {
+                margin-top: 6px;
+                padding-top: 6px;
+                border-top: 1px solid #d1d5db;
+                font-weight: 700;
+              }
+              .email-footer {
+                margin-top: 14px;
+                border-top: 1px solid #d1d5db;
+                padding-top: 12px;
+                font-size: 0.88rem;
+                line-height: 1.35;
+              }
+              .email-footer p { margin: 0 0 8px; }
+              .email-link { color: #3456d8; text-decoration: underline; }
+              @media (max-width: 640px) {
+                .email-card { padding: 16px; }
+                .email-title { font-size: 1.6rem; }
+                .meta-grid,
+                .pickup-grid { grid-template-columns: 1fr; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="preview-shell">
+              <main class="email-card">
+                <h1 class="email-brand">La Boutique de la Limpieza®</h1>
+                <h2 class="email-title">Tu pedido está disponible para ser recogido.</h2>
+                <p class="email-lead">Los artículos de tu pedido están listos para ser recogidos.</p>
+                <p class="email-body">Puedes encontrar los detalles de recogida a continuación.</p>
+
+                <section class="meta-grid">
+                  <p>Pedido n.° ${escapeHtml(targetOrderNumber)}</p>
+                  <p>Realizado el ${escapeHtml(orderDate)}</p>
+                </section>
+
+                <section class="pickup-grid">
+                  <article>
+                    <h4>Dirección donde retirar el pedido</h4>
+                    <p>${escapeHtml(pickupAddress)}</p>
+                  </article>
+                  <article>
+                    <h4>Instrucciones para retirar</h4>
+                    <p>${escapeHtml(pickupInstructions)}</p>
+                  </article>
+                </section>
+
+                <h3 class="items-title">Elementos en el pedido</h3>
+                <table class="items-table" aria-label="Elementos del pedido para retirar">
+                  <tbody>
+                    ${lineRows || '<tr><td colspan="3">No hay elementos en este pedido.</td></tr>'}
+                  </tbody>
+                </table>
+
+                <section class="totals">
+                  <div class="totals-row"><span>Subtotal</span><span>${escapeHtml(`${formatMoney(itemsSubtotal)} ${currency}`)}</span></div>
+                  <div class="totals-row"><span>Envío</span><span>${escapeHtml(`${formatMoney(shippingCost)} ${currency}`)}</span></div>
+                  <div class="totals-row"><span>Impuestos</span><span>${escapeHtml(`${formatMoney(taxTotal)} ${currency}`)}</span></div>
+                  <div class="totals-row is-total"><span>Total</span><span>${escapeHtml(`${formatMoney(orderTotal)} ${currency}`)}</span></div>
+                </section>
+
+                <footer class="email-footer">
+                  <p><strong>¿Necesitás asistencia?</strong> Contactanos</p>
+                  <p>Llámanos: 011 15 5501-8399<br />Escríbenos un email: laboutiqueacevedo200@gmail.com</p>
+                  <p>Este email fue enviado por La Boutique de la Limpieza®</p>
+                  <p><a class="email-link" href="https://www.laboutiquedelalimpieza.com.ar/" target="_blank" rel="noreferrer">https://www.laboutiquedelalimpieza.com.ar/</a></p>
+                </footer>
+              </main>
+            </div>
+          </body>
+        </html>
+      `;
+
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
+      popup.focus();
+
+      return true;
+    }
+
+    function openReadyForPickupEmailDraft(targetOrder) {
+      const email = String(targetOrder?.contactEmail || "").trim();
+      if (!email) {
+        setOrderActionMessage("Este pedido no tiene email de contacto.");
+        return false;
+      }
+
+      const targetOrderNumber = targetOrder.wixOrderNumber || targetOrder.id;
+      const subject = encodeURIComponent(`Pedido listo para retirar · Pedido #${targetOrderNumber}`);
+      const body = encodeURIComponent(
+        `Hola ${targetOrder.customerName || ""},%0D%0A%0D%0A` +
+        `Tu pedido #${targetOrderNumber} ya está listo para ser retirado.%0D%0A` +
+        `Si tenés dudas, podés responder este email.%0D%0A%0D%0A` +
+        "Gracias por tu compra."
+      );
+
+      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+      return true;
+    }
+
+    async function handleConfirmFulfillment() {
+      if (!fulfillmentConfirmOrder) {
+        return;
+      }
+
+      const targetOrder = fulfillmentConfirmOrder;
+      const targetOrderNumber = targetOrder.wixOrderNumber || targetOrder.id;
+
+      setIsSubmittingFulfillmentConfirm(true);
+
+      try {
+        await onOrderStatusChange(targetOrder.id, "entregado");
+
+        if (fulfillmentConfirmMarkPaid) {
+          await onOrderStatusChange(targetOrder.id, "pago");
+        }
+
+        let emailDraftOpened = false;
+        if (fulfillmentConfirmSendReadyEmail) {
+          emailDraftOpened = openReadyForPickupEmailDraft(targetOrder);
+        }
+
+        const messageParts = [`Pedido #${targetOrderNumber} marcado como cumplido.`];
+        if (fulfillmentConfirmMarkPaid) {
+          messageParts.push("También se marcó como pagado.");
+        }
+        if (fulfillmentConfirmSendReadyEmail) {
+          messageParts.push(emailDraftOpened
+            ? "Se abrió el email de pedido listo para retirar."
+            : "No se pudo abrir el email porque el pedido no tiene contacto.");
+        }
+
+        setOrderActionMessage(messageParts.join(" "));
+        setFulfillmentConfirmOrder(null);
+        setIsOrderActionsOpen(false);
+      } catch (error) {
+        setOrderActionMessage(error?.message || "No se pudo marcar el pedido como cumplido.");
+      } finally {
+        setIsSubmittingFulfillmentConfirm(false);
+      }
+    }
+
+    if (actionKey === "preview_ready_email") {
+      if (isStorePickupOrder(order)) {
+        openReadyForPickupEmailPreview(order);
+        return;
+      }
+
+      openReadyForPickupEmailDraft(order);
+      return;
+    }
+
+    if (actionKey === "mark_completed") {
+      setFulfillmentConfirmOrder(order);
+      setFulfillmentConfirmMarkPaid(false);
+      setFulfillmentConfirmSendReadyEmail(false);
+      setIsOrderActionsOpen(false);
+      return;
+    }
+
+    if (actionKey === "confirm_mark_completed") {
+      await handleConfirmFulfillment();
+      return;
+    }
+
     if (actionKey === "mark_unprocessed") {
       await onOrderStatusChange(order.id, "nuevo");
       setOrderActionMessage(`Pedido #${orderNumber} marcado como no procesado.`);
+      setIsOrderActionsOpen(false);
+      return;
+    }
+
+    if (actionKey === "cancel_order") {
+      await onOrderStatusChange(order.id, "cancelado");
+      setOrderActionMessage(`Pedido #${orderNumber} cancelado.`);
+      setIsOrderActionsOpen(false);
+      return;
+    }
+
+    if (actionKey === "cancel_and_refund") {
+      await onOrderStatusChange(order.id, "cancelado");
+      setOrderActionMessage(`Pedido #${orderNumber} cancelado. Iniciá el reembolso desde la opción "Reembolsar".`);
       setIsOrderActionsOpen(false);
       return;
     }
@@ -4732,6 +5154,16 @@ export default function AdminPanel({
                 const totalItems = Number(order.itemsCount || 0) || orderItems.reduce((acc, line) => acc + Number(line.quantity || 0), 0);
                 const itemsSubtotal = orderItems.reduce((acc, line) => acc + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0);
                 const timelineItems = buildOrderActivityItems(order, paymentLabel, fulfillmentLabel);
+                const isUnpaidUnprocessedOrder = paymentLabel === "No pagado" && fulfillmentLabel === "No procesado";
+                const isPaidUnprocessedOrder = paymentLabel === "Pagado" && fulfillmentLabel === "No procesado";
+                const isPaidCompletedOrder = paymentLabel === "Pagado" && fulfillmentLabel === "Cumplido";
+                const primaryOrderStatusAction = fulfillmentLabel === "No procesado"
+                  ? { key: "mark_completed", icon: "✅", label: "Marcar como completado" }
+                  : {
+                    key: "mark_unprocessed",
+                    icon: "✖️",
+                    label: isPaidCompletedOrder ? "Pedido marcado como no procesado" : "Marcar como no procesado"
+                  };
 
                 return (
                   <section className="admin-order-detail-shell" aria-label={`Detalle del pedido #${order.wixOrderNumber || order.id}`}>
@@ -4761,39 +5193,92 @@ export default function AdminPanel({
                           </button>
 
                           {isOrderActionsOpen && (
-                            <div className="admin-order-actions-menu" role="menu">
-                              <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("mark_unprocessed", order)}>
-                                <span aria-hidden="true">✖️</span>
-                                <span>Pedido marcado como no procesado</span>
+                            <div className="admin-order-actions-menu admin-order-actions-menu-main" role="menu">
+                              <button type="button" role="menuitem" onClick={() => handleOrderQuickAction(primaryOrderStatusAction.key, order)}>
+                                <span aria-hidden="true">{primaryOrderStatusAction.icon}</span>
+                                <span>{primaryOrderStatusAction.label}</span>
                               </button>
                               <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("edit", order)}>
                                 <span aria-hidden="true">✏️</span>
                                 <span>Editar pedido</span>
                               </button>
-                              <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("send_shipping_email", order)}>
-                                <span aria-hidden="true">✉️</span>
-                                <span>Enviar email con confirmación de envío</span>
-                              </button>
-                              <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("download_pdf", order)}>
-                                <span aria-hidden="true">⬇️</span>
-                                <span>Descargar PDF</span>
-                              </button>
                               <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("print", order)}>
                                 <span aria-hidden="true">🖨️</span>
-                                <span>Imprimir</span>
+                                <span>Imprimir pedido</span>
                               </button>
-                              <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("refund", order)}>
-                                <span aria-hidden="true">💸</span>
-                                <span>Reembolsar</span>
-                              </button>
-                              <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("invoice", order)}>
-                                <span aria-hidden="true">🧾</span>
-                                <span>Ver factura</span>
-                              </button>
-                              <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("receipt", order)}>
-                                <span aria-hidden="true">🧷</span>
-                                <span>Ver recibo</span>
-                              </button>
+                              {isUnpaidUnprocessedOrder ? (
+                                <>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("cancel_order", order)}>
+                                    <span aria-hidden="true">🛍️</span>
+                                    <span>Cancelar pedido</span>
+                                  </button>
+                                  <button type="button" role="menuitem" disabled className="is-disabled" aria-disabled="true">
+                                    <span aria-hidden="true">💸</span>
+                                    <span>Reembolsar</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("invoice", order)}>
+                                    <span aria-hidden="true">🧾</span>
+                                    <span>Cobrar con factura</span>
+                                  </button>
+                                </>
+                              ) : isPaidUnprocessedOrder ? (
+                                <>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("cancel_and_refund", order)}>
+                                    <span aria-hidden="true">🛍️</span>
+                                    <span>Cancelar y reembolsar</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("refund", order)}>
+                                    <span aria-hidden="true">💸</span>
+                                    <span>Reembolsar</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("invoice", order)}>
+                                    <span aria-hidden="true">🧾</span>
+                                    <span>Crear factura</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("receipt", order)}>
+                                    <span aria-hidden="true">🧷</span>
+                                    <span>Ver recibo</span>
+                                  </button>
+                                </>
+                              ) : isPaidCompletedOrder ? (
+                                <>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("refund", order)}>
+                                    <span aria-hidden="true">💸</span>
+                                    <span>Reembolsar</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("invoice", order)}>
+                                    <span aria-hidden="true">🧾</span>
+                                    <span>Ver factura</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("receipt", order)}>
+                                    <span aria-hidden="true">🧷</span>
+                                    <span>Ver recibo</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("send_shipping_email", order)}>
+                                    <span aria-hidden="true">✉️</span>
+                                    <span>Enviar email con confirmación de envío</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("download_pdf", order)}>
+                                    <span aria-hidden="true">⬇️</span>
+                                    <span>Descargar PDF</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("refund", order)}>
+                                    <span aria-hidden="true">💸</span>
+                                    <span>Reembolsar</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("invoice", order)}>
+                                    <span aria-hidden="true">🧾</span>
+                                    <span>Ver factura</span>
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("receipt", order)}>
+                                    <span aria-hidden="true">🧷</span>
+                                    <span>Ver recibo</span>
+                                  </button>
+                                </>
+                              )}
                               <button type="button" role="menuitem" onClick={() => handleOrderQuickAction("archive", order)}>
                                 <span aria-hidden="true">🗂️</span>
                                 <span>Archivar</span>
@@ -6071,6 +6556,80 @@ export default function AdminPanel({
           </p>
         )}
       </div>
+
+      {fulfillmentConfirmOrder && (
+        <div
+          className="admin-order-fulfillment-modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!isSubmittingFulfillmentConfirm) {
+              setFulfillmentConfirmOrder(null);
+            }
+          }}
+        >
+          <article
+            className="admin-order-fulfillment-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-order-fulfillment-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="admin-order-fulfillment-modal-title">Marcar pedido como cumplido</h3>
+            <p>
+              ¿Quieres marcar el pedido n.º {fulfillmentConfirmOrder.wixOrderNumber || fulfillmentConfirmOrder.id} como completado?
+            </p>
+
+            <label className="admin-order-fulfillment-modal-option">
+              <input
+                type="checkbox"
+                checked={fulfillmentConfirmMarkPaid}
+                onChange={(event) => setFulfillmentConfirmMarkPaid(event.target.checked)}
+                disabled={isSubmittingFulfillmentConfirm}
+              />
+              <span>Marcar pedido como pagado</span>
+            </label>
+
+            <div className="admin-order-fulfillment-modal-option-row">
+              <label className="admin-order-fulfillment-modal-option">
+                <input
+                  type="checkbox"
+                  checked={fulfillmentConfirmSendReadyEmail}
+                  onChange={(event) => setFulfillmentConfirmSendReadyEmail(event.target.checked)}
+                  disabled={isSubmittingFulfillmentConfirm}
+                />
+                <span>Enviar email de pedido listo para ser retirado</span>
+              </label>
+
+              <button
+                type="button"
+                className="admin-order-fulfillment-modal-link"
+                onClick={() => handleOrderQuickAction("preview_ready_email", fulfillmentConfirmOrder)}
+                disabled={isSubmittingFulfillmentConfirm}
+              >
+                Previsualizar email
+              </button>
+            </div>
+
+            <div className="admin-order-fulfillment-modal-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setFulfillmentConfirmOrder(null)}
+                disabled={isSubmittingFulfillmentConfirm}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOrderQuickAction("confirm_mark_completed", fulfillmentConfirmOrder)}
+                disabled={isSubmittingFulfillmentConfirm}
+              >
+                {isSubmittingFulfillmentConfirm ? "Guardando..." : "Marcar como cumplido"}
+              </button>
+            </div>
+          </article>
+        </div>
+      )}
     </section>
   );
 }

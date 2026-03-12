@@ -3073,6 +3073,17 @@ html {
   font-weight: 600;
 }
 
+.cart-drawer-promo-percent {
+  margin: -2px 0 4px;
+  color: #0f766e;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .cart-drawer-total-wrap {
   display: grid;
   gap: 8px;
@@ -6278,6 +6289,37 @@ html {
   gap: 4px;
 }
 
+.admin-order-actions-menu-main {
+  top: calc(100% + 10px);
+  padding: 6px;
+  min-width: 272px;
+  gap: 2px;
+}
+
+.admin-order-actions-menu-main::before,
+.admin-order-actions-menu-main::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+}
+
+.admin-order-actions-menu-main::before {
+  top: -7px;
+  background: var(--white);
+  border-top: 1px solid rgba(45, 45, 45, 0.12);
+  border-left: 1px solid rgba(45, 45, 45, 0.12);
+  z-index: 0;
+}
+
+.admin-order-actions-menu-main::after {
+  top: -6px;
+  background: var(--white);
+  z-index: 1;
+}
+
 .admin-order-actions-menu button {
   border: 0;
   display: inline-flex;
@@ -6292,6 +6334,13 @@ html {
   cursor: pointer;
 }
 
+.admin-order-actions-menu-main button {
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
 .admin-order-actions-trigger > span[aria-hidden="true"],
 .admin-order-actions-menu button > span[aria-hidden="true"] {
   width: 1.25rem;
@@ -6301,6 +6350,133 @@ html {
 
 .admin-order-actions-menu button:hover {
   background: rgba(24, 119, 242, 0.08);
+}
+
+.admin-order-actions-menu button.is-disabled,
+.admin-order-actions-menu button:disabled {
+  color: rgba(20, 28, 45, 0.38);
+  cursor: not-allowed;
+}
+
+.admin-order-actions-menu button.is-disabled:hover,
+.admin-order-actions-menu button:disabled:hover {
+  background: transparent;
+}
+
+.admin-order-fulfillment-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 90;
+}
+
+.admin-order-fulfillment-modal {
+  width: min(920px, 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(45, 45, 45, 0.14);
+  background: var(--white);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.28);
+  padding: 28px 42px 34px;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-order-fulfillment-modal h3 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  line-height: 1.1;
+}
+
+.admin-order-fulfillment-modal > p {
+  margin: 0;
+  color: rgba(45, 45, 45, 0.9);
+  font-size: 1.02rem;
+}
+
+.admin-order-fulfillment-modal-option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-order-fulfillment-modal-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.03rem;
+  color: var(--text-main);
+}
+
+.admin-order-fulfillment-modal-option input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  accent-color: #4a72e5;
+}
+
+.admin-order-fulfillment-modal-link {
+  border: 0;
+  background: transparent;
+  color: #4a72e5;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.admin-order-fulfillment-modal-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-order-fulfillment-modal-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-order-fulfillment-modal-actions > button:not(.secondary-btn) {
+  border: 0;
+  border-radius: 999px;
+  min-height: 44px;
+  padding: 0 26px;
+  font: inherit;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4a72e5, #3b66df);
+  color: var(--white);
+  cursor: pointer;
+}
+
+.admin-order-fulfillment-modal-actions > button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+@media (max-width: 780px) {
+  .admin-order-fulfillment-modal {
+    padding: 20px;
+    gap: 10px;
+  }
+
+  .admin-order-fulfillment-modal-option {
+    font-size: 0.96rem;
+  }
+
+  .admin-order-fulfillment-modal-actions {
+    justify-content: stretch;
+  }
+
+  .admin-order-fulfillment-modal-actions > button,
+  .admin-order-fulfillment-modal-actions > .secondary-btn {
+    width: 100%;
+  }
 }
 
 .admin-order-detail-layout {
@@ -10202,6 +10378,17 @@ main h1 {
   color: var(--blue);
   font-size: 0.92rem;
   font-weight: 600;
+}
+
+.cart-promo-percent {
+  margin: -2px 0 4px;
+  color: #0f766e;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .cart-note-actions {
