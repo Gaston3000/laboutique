@@ -26,7 +26,7 @@ const BANNER_SLIDES = [
 
 const AUTOPLAY_INTERVAL_MS = 6000;
 const SWIPE_MIN_DISTANCE_PX = 34;
-const BANNERS_ASSET_VERSION = "2026-03-06-1";
+const BANNERS_ASSET_VERSION = "2026-03-12-3";
 
 function withBannerVersion(assetPath) {
   return `${assetPath}?v=${BANNERS_ASSET_VERSION}`;

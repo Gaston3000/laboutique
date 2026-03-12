@@ -1,4 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#1877f2" />
-  <path d="M16 22h32v4H16zm0 8h32v4H16zm0 8h20v4H16z" fill="#fff" />
+  <defs>
+    <style>
+      @keyframes shine-anim {
+        0%, 68%, 100% { transform: translateX(-75px); opacity: 0; }
+        78%            { opacity: 0.65; }
+        90%            { transform: translateX(85px);  opacity: 0; }
+      }
+      @keyframes sp1-anim {
+        0%, 60%, 95%, 100% { opacity: 0; transform: scale(0); }
+        72%                 { opacity: 1; transform: scale(1); }
+      }
+      @keyframes sp2-anim {
+        0%, 65%, 95%, 100% { opacity: 0; transform: scale(0); }
+        77%                 { opacity: 1; transform: scale(1); }
+      }
+      @keyframes sp3-anim {
+        0%, 70%, 95%, 100% { opacity: 0; transform: scale(0); }
+        82%                 { opacity: 1; transform: scale(0.85); }
+      }
+      .shine { animation: shine-anim 5s ease-in-out infinite; }
+      .s1 { animation: sp1-anim 5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+      .s2 { animation: sp2-anim 5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+      .s3 { animation: sp3-anim 5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    </style>
+    <clipPath id="c">
+      <rect width="64" height="64" rx="13"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="64" height="64" rx="13" fill="#1877f2"/>
+  <rect y="36" width="64" height="28" fill="#0d47a1" opacity="0.18" clip-path="url(#c)"/>
+
+  <!-- Bold italic B -->
+  <text x="7" y="52"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-style="italic"
+        font-weight="bold"
+        font-size="48"
+        fill="white"
+        clip-path="url(#c)">B</text>
+
+  <!-- Shine sweep bar -->
+  <rect class="shine" x="-18" y="-5" width="22" height="74" rx="4"
+        fill="white" opacity="0.3" clip-path="url(#c)"/>
+
+  <!-- Star 1 — large, top-right -->
+  <path class="s1"
+        d="M48,11 L49.8,15.2 L54,17 L49.8,18.8 L48,23 L46.2,18.8 L42,17 L46.2,15.2 Z"
+        fill="white"/>
+
+  <!-- Star 2 — medium, mid-right -->
+  <path class="s2"
+        d="M52,25.5 L53.1,28 L55.5,29 L53.1,30 L52,32.5 L50.9,30 L48.5,29 L50.9,28 Z"
+        fill="white"/>
+
+  <!-- Star 3 — small, above star 1 -->
+  <path class="s3"
+        d="M44,6 L44.85,8.15 L47,9 L44.85,9.85 L44,12 L43.15,9.85 L41,9 L43.15,8.15 Z"
+        fill="white" opacity="0.9"/>
 </svg>

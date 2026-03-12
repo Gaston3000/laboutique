@@ -42,9 +42,9 @@ html {
 
 .home-banners-stage {
   position: relative;
-  border-radius: 20px;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid var(--surface-gray);
+  border: none;
   background: linear-gradient(120deg, #122566 0%, #2c4bb6 50%, #152a73 100%);
 }
 
@@ -75,7 +75,7 @@ html {
 }
 
 .home-banners-slide img {
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
   transform: none;
 }
