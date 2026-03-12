@@ -686,6 +686,51 @@ export async function checkoutCart(payload, token = null) {
   return data;
 }
 
+export async function fetchUserCart(token) {
+  const response = await fetch(`${API_URL}/cart`, {
+    headers: getAuthHeaders(token)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo cargar el carrito");
+  }
+
+  return data;
+}
+
+export async function saveUserCart(token, items = []) {
+  const response = await fetch(`${API_URL}/cart`, {
+    method: "PUT",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ items: Array.isArray(items) ? items : [] })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo guardar el carrito");
+  }
+
+  return data;
+}
+
+export async function clearUserCart(token) {
+  const response = await fetch(`${API_URL}/cart`, {
+    method: "DELETE",
+    headers: getAuthHeaders(token)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo limpiar el carrito");
+  }
+
+  return data;
+}
+
 export async function fetchTickets(token, filters = {}) {
   const params = new URLSearchParams();
 

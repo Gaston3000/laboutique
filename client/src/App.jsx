@@ -19,6 +19,7 @@ import {
   fetchAdministrators,
   fetchCustomerActivity,
   fetchCustomerReorderItems,
+  fetchUserCart,
   fetchCustomersHistory,
   fetchMembers,
   fetchLowStockAlerts,
@@ -44,6 +45,7 @@ import {
   updateShippingRule,
   updateProduct,
   submitLegalTicket,
+  saveUserCart,
   uploadProductMedia,
   trackAnalyticsEvent
 } from "./api";
@@ -74,6 +76,7 @@ const MAX_ACCOUNT_ADDRESSES = 5;
 const WELCOME_PROMO_CODE = "PRIMERACOMPRA10";
 const ADMIN_NOTIFICATIONS_SEEN_STORAGE_KEY = "admin:notifications:seen:v1";
 const FREE_SHIPPING_TARGET_ARS = 50000;
+const GUEST_CART_STORAGE_KEY = "cart:guest";
 
 const FOOTER_ACCOUNT_LINKS = [
   { key: "cuenta", label: "Mi Cuenta" },
@@ -1003,7 +1006,7 @@ function App() {
   const previousActiveSectionRef = useRef(activeSection);
   const [cart, setCart] = useState(() => {
     try {
-      const savedCart = localStorage.getItem("cart");
+      const savedCart = localStorage.getItem(GUEST_CART_STORAGE_KEY) || localStorage.getItem("cart");
       return savedCart ? JSON.parse(savedCart) : [];
     } catch {
       return [];
@@ -1380,8 +1383,30 @@ function App() {
   }, [auth.user?.address]);
 
   useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(cart));
-  }, [cart]);
+    if (auth.user) {
+      localStorage.removeItem("cart");
+      return;
+    }
+
+    localStorage.setItem(GUEST_CART_STORAGE_KEY, JSON.stringify(cart));
+    localStorage.removeItem("cart");
+  }, [auth.user, cart]);
+
+  useEffect(() => {
+    if (!auth.token || !auth.user) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      saveUserCart(auth.token, cart).catch(() => {
+        // Silent failure: keep checkout UX responsive if autosave fails.
+      });
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [auth.token, auth.user?.id, auth.user?.role, cart]);
 
   useEffect(() => {
     localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(recentSearches));
@@ -2977,11 +3002,31 @@ function App() {
         primaryAddressId: hasStoredBook ? validPrimaryAddressId : String(data.user?.primaryAddressId || "").trim()
       };
 
+      let nextCart = [];
+
+      if (data.token) {
+        const cartResponse = await fetchUserCart(data.token);
+        const storedUserCart = Array.isArray(cartResponse?.items) ? cartResponse.items : [];
+
+        if (storedUserCart.length > 0) {
+          nextCart = storedUserCart;
+        } else {
+          nextCart = Array.isArray(cart) ? cart : [];
+
+          if (nextCart.length > 0) {
+            await saveUserCart(data.token, nextCart);
+          }
+        }
+      }
+
       sendAnalytics(mode === "register" ? "register" : "login", {
         role: userWithAddresses?.role || "client",
         emailDomain: String(email || "").includes("@") ? String(email).split("@").pop() : ""
       });
+      setCart(nextCart);
       setAuth({ token: data.token, user: userWithAddresses });
+      localStorage.removeItem(GUEST_CART_STORAGE_KEY);
+      localStorage.removeItem("cart");
       if (userWithAddresses?.role === "admin") {
         setActiveSection("admin");
         await Promise.all([
@@ -3026,11 +3071,31 @@ function App() {
         primaryAddressId: hasStoredBook ? validPrimaryAddressId : String(data.user?.primaryAddressId || "").trim()
       };
 
+      let nextCart = [];
+
+      if (data.token) {
+        const cartResponse = await fetchUserCart(data.token);
+        const storedUserCart = Array.isArray(cartResponse?.items) ? cartResponse.items : [];
+
+        if (storedUserCart.length > 0) {
+          nextCart = storedUserCart;
+        } else {
+          nextCart = Array.isArray(cart) ? cart : [];
+
+          if (nextCart.length > 0) {
+            await saveUserCart(data.token, nextCart);
+          }
+        }
+      }
+
       sendAnalytics("email_verified", {
         role: userWithAddresses?.role || "client"
       });
 
+      setCart(nextCart);
       setAuth({ token: data.token, user: userWithAddresses });
+      localStorage.removeItem(GUEST_CART_STORAGE_KEY);
+      localStorage.removeItem("cart");
       await refreshTicketsData(data.token, userWithAddresses?.role || "client");
       setIsLoginOpen(false);
       setLoginInviteMessage("");
@@ -3064,10 +3129,18 @@ function App() {
   }
 
   function handleLogout() {
+    if (auth.token && auth.user) {
+      saveUserCart(auth.token, cart).catch(() => {
+        // Keep logout immediate even if save fails.
+      });
+    }
+
+    clearCart();
     setAuth({ token: null, user: null });
     setActiveSection("home");
     setAdminMessage("");
     setAnalyticsData(null);
+    localStorage.removeItem("cart");
   }
 
   async function handleReloadAdminAnalytics(period = "30d") {

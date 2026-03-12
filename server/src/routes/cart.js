@@ -6,6 +6,7 @@ import { sendOrderConfirmationEmail } from "../services/emailService.js";
 const cartRouter = Router();
 const MERCADOPAGO_API_URL = "https://api.mercadopago.com";
 const WELCOME_PROMO_CODE = "PRIMERACOMPRA10";
+let userCartStorageReady = false;
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -24,6 +25,15 @@ function toNumber(value) {
 function toMoneyAmount(value) {
   const normalized = toNumber(value) ?? 0;
   return Number(normalized.toFixed(2));
+}
+
+function toNullableInteger(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = toInteger(value);
+  return parsed && parsed > 0 ? parsed : null;
 }
 
 function getBearerToken(req) {
@@ -76,6 +86,75 @@ async function resolveOptionalAuthUser(req) {
   } catch {
     return null;
   }
+}
+
+async function resolveRequiredAuthUser(req, res) {
+  const authUser = await resolveOptionalAuthUser(req);
+
+  if (!authUser) {
+    res.status(401).json({ error: "No autorizado" });
+    return null;
+  }
+
+  return authUser;
+}
+
+function sanitizeCartItems(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  const normalized = [];
+
+  for (const rawItem of items) {
+    if (!rawItem || typeof rawItem !== "object") {
+      continue;
+    }
+
+    const productId = toInteger(rawItem.id ?? rawItem.productId);
+    const quantity = toInteger(rawItem.quantity);
+    const variantId = toNullableInteger(rawItem.variantId);
+
+    if (!productId || productId <= 0 || !quantity || quantity <= 0) {
+      continue;
+    }
+
+    const cartKey = normalizeText(rawItem.cartKey) || `${productId}:${variantId ?? "base"}`;
+
+    normalized.push({
+      ...rawItem,
+      id: productId,
+      productId,
+      variantId,
+      quantity,
+      cartKey
+    });
+
+    if (normalized.length >= 200) {
+      break;
+    }
+  }
+
+  return normalized;
+}
+
+async function ensureUserCartStorage() {
+  if (userCartStorageReady) {
+    return;
+  }
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS user_carts (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      items JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )`
+  );
+
+  await query("CREATE INDEX IF NOT EXISTS idx_user_carts_user_id ON user_carts(user_id)");
+  userCartStorageReady = true;
 }
 
 async function ensureWelcomePromoEligibility(queryRunner, authUser) {
@@ -415,8 +494,82 @@ async function getShippingCost(shippingZone, _subtotal) {
   return null;
 }
 
-cartRouter.get("/", (_req, res) => {
-  res.json({ items: [], message: "Carrito inicial listo para implementar persistencia" });
+cartRouter.get("/", async (req, res) => {
+  try {
+    const authUser = await resolveOptionalAuthUser(req);
+
+    if (!authUser) {
+      return res.json({ items: [] });
+    }
+
+    await ensureUserCartStorage();
+
+    const cartResult = await query(
+      "SELECT items FROM user_carts WHERE user_id = $1 LIMIT 1",
+      [authUser.id]
+    );
+
+    const storedItems = cartResult.rows[0]?.items;
+    const items = sanitizeCartItems(Array.isArray(storedItems) ? storedItems : []);
+
+    return res.json({ items });
+  } catch (error) {
+    console.error("GET /api/cart failed:", error?.message || error);
+    return res.status(500).json({ error: "No se pudo cargar el carrito" });
+  }
+});
+
+cartRouter.put("/", async (req, res) => {
+  const authUser = await resolveRequiredAuthUser(req, res);
+
+  if (!authUser) {
+    return;
+  }
+
+  const receivedItems = Array.isArray(req.body?.items) ? req.body.items : [];
+  const items = sanitizeCartItems(receivedItems);
+
+  if (receivedItems.length > 0 && items.length === 0) {
+    return res.status(400).json({ error: "Hay productos inválidos en el carrito" });
+  }
+
+  try {
+    await ensureUserCartStorage();
+
+    const saveResult = await query(
+      `INSERT INTO user_carts (user_id, items, updated_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (user_id)
+       DO UPDATE SET items = EXCLUDED.items, updated_at = NOW()
+       RETURNING items, updated_at`,
+      [authUser.id, JSON.stringify(items)]
+    );
+
+    return res.json({
+      items: sanitizeCartItems(Array.isArray(saveResult.rows[0]?.items) ? saveResult.rows[0].items : []),
+      updatedAt: saveResult.rows[0]?.updated_at || null
+    });
+  } catch (error) {
+    console.error("PUT /api/cart failed:", error?.message || error);
+    return res.status(500).json({ error: "No se pudo guardar el carrito" });
+  }
+});
+
+cartRouter.delete("/", async (req, res) => {
+  const authUser = await resolveRequiredAuthUser(req, res);
+
+  if (!authUser) {
+    return;
+  }
+
+  try {
+    await ensureUserCartStorage();
+    await query("DELETE FROM user_carts WHERE user_id = $1", [authUser.id]);
+    return res.json({ items: [] });
+  } catch (error) {
+    console.error("DELETE /api/cart failed:", error?.message || error);
+    return res.status(500).json({ error: "No se pudo limpiar el carrito" });
+  }
 });
 
 cartRouter.post("/checkout", async (req, res) => {
