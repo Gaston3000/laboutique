@@ -248,7 +248,11 @@ export default function HomeBanners({ onExploreProducts, onViewPromotions }) {
           onClick={goToPrevious}
           aria-label="Ver banner anterior"
         >
-          ‹
+          <span className="nav-arrow-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M7 10.5 12 15.5 17 10.5" />
+            </svg>
+          </span>
         </button>
         <button
           type="button"
@@ -256,7 +260,11 @@ export default function HomeBanners({ onExploreProducts, onViewPromotions }) {
           onClick={goToNext}
           aria-label="Ver banner siguiente"
         >
-          ›
+          <span className="nav-arrow-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M7 10.5 12 15.5 17 10.5" />
+            </svg>
+          </span>
         </button>
       </div>
 

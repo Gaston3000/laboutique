@@ -89,7 +89,11 @@ const FOOTER_CATEGORY_LINKS = [
   "Insecticidas",
   "Plumeros",
   "Trapos",
-  "Velas"
+  "Velas",
+  "Saphirus",
+  "Desinfectantes",
+  "Lavandina",
+  "Aromatizantes"
 ];
 
 const FOOTER_INFO_LINKS = [
@@ -447,6 +451,25 @@ function getProductCategoriesForSearch(product) {
       return String(category?.name || "").trim();
     })
     .filter(Boolean);
+}
+
+const CATEGORY_FILTER_ALIASES = {
+  aparatos: ["aparatos", "aparato", "aparatos saphirus", "aparato saphirus"],
+  difusores: ["difusores", "difusor", "difusor saphirus"]
+};
+
+function matchesSelectedCategory(productCategories, normalizedSelectedCategory) {
+  if (!normalizedSelectedCategory) {
+    return true;
+  }
+
+  const aliasTerms = CATEGORY_FILTER_ALIASES[normalizedSelectedCategory];
+
+  if (Array.isArray(aliasTerms) && aliasTerms.length) {
+    return productCategories.some((category) => aliasTerms.includes(category));
+  }
+
+  return productCategories.some((category) => category.includes(normalizedSelectedCategory));
 }
 
 function getProductSearchableText(product) {
@@ -931,6 +954,7 @@ function App() {
   const [withdrawalSubmitMessage, setWithdrawalSubmitMessage] = useState("");
   const [isWithdrawalSubmitting, setIsWithdrawalSubmitting] = useState(false);
   const [isCartPromoOpen, setIsCartPromoOpen] = useState(false);
+  const [isClearCartConfirmOpen, setIsClearCartConfirmOpen] = useState(false);
   const [isCartNoteOpen, setIsCartNoteOpen] = useState(false);
   const [isCheckoutPromoOpen, setIsCheckoutPromoOpen] = useState(false);
   const [isAdminNotificationsOpen, setIsAdminNotificationsOpen] = useState(false);
@@ -959,6 +983,8 @@ function App() {
   const [cartOrderNote, setCartOrderNote] = useState("");
   const [isApplyingCartPromo, setIsApplyingCartPromo] = useState(false);
   const [cartPromoMessage, setCartPromoMessage] = useState("");
+  const [cartStockMessage, setCartStockMessage] = useState("");
+  const [cartStockMessageCartKey, setCartStockMessageCartKey] = useState("");
   const [appliedCartPromotion, setAppliedCartPromotion] = useState(null);
   const [cartNoteMessage, setCartNoteMessage] = useState("");
   const [shouldFocusCartPromoInput, setShouldFocusCartPromoInput] = useState(false);
@@ -968,9 +994,13 @@ function App() {
   const productsRowRef = useRef(null);
   const similarProductsRowRef = useRef(null);
   const saphirusProductsRowRef = useRef(null);
+  const cartDrawerLockedScrollYRef = useRef(0);
+  const hadCartDrawerBodyLockRef = useRef(false);
   const adminNotificationsRef = useRef(null);
   const cartPromoInputRef = useRef(null);
+  const cartDrawerPromoInputRef = useRef(null);
   const hasProcessedInitialProductQueryRef = useRef(false);
+  const previousActiveSectionRef = useRef(activeSection);
   const [cart, setCart] = useState(() => {
     try {
       const savedCart = localStorage.getItem("cart");
@@ -984,6 +1014,18 @@ function App() {
     const data = await fetchProducts();
     setProducts(data.items || []);
     setProductsLoadError("");
+  }
+
+  function scrollToPageTop() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "auto"
+    });
   }
 
   async function refreshOrders(token) {
@@ -1423,15 +1465,46 @@ function App() {
 
   useEffect(() => {
     if (isCartDrawerOpen) {
+      const currentScrollY = window.scrollY || window.pageYOffset || 0;
+      cartDrawerLockedScrollYRef.current = currentScrollY;
+      hadCartDrawerBodyLockRef.current = true;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${currentScrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.width = "100%";
       document.body.style.overflow = "hidden";
+
       return () => {
+        const lockedScrollY = cartDrawerLockedScrollYRef.current || 0;
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.right = "";
+        document.body.style.width = "";
         document.body.style.overflow = "";
+        window.scrollTo({ top: lockedScrollY, left: 0, behavior: "auto" });
       };
     }
 
+    const lockedScrollY = cartDrawerLockedScrollYRef.current || 0;
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.left = "";
+    document.body.style.right = "";
+    document.body.style.width = "";
     document.body.style.overflow = "";
+    if (hadCartDrawerBodyLockRef.current) {
+      window.scrollTo({ top: lockedScrollY, left: 0, behavior: "auto" });
+      hadCartDrawerBodyLockRef.current = false;
+    }
 
     return () => {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
       document.body.style.overflow = "";
     };
   }, [isCartDrawerOpen]);
@@ -1565,6 +1638,23 @@ function App() {
     setShouldFocusCartPromoInput(false);
   }, [activeSection, isCartPromoOpen, shouldFocusCartPromoInput]);
 
+  useEffect(() => {
+    if (!isCartDrawerOpen || !isCartPromoOpen || !shouldFocusCartPromoInput) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      if (!cartDrawerPromoInputRef.current) {
+        return;
+      }
+
+      cartDrawerPromoInputRef.current.focus();
+      cartDrawerPromoInputRef.current.select();
+    });
+
+    setShouldFocusCartPromoInput(false);
+  }, [isCartDrawerOpen, isCartPromoOpen, shouldFocusCartPromoInput]);
+
   const favoriteProducts = useMemo(() => {
     const favoriteIdSet = new Set(favoriteProductIds.map((id) => String(id)));
     return products.filter((product) => product.isVisible !== false && favoriteIdSet.has(String(product.id)));
@@ -1583,7 +1673,7 @@ function App() {
             .map((category) => normalizeSearchText(category))
             .filter(Boolean);
 
-          return productCategories.some((category) => category.includes(normalizedSelectedCategory));
+          return matchesSelectedCategory(productCategories, normalizedSelectedCategory);
         });
 
     if (!normalizedSearch) {
@@ -2091,6 +2181,20 @@ function App() {
     return stockLimit !== null && Number(item?.quantity || 0) >= stockLimit;
   }
 
+  function getCartStockWarningMessage(item, stockLimit) {
+    const productName = String(item?.name || "Este producto").trim();
+
+    if (stockLimit <= 0) {
+      return `${productName} no tiene mas stock disponible.`;
+    }
+
+    if (stockLimit === 1) {
+      return `Solo queda 1 unidad de ${productName}.`;
+    }
+
+    return `Solo hay ${stockLimit} unidades disponibles de ${productName}.`;
+  }
+
   const isAdmin = auth.user?.role === "admin";
   const analyticsVisitorId = useMemo(() => getOrCreateStorageId("analytics:visitor:id", false), []);
   const analyticsSessionId = useMemo(() => getOrCreateStorageId("analytics:session:id", true), []);
@@ -2152,6 +2256,15 @@ function App() {
   }, [activeSection, searchTerm, selectedCategory]);
 
   useEffect(() => {
+    if (previousActiveSectionRef.current === activeSection) {
+      return;
+    }
+
+    previousActiveSectionRef.current = activeSection;
+    scrollToPageTop();
+  }, [activeSection]);
+
+  useEffect(() => {
     if (!selectedProduct?.id) {
       return;
     }
@@ -2207,6 +2320,9 @@ function App() {
     if (addedQuantity <= 0) {
       return;
     }
+
+    setCartStockMessage("");
+    setCartStockMessageCartKey("");
 
     sendAnalytics("add_to_cart", {
       productId: product.id,
@@ -2281,6 +2397,9 @@ function App() {
       return;
     }
 
+    setCartStockMessage("");
+    setCartStockMessageCartKey("");
+
     sendAnalytics("add_to_cart", {
       productId: product.id,
       productName: product.name,
@@ -2302,6 +2421,8 @@ function App() {
   }
 
   function updateCartQuantity(cartKey, nextQuantity) {
+    let stockWarningMessage = "";
+
     setCart((currentCart) => {
       const targetItem = currentCart.find((item) => (item.cartKey || `${item.id}:base`) === cartKey);
 
@@ -2309,10 +2430,18 @@ function App() {
         return currentCart;
       }
 
+      const parsedNextQuantity = Number(nextQuantity);
+      const safeNextQuantity = Number.isFinite(parsedNextQuantity)
+        ? Math.floor(parsedNextQuantity)
+        : Number(targetItem.quantity || 0);
       const stockLimit = getCartItemStockLimit(targetItem);
       const boundedQuantity = stockLimit === null
-        ? nextQuantity
-        : Math.min(nextQuantity, stockLimit);
+        ? safeNextQuantity
+        : Math.min(safeNextQuantity, stockLimit);
+
+      if (stockLimit !== null && safeNextQuantity > stockLimit) {
+        stockWarningMessage = getCartStockWarningMessage(targetItem, stockLimit);
+      }
 
       if (boundedQuantity <= 0) {
         return currentCart.filter((item) => (item.cartKey || `${item.id}:base`) !== cartKey);
@@ -2328,14 +2457,26 @@ function App() {
           : item
       ));
     });
+
+    setCartStockMessage(stockWarningMessage);
+    setCartStockMessageCartKey(stockWarningMessage ? cartKey : "");
   }
 
   function removeFromCart(cartKey) {
+    setCartStockMessage("");
+    setCartStockMessageCartKey("");
     setCart((currentCart) => currentCart.filter((item) => (item.cartKey || `${item.id}:base`) !== cartKey));
   }
 
   function clearCart() {
+    setCartStockMessage("");
+    setCartStockMessageCartKey("");
     setCart([]);
+  }
+
+  function handleConfirmClearCart() {
+    clearCart();
+    setIsClearCartConfirmOpen(false);
   }
 
   function openCartDrawer() {
@@ -2396,6 +2537,22 @@ function App() {
     setOpenInfoSection("description");
     setActiveSection("product");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openCartItemProduct(item) {
+    if (!item) {
+      return;
+    }
+
+    if (item.variantId) {
+      setSelectedVariantByProduct((current) => ({
+        ...current,
+        [item.id]: item.variantId
+      }));
+    }
+
+    openProductPreview(item);
+    closeCartDrawer();
   }
 
   function handleAddSelectedProductToCart() {
@@ -2517,6 +2674,7 @@ function App() {
     setSearchInput("");
     setSearchTerm("");
     setActiveSection("home");
+    scrollToPageTop();
   }
 
   function handleSelectBrandFromCarousel(categoryName) {
@@ -2557,6 +2715,7 @@ function App() {
     setSearchInput(normalizedSearch);
     setSelectedCategory("Todos los productos");
     setActiveSection("home");
+    scrollToPageTop();
   }
 
   function handleApplySuggestedSearch() {
@@ -2605,7 +2764,8 @@ function App() {
     const firstCard = rowRef.current.querySelector(".product-card");
     const rowStyles = window.getComputedStyle(rowRef.current);
     const rowGap = Number.parseFloat(rowStyles.columnGap || rowStyles.gap || "0") || 0;
-    const amount = firstCard ? firstCard.getBoundingClientRect().width + rowGap : 240;
+    const amountPerCard = firstCard ? firstCard.getBoundingClientRect().width + rowGap : 240;
+    const amount = amountPerCard * 3;
 
     rowRef.current.scrollBy({
       left: direction === "left" ? -amount : amount,
@@ -3281,6 +3441,21 @@ function App() {
   const isPromotionsActive = activeSection === "promotions";
   const isAboutActive = activeSection === "about";
   const shouldRenderGridProducts = isSpecificCategorySelected || isSearchActive;
+  const homeRandomProducts = useMemo(() => {
+    if (!isInicioActive) {
+      return [];
+    }
+
+    const shuffledProducts = [...filteredProducts];
+
+    for (let index = shuffledProducts.length - 1; index > 0; index -= 1) {
+      const randomIndex = Math.floor(Math.random() * (index + 1));
+      [shuffledProducts[index], shuffledProducts[randomIndex]] = [shuffledProducts[randomIndex], shuffledProducts[index]];
+    }
+
+    return shuffledProducts;
+  }, [isInicioActive, filteredProducts]);
+  const productsForCarousel = isInicioActive ? homeRandomProducts : filteredProducts;
   const visibleCategoryProducts = isSpecificCategorySelected
     ? sortedFilteredProducts.slice(0, categoryVisibleCount)
     : sortedFilteredProducts;
@@ -3780,7 +3955,7 @@ function App() {
   }
 
   return (
-    <div className="page">
+    <div className={`page${isCartDrawerOpen ? " cart-lock-active" : ""}`}>
       <PromoStrip />
       <SiteHeader
         totalItems={totalItems}
@@ -4028,60 +4203,100 @@ function App() {
                 {!cart.length ? (
                   <p className="empty-results">Tu carrito está vacío.</p>
                 ) : (
-                  <ul className="cart-drawer-list">
-                    {cart.map((item) => (
-                      <li key={item.cartKey || `${item.id}:base`} className="cart-drawer-line">
-                        <img className="cart-drawer-image" src={getProductImageUrl(item)} alt={getProductImageAlt(item, 0)} />
+                  <>
+                    <ul className="cart-drawer-list">
+                      {cart.map((item) => (
+                        <li key={item.cartKey || `${item.id}:base`} className="cart-drawer-line">
+                          <button
+                            type="button"
+                            className="cart-item-image-btn"
+                            onClick={() => openCartItemProduct(item)}
+                            aria-label={`Ver detalle de ${item.name}`}
+                          >
+                            <img className="cart-drawer-image" src={getProductImageUrl(item)} alt={getProductImageAlt(item, 0)} />
+                          </button>
 
-                        <div className="cart-drawer-info">
-                          <h3>{item.name}</h3>
-                          {(item.variantPresentation || item.variantName) && (
-                            <p className="cart-drawer-unit-price">
-                              {item.variantPresentation ? `${item.variantPresentation}: ` : ""}
-                              {item.variantName}
-                            </p>
-                          )}
-                          <p className="cart-drawer-unit-price">${Number(item.price).toLocaleString("es-AR")} ARS</p>
-
-                          <div className="cart-drawer-line-footer">
-                            <div className="cart-qty-control" aria-label={`Cantidad de ${item.name}`}>
+                          <div className="cart-drawer-info">
+                            <h3>
                               <button
                                 type="button"
-                                onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity - 1)}
-                                aria-label={`Quitar una unidad de ${item.name}`}
+                                className="cart-item-title-btn"
+                                onClick={() => openCartItemProduct(item)}
+                                aria-label={`Ver detalle de ${item.name}`}
                               >
-                                -
+                                {item.name}
                               </button>
-                              <span>{item.quantity}</span>
-                              <button
-                                type="button"
-                                onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity + 1)}
-                                disabled={isCartItemAtStockLimit(item)}
-                                aria-label={`Agregar una unidad de ${item.name}`}
-                              >
-                                +
-                              </button>
+                            </h3>
+                            {(item.variantPresentation || item.variantName) && (
+                              <p className="cart-drawer-unit-price">
+                                {item.variantPresentation ? `${item.variantPresentation}: ` : ""}
+                                {item.variantName}
+                              </p>
+                            )}
+                            <p className="cart-drawer-unit-price">${Number(item.price).toLocaleString("es-AR")} ARS</p>
+
+                            <div className="cart-drawer-line-footer">
+                              <div className="cart-qty-control" aria-label={`Cantidad de ${item.name}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity - 1)}
+                                  aria-label={`Quitar una unidad de ${item.name}`}
+                                >
+                                  -
+                                </button>
+                                <span>{item.quantity}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity + 1)}
+                                  title={isCartItemAtStockLimit(item) ? "No hay mas stock disponible" : undefined}
+                                  aria-label={`Agregar una unidad de ${item.name}`}
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              <strong className="cart-drawer-line-total">
+                                ${(Number(item.price) * item.quantity).toLocaleString("es-AR")} ARS
+                              </strong>
                             </div>
 
-                            <strong className="cart-drawer-line-total">
-                              ${(Number(item.price) * item.quantity).toLocaleString("es-AR")} ARS
-                            </strong>
+                            {cartStockMessage
+                              && cartStockMessageCartKey === (item.cartKey || `${item.id}:base`) && (
+                              <p className="cart-item-stock-warning" role="status" aria-live="polite">
+                                {cartStockMessage}
+                              </p>
+                            )}
                           </div>
-                        </div>
 
-                        <button
-                          type="button"
-                          className="cart-drawer-remove"
-                          onClick={() => removeFromCart(item.cartKey || `${item.id}:base`)}
-                          aria-label={`Eliminar ${item.name}`}
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <button
+                            type="button"
+                            className="cart-drawer-remove"
+                            onClick={() => removeFromCart(item.cartKey || `${item.id}:base`)}
+                            aria-label={`Eliminar ${item.name}`}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M8 7V5h8v2M5 7h14M9 10v7M15 10v7M7 7l1 12h8l1-12" />
+                            </svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="cart-drawer-list-actions">
+                      <button
+                        type="button"
+                        className="cart-drawer-clear-btn"
+                        onClick={() => setIsClearCartConfirmOpen(true)}
+                      >
+                        <span className="cart-clear-btn-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24">
                             <path d="M8 7V5h8v2M5 7h14M9 10v7M15 10v7M7 7l1 12h8l1-12" />
                           </svg>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                        </span>
+                        Vaciar carrito
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -4089,7 +4304,15 @@ function App() {
               <button
                 type="button"
                 className="cart-promo-btn"
-                onClick={() => handleGoToCartPage({ openPromotion: true })}
+                onClick={() => {
+                  setIsCartPromoOpen((current) => {
+                    const nextValue = !current;
+                    if (nextValue) {
+                      setShouldFocusCartPromoInput(true);
+                    }
+                    return nextValue;
+                  });
+                }}
               >
                 <span className="cart-promo-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
@@ -4100,55 +4323,108 @@ function App() {
                 <span>Ingresar código de promoción</span>
               </button>
 
-              <div className="cart-drawer-total-wrap">
-                <div className="cart-drawer-total-row">
-                  <span>Subtotal</span>
-                  <strong>${cartSubtotal.toLocaleString("es-AR")} ARS</strong>
+              {isCartPromoOpen && (
+                <div className="cart-drawer-promo-panel" aria-label="Código promocional en carrito rápido">
+                  <input
+                    ref={cartDrawerPromoInputRef}
+                    type="text"
+                    placeholder="P. ej., OFERTA50"
+                    value={cartPromoCode}
+                    onChange={(event) => setCartPromoCode(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="cart-extra-apply-btn"
+                    onClick={handleApplyCartPromotion}
+                    disabled={isApplyingCartPromo}
+                  >
+                    {isApplyingCartPromo ? "Aplicando..." : "Aplicar"}
+                  </button>
+                </div>
+              )}
+              {isCartPromoOpen && cartPromoMessage && <p className="cart-drawer-promo-message">{cartPromoMessage}</p>}
+
+              <div className="cart-drawer-checkout-bottom">
+                <div className="cart-drawer-total-wrap">
+                  <div className="cart-drawer-total-row">
+                    <span>Subtotal</span>
+                    <strong>${cartSubtotal.toLocaleString("es-AR")} ARS</strong>
+                  </div>
+
+                  {cartDiscount > 0 && (
+                    <div className="cart-drawer-total-row">
+                      <span>Descuento cupón</span>
+                      <strong>-${cartDiscount.toLocaleString("es-AR")} ARS</strong>
+                    </div>
+                  )}
+
+                  {welcomeDiscountAmount > 0 && (
+                    <>
+                      <div className="cart-drawer-discount-row-a">
+                        <svg viewBox="0 0 64 64" style={{width:'13px',height:'13px',display:'block',flexShrink:0}}>
+                          <path fill="#1877f2" d="M51.429 15.856c4.558-4.299-.715-9.875-10.687-6.421c-.587.204-1.133.419-1.648.642c.977-1.876 2.42-3.924 4.58-5.885c0 0-4.034 1.449-5.898 1.082C35.464 4.819 34.739 2 34.739 2s-2.405 5.238-3.63 9.349c-1.754-3.532-3.697-6.969-3.697-6.969s-1.037 2.404-2.936 3.318c-1.531.74-7.829 1.378-7.829 1.378c2.1 1.074 3.903 2.401 5.433 3.774c-1.609-.426-3.446-.746-5.547-.898c-8.344-.605-11.621 2.372-10.505 5.313L2 17.394l2.192 8.219L5.554 26c3.232 10.949 2.45 23.098 2.44 23.235l-.055.792l.754.222C20.766 53.805 31.735 62 31.735 62s14.222-9.412 22.042-11.753l.684-.205l.014-.72c.004-.17.346-15.334 4.271-25.218c.276-.039.536-.07.759-.084l.827-.05l.083-.832c.003-.033.341-4.796 1.586-6.739zM4.587 19.7l6.483 1.759v4.063l-5.381-1.528zm10.074 30.512a70 70 0 0 0-4.681-1.63c.128-2.822.313-12.549-2.233-21.96l4.71 1.338c.912 4.023 2.426 12.311 2.204 22.252m7.893-35.169c8.094.586 9.517 4.764 9.517 4.764s-4.931 1.803-7.978 1.803c-9.942 0-11.378-7.28-1.539-6.567m9.988 5.379l8.126.921l-10.13 2.451l-5.786-1.293zm-9.729 3.661l6.76 1.51v5.184l-6.979-1.947zm8.041 34.937c-1.476-1.096-3.936-2.787-7.202-4.6c.259-4.777.29-17.541.291-23.198l6.911 1.963zm9.046-4.356a138 138 0 0 0-7.1 4.496V32.29a511 511 0 0 1 8.162-2.917c-.587 5.658-.954 20.424-1.062 25.291m3.28-27.832s-9.738 3.125-11.659 3.834V25.58l11.811-2.858zm-1.2-7.461c-4.559 1.168-9.408.344-9.408.344s-.909-4.465 6.451-7.014c8.946-3.099 12.483 4.229 2.957 6.67m6.711-1.699l5.796.326l-3.481.843l-4.157-.41c.673-.234 1.284-.49 1.842-.759m3.856 30.9c-1.447.473-2.973 1.092-4.511 1.793c.011-4.684.297-15.066 2.467-24.145c2.231-.688 4.299-1.275 5.987-1.672c-3.227 8.986-3.838 20.96-3.943 24.024m6.038-26.431s-3.201.938-5.245 1.502l.514-3.468l5.565-1.346c-.456 1.255-.834 3.312-.834 3.312"/>
+                        </svg>
+                        <span className="cart-drawer-discount-row-a-label">10% OFF</span>
+                        <span className="cart-drawer-discount-row-a-amount">-${welcomeDiscountAmount.toLocaleString("es-AR")} ARS</span>
+                      </div>
+                      {auth.user?.welcomeDiscountExpiresAt && (
+                        <div className="cart-drawer-discount-row-b">
+                          <svg viewBox="0 0 24 24" style={{width:'12px',height:'12px',display:'block',flexShrink:0}}>
+                            <path fill="#92400e" fillRule="evenodd" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m0-1.2a8.8 8.8 0 1 0 0-17.6a8.8 8.8 0 0 0 0 17.6"/>
+                            <path className="clock-animated" fill="#92400e" fillRule="evenodd" d="m12.6 11.503l3.891 3.891l-.848.849L11.4 12V6h1.2z" style={{transformOrigin:'12px 12px'}}/>
+                          </svg>
+                          <WelcomeDiscountTimer expiresAt={auth.user.welcomeDiscountExpiresAt} mode="compact" />
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div className="cart-drawer-total-row cart-drawer-final-total">
+                    <span>Total</span>
+                    <strong>${(cartSubtotalAfterDiscount - welcomeDiscountAmount).toLocaleString("es-AR")} ARS</strong>
+                  </div>
                 </div>
 
-                {welcomeDiscountAmount > 0 && (
-                  <>
-                    <div className="cart-drawer-discount-row-a">
-                      <svg viewBox="0 0 64 64" style={{width:'13px',height:'13px',display:'block',flexShrink:0}}>
-                        <path fill="#1877f2" d="M51.429 15.856c4.558-4.299-.715-9.875-10.687-6.421c-.587.204-1.133.419-1.648.642c.977-1.876 2.42-3.924 4.58-5.885c0 0-4.034 1.449-5.898 1.082C35.464 4.819 34.739 2 34.739 2s-2.405 5.238-3.63 9.349c-1.754-3.532-3.697-6.969-3.697-6.969s-1.037 2.404-2.936 3.318c-1.531.74-7.829 1.378-7.829 1.378c2.1 1.074 3.903 2.401 5.433 3.774c-1.609-.426-3.446-.746-5.547-.898c-8.344-.605-11.621 2.372-10.505 5.313L2 17.394l2.192 8.219L5.554 26c3.232 10.949 2.45 23.098 2.44 23.235l-.055.792l.754.222C20.766 53.805 31.735 62 31.735 62s14.222-9.412 22.042-11.753l.684-.205l.014-.72c.004-.17.346-15.334 4.271-25.218c.276-.039.536-.07.759-.084l.827-.05l.083-.832c.003-.033.341-4.796 1.586-6.739zM4.587 19.7l6.483 1.759v4.063l-5.381-1.528zm10.074 30.512a70 70 0 0 0-4.681-1.63c.128-2.822.313-12.549-2.233-21.96l4.71 1.338c.912 4.023 2.426 12.311 2.204 22.252m7.893-35.169c8.094.586 9.517 4.764 9.517 4.764s-4.931 1.803-7.978 1.803c-9.942 0-11.378-7.28-1.539-6.567m9.988 5.379l8.126.921l-10.13 2.451l-5.786-1.293zm-9.729 3.661l6.76 1.51v5.184l-6.979-1.947zm8.041 34.937c-1.476-1.096-3.936-2.787-7.202-4.6c.259-4.777.29-17.541.291-23.198l6.911 1.963zm9.046-4.356a138 138 0 0 0-7.1 4.496V32.29a511 511 0 0 1 8.162-2.917c-.587 5.658-.954 20.424-1.062 25.291m3.28-27.832s-9.738 3.125-11.659 3.834V25.58l11.811-2.858zm-1.2-7.461c-4.559 1.168-9.408.344-9.408.344s-.909-4.465 6.451-7.014c8.946-3.099 12.483 4.229 2.957 6.67m6.711-1.699l5.796.326l-3.481.843l-4.157-.41c.673-.234 1.284-.49 1.842-.759m3.856 30.9c-1.447.473-2.973 1.092-4.511 1.793c.011-4.684.297-15.066 2.467-24.145c2.231-.688 4.299-1.275 5.987-1.672c-3.227 8.986-3.838 20.96-3.943 24.024m6.038-26.431s-3.201.938-5.245 1.502l.514-3.468l5.565-1.346c-.456 1.255-.834 3.312-.834 3.312"/>
-                      </svg>
-                      <span className="cart-drawer-discount-row-a-label">10% OFF</span>
-                      <span className="cart-drawer-discount-row-a-amount">-${welcomeDiscountAmount.toLocaleString("es-AR")} ARS</span>
-                    </div>
-                    {auth.user?.welcomeDiscountExpiresAt && (
-                      <div className="cart-drawer-discount-row-b">
-                        <svg viewBox="0 0 24 24" style={{width:'12px',height:'12px',display:'block',flexShrink:0}}>
-                          <path fill="#92400e" fillRule="evenodd" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m0-1.2a8.8 8.8 0 1 0 0-17.6a8.8 8.8 0 0 0 0 17.6"/>
-                          <path className="clock-animated" fill="#92400e" fillRule="evenodd" d="m12.6 11.503l3.891 3.891l-.848.849L11.4 12V6h1.2z" style={{transformOrigin:'12px 12px'}}/>
-                        </svg>
-                        <WelcomeDiscountTimer expiresAt={auth.user.welcomeDiscountExpiresAt} mode="compact" />
-                      </div>
-                    )}
-                    <div className="cart-drawer-total-row cart-drawer-final-total">
-                      <span>Total</span>
-                      <strong>${(cartSubtotal - welcomeDiscountAmount).toLocaleString("es-AR")} ARS</strong>
-                    </div>
-                  </>
-                )}
+                <button type="button" className="cart-pay-btn" onClick={handleGoToCartPage}>
+                  <span className="cart-pay-btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M3 6h2l2 10h10l2-7H7M10 20a1 1 0 1 1-2 0a1 1 0 0 1 2 0m8 0a1 1 0 1 1-2 0a1 1 0 0 1 2 0" />
+                    </svg>
+                  </span>
+                  Ver carrito y pagar
+                </button>
+
+                <p className="cart-secure-note">
+                  <span aria-hidden="true" style={{display: 'inline-flex', alignItems: 'center', marginRight: '0.35em'}}>
+                    <svg viewBox="0 0 50 50" style={{width: '1.2em', height: '1.2em', display: 'block'}}>
+                      <g fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
+                        <path stroke="#344054" d="M25 35.417v-2.084m3.125-3.125a3.125 3.125 0 1 1-6.25 0a3.125 3.125 0 0 1 6.25 0"/>
+                        <path stroke="#1877f2" d="M39.583 41.667V20.833c0-1.15-.932-2.083-2.083-2.083h-25c-1.15 0-2.083.933-2.083 2.083v20.834c0 1.15.932 2.083 2.083 2.083h25c1.15 0 2.083-.933 2.083-2.083m-6.25-22.917v-4.167a8.333 8.333 0 1 0-16.666 0v4.167"/>
+                      </g>
+                    </svg>
+                  </span>
+                  <span>Pago seguro</span>
+                </p>
               </div>
-
-              <button type="button" className="cart-pay-btn" onClick={handleGoToCartPage}>
-                Ver carrito y pagar
-              </button>
-
-              <p className="cart-secure-note">
-                <span aria-hidden="true" style={{display: 'inline-flex', alignItems: 'center', marginRight: '0.35em'}}>
-                  <svg viewBox="0 0 50 50" style={{width: '1.2em', height: '1.2em', display: 'block'}}>
-                    <g fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
-                      <path stroke="#344054" d="M25 35.417v-2.084m3.125-3.125a3.125 3.125 0 1 1-6.25 0a3.125 3.125 0 0 1 6.25 0"/>
-                      <path stroke="#1877f2" d="M39.583 41.667V20.833c0-1.15-.932-2.083-2.083-2.083h-25c-1.15 0-2.083.933-2.083 2.083v20.834c0 1.15.932 2.083 2.083 2.083h25c1.15 0 2.083-.933 2.083-2.083m-6.25-22.917v-4.167a8.333 8.333 0 1 0-16.666 0v4.167"/>
-                    </g>
-                  </svg>
-                </span>
-                <span>Pago seguro</span>
-              </p>
               </footer>
             </div>
+
+            {isClearCartConfirmOpen && (
+              <div className="cart-drawer-confirm-backdrop" onClick={() => setIsClearCartConfirmOpen(false)}>
+                <div className="cart-drawer-confirm-modal" role="alertdialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+                  <h3>¿Estás seguro que querés vaciar el carrito?</h3>
+                  <p>Se eliminarán todos los productos cargados.</p>
+                  <div className="cart-drawer-confirm-actions">
+                    <button type="button" className="secondary-btn" onClick={() => setIsClearCartConfirmOpen(false)}>
+                      Cancelar
+                    </button>
+                    <button type="button" className="danger-btn" onClick={handleConfirmClearCart}>
+                      Sí, vaciar carrito
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </aside>
         </div>
       )}
@@ -4961,14 +5237,30 @@ function App() {
                       {cart.map((item) => (
                         <li key={item.cartKey || `${item.id}:base`} className="cart-line">
                           <div className="cart-line-main">
-                            <img
-                              className="cart-line-image"
-                              src={getProductImageUrl(item)}
-                              alt={getProductImageAlt(item, 0)}
-                            />
+                            <button
+                              type="button"
+                              className="cart-item-image-btn"
+                              onClick={() => openCartItemProduct(item)}
+                              aria-label={`Ver detalle de ${item.name}`}
+                            >
+                              <img
+                                className="cart-line-image"
+                                src={getProductImageUrl(item)}
+                                alt={getProductImageAlt(item, 0)}
+                              />
+                            </button>
 
                             <div>
-                              <h2>{item.name}</h2>
+                              <h2>
+                                <button
+                                  type="button"
+                                  className="cart-item-title-btn"
+                                  onClick={() => openCartItemProduct(item)}
+                                  aria-label={`Ver detalle de ${item.name}`}
+                                >
+                                  {item.name}
+                                </button>
+                              </h2>
                               {(item.variantPresentation || item.variantName) && (
                                 <p>
                                   {item.variantPresentation ? `${item.variantPresentation}: ` : ""}
@@ -4992,12 +5284,19 @@ function App() {
                               <button
                                 type="button"
                                 onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity + 1)}
-                                disabled={isCartItemAtStockLimit(item)}
+                                title={isCartItemAtStockLimit(item) ? "No hay mas stock disponible" : undefined}
                                 aria-label={`Agregar una unidad de ${item.name}`}
                               >
                                 +
                               </button>
                             </div>
+
+                            {cartStockMessage
+                              && cartStockMessageCartKey === (item.cartKey || `${item.id}:base`) && (
+                              <p className="cart-item-stock-warning" role="status" aria-live="polite">
+                                {cartStockMessage}
+                              </p>
+                            )}
 
                             <strong>
                               {(Number(item.price) * item.quantity).toLocaleString("es-AR")},00 ARS
@@ -5770,11 +6069,15 @@ function App() {
                   <>
                     <button
                       type="button"
-                      className="carousel-arrow"
+                      className="carousel-arrow carousel-arrow-left"
                       onClick={() => scrollProductsRow("left", similarProductsRowRef)}
                       aria-label="Ver productos similares anteriores"
                     >
-                      ‹
+                      <span className="nav-arrow-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                          <path d="M7 10.5 12 15.5 17 10.5" />
+                        </svg>
+                      </span>
                     </button>
 
                     <div className="products-row" ref={similarProductsRowRef}>
@@ -5854,11 +6157,15 @@ function App() {
 
                     <button
                       type="button"
-                      className="carousel-arrow"
+                      className="carousel-arrow carousel-arrow-right"
                       onClick={() => scrollProductsRow("right", similarProductsRowRef)}
                       aria-label="Ver más productos similares"
                     >
-                      ›
+                      <span className="nav-arrow-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                          <path d="M7 10.5 12 15.5 17 10.5" />
+                        </svg>
+                      </span>
                     </button>
                   </>
                 ) : (
@@ -5889,7 +6196,7 @@ function App() {
               <div id="home-catalog-start" />
               {!isInicioActive && <h1>{catalogHeading}</h1>}
               <p className={`subtitle${isInicioActive ? " home-catalog-subtitle" : ""}`}>
-                {isInicioActive ? "Últimos productos subidos" : catalogSubtitle}
+                {isInicioActive ? "Nuestro catalogo" : catalogSubtitle}
               </p>
               {!isInicioActive && (
                 <section className="catalog-seo-copy" aria-label="Información de catálogo">
@@ -6090,15 +6397,19 @@ function App() {
                   <section className={`products-carousel${isInicioActive ? " home-products-carousel" : ""}`} aria-label="Productos">
                     <button
                       type="button"
-                      className="carousel-arrow"
+                      className="carousel-arrow carousel-arrow-left"
                       onClick={() => scrollProductsRow("left")}
                       aria-label="Ver productos anteriores"
                     >
-                      ‹
+                      <span className="nav-arrow-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                          <path d="M7 10.5 12 15.5 17 10.5" />
+                        </svg>
+                      </span>
                     </button>
 
                     <div className="products-row" ref={productsRowRef}>
-                      {filteredProducts.map((product) => {
+                      {productsForCarousel.map((product) => {
                       const selectedQuantity = getCatalogQuantity(product.id);
                       const stockLimit = getStockLimit(product.stock);
                       const isQtyAtStockLimit = stockLimit !== null && selectedQuantity >= stockLimit;
@@ -6204,11 +6515,15 @@ function App() {
 
                     <button
                       type="button"
-                      className="carousel-arrow"
+                      className="carousel-arrow carousel-arrow-right"
                       onClick={() => scrollProductsRow("right")}
                       aria-label="Ver más productos"
                     >
-                      ›
+                      <span className="nav-arrow-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                          <path d="M7 10.5 12 15.5 17 10.5" />
+                        </svg>
+                      </span>
                     </button>
                   </section>
                 )
@@ -6235,11 +6550,15 @@ function App() {
                     <section className="products-carousel saphirus-products-carousel" aria-label="Galería de productos Saphirus">
                       <button
                         type="button"
-                        className="carousel-arrow"
+                        className="carousel-arrow carousel-arrow-left"
                         onClick={() => scrollProductsRow("left", saphirusProductsRowRef)}
                         aria-label="Ver productos Saphirus anteriores"
                       >
-                        ‹
+                        <span className="nav-arrow-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                            <path d="M7 10.5 12 15.5 17 10.5" />
+                          </svg>
+                        </span>
                       </button>
 
                       <div className="products-row saphirus-products-row" ref={saphirusProductsRowRef}>
@@ -6349,11 +6668,15 @@ function App() {
 
                       <button
                         type="button"
-                        className="carousel-arrow"
+                        className="carousel-arrow carousel-arrow-right"
                         onClick={() => scrollProductsRow("right", saphirusProductsRowRef)}
                         aria-label="Ver más productos Saphirus"
                       >
-                        ›
+                        <span className="nav-arrow-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                            <path d="M7 10.5 12 15.5 17 10.5" />
+                          </svg>
+                        </span>
                       </button>
                     </section>
                   ) : (
