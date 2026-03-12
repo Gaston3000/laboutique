@@ -1,0 +1,67 @@
+{
+  "count": 626,
+  "totalBytes": 93996574,
+  "totalMB": 89.64,
+  "largest": [
+    {
+      "path": "uploads\\products\\1773328725889-951615406.png",
+      "size": 675618
+    },
+    {
+      "path": "uploads\\products\\1773328963471-737725879.png",
+      "size": 579725
+    },
+    {
+      "path": "uploads\\products\\1773275017282-229908446.png",
+      "size": 507788
+    },
+    {
+      "path": "uploads\\products\\1773258180477-140262367.png",
+      "size": 505879
+    },
+    {
+      "path": "uploads\\products\\1773275119305-795631192.png",
+      "size": 483977
+    },
+    {
+      "path": "uploads\\products\\1773258122284-794574573.png",
+      "size": 482136
+    },
+    {
+      "path": "uploads\\products\\1773258228856-538031176.png",
+      "size": 468459
+    },
+    {
+      "path": "uploads\\products\\1773328934903-304085727.png",
+      "size": 464829
+    },
+    {
+      "path": "uploads\\products\\1773275093407-924390614.png",
+      "size": 434008
+    },
+    {
+      "path": "uploads\\products\\1773283731184-987286603.png",
+      "size": 413740
+    },
+    {
+      "path": "uploads\\products\\1773258938715-906787774.png",
+      "size": 386617
+    },
+    {
+      "path": "uploads\\products\\1773275017312-178882817.png",
+      "size": 377023
+    },
+    {
+      "path": "uploads\\products\\1773329074149-261564673.png",
+      "size": 358020
+    },
+    {
+      "path": "uploads\\products\\1773329937855-100764907.png",
+      "size": 354419
+    },
+    {
+      "path": "uploads\\products\\1773284463395-247473042.png",
+      "size": 353311
+    }
+  ]
+}

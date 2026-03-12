@@ -122,6 +122,71 @@ function normalizeCategoryName(value) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function normalizeAdminSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getAdminProductSearchText(product) {
+  const categoryText = getProductCategoryNames(product).join(" ");
+
+  return [
+    product?.name,
+    product?.brand,
+    categoryText
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function matchesAdminProductSearch(product, query) {
+  const normalizedQuery = normalizeAdminSearchText(query);
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const normalizedText = normalizeAdminSearchText(getAdminProductSearchText(product));
+
+  if (!normalizedText) {
+    return false;
+  }
+
+  const compactQuery = normalizedQuery.replace(/\s+/g, "");
+  const compactText = normalizedText.replace(/\s+/g, "");
+
+  if (normalizedText.includes(normalizedQuery) || (compactQuery.length >= 3 && compactText.includes(compactQuery))) {
+    return true;
+  }
+
+  const tokens = normalizedQuery.split(/\s+/).filter((token) => token.length >= 2);
+
+  if (!tokens.length) {
+    return false;
+  }
+
+  const requiredMatches = Math.max(1, Math.ceil(tokens.length * 0.6));
+  let matched = 0;
+
+  for (const token of tokens) {
+    if (normalizedText.includes(token) || compactText.includes(token)) {
+      matched += 1;
+
+      if (matched >= requiredMatches) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function getProductCategoryNames(product) {
   if (!Array.isArray(product?.categories)) {
     return [];
@@ -1524,7 +1589,7 @@ export default function AdminPanel({
       return [];
     }
 
-    const searchTerm = categoryProductSearch.trim().toLowerCase();
+    const searchTerm = normalizeAdminSearchText(categoryProductSearch);
 
     return products.filter((product) => {
       const productCategories = getProductCategoryNames(product);
@@ -1540,9 +1605,7 @@ export default function AdminPanel({
         return true;
       }
 
-      const productName = String(product.name || "").toLowerCase();
-      const productBrand = String(product.brand || "").toLowerCase();
-      return productName.includes(searchTerm) || productBrand.includes(searchTerm);
+      return matchesAdminProductSearch(product, searchTerm);
     });
   }, [products, selectedCategoryName, categoryProductSearch]);
 
@@ -1568,17 +1631,13 @@ export default function AdminPanel({
   const editorVariants = editorId ? variantsByProduct[editorId] || [] : [];
 
   const filteredProducts = useMemo(() => {
-    const term = adminProductSearch.trim().toLowerCase();
+    const term = normalizeAdminSearchText(adminProductSearch);
 
     if (!term) {
       return products;
     }
 
-    return products.filter((product) => {
-      const name = typeof product.name === "string" ? product.name.toLowerCase() : "";
-      const brand = typeof product.brand === "string" ? product.brand.toLowerCase() : "";
-      return name.includes(term) || brand.includes(term);
-    });
+    return products.filter((product) => matchesAdminProductSearch(product, term));
   }, [products, adminProductSearch]);
 
   const inventoryCategoryOptions = useMemo(() => {

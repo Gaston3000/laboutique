@@ -4,6 +4,7 @@ import path from "node:path";
 import multer from "multer";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { db, query } from "../db.js";
+import { optimizeImageFile } from "../services/imageOptimizer.js";
 
 const productsRouter = Router();
 const MAX_MEDIA_ITEMS = 5;
@@ -267,6 +268,27 @@ function buildUploadedImageUrl(req, fileName) {
   return `${req.protocol}://${req.get("host")}/uploads/products/${fileName}`;
 }
 
+async function optimizeUploadedFiles(files) {
+  if (!Array.isArray(files) || !files.length) {
+    return;
+  }
+
+  await Promise.all(
+    files.map(async (file) => {
+      const inputPath = typeof file?.path === "string" ? file.path : "";
+      if (!inputPath) {
+        return;
+      }
+
+      try {
+        await optimizeImageFile(inputPath, { mimeType: file.mimetype });
+      } catch {
+        // Keep original file if optimization fails for any reason.
+      }
+    })
+  );
+}
+
 async function persistCategories(categories) {
   if (!Array.isArray(categories) || !categories.length) {
     return;
@@ -338,7 +360,7 @@ productsRouter.get("/", async (_req, res) => {
 });
 
 productsRouter.post("/media/upload", requireAuth, requireAdmin, (req, res) => {
-  upload.array("files", MAX_MEDIA_ITEMS)(req, res, (error) => {
+  upload.array("files", MAX_MEDIA_ITEMS)(req, res, async (error) => {
     if (error) {
       if (error instanceof multer.MulterError) {
         if (error.code === "LIMIT_FILE_COUNT") {
@@ -358,6 +380,8 @@ productsRouter.post("/media/upload", requireAuth, requireAdmin, (req, res) => {
     if (!files.length) {
       return res.status(400).json({ error: "No se recibieron imágenes" });
     }
+
+    await optimizeUploadedFiles(files);
 
     return res.status(201).json({
       items: files.map((file) => ({

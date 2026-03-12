@@ -2073,6 +2073,24 @@ function App() {
     return Math.max(0, Number(selectedProduct.stock || 0));
   }, [selectedProduct, selectedProductVariant]);
 
+  function getStockLimit(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+
+    return Math.max(0, Math.floor(parsed));
+  }
+
+  function getCartItemStockLimit(item) {
+    return getStockLimit(item?.maxStock ?? item?.variantStock ?? item?.stock);
+  }
+
+  function isCartItemAtStockLimit(item) {
+    const stockLimit = getCartItemStockLimit(item);
+    return stockLimit !== null && Number(item?.quantity || 0) >= stockLimit;
+  }
+
   const isAdmin = auth.user?.role === "admin";
   const analyticsVisitorId = useMemo(() => getOrCreateStorageId("analytics:visitor:id", false), []);
   const analyticsSessionId = useMemo(() => getOrCreateStorageId("analytics:session:id", true), []);
@@ -2150,12 +2168,51 @@ function App() {
     const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
     const cartKey = `${product.id}:base`;
     const productImageUrl = getProductImageUrl(product);
+    const maxStock = getStockLimit(product.stock);
+    let addedQuantity = 0;
+
+    setCart((currentCart) => {
+      const itemIndex = currentCart.findIndex((item) => (item.cartKey || `${item.id}:base`) === cartKey);
+      const existingQuantity = itemIndex === -1 ? 0 : Number(currentCart[itemIndex].quantity || 0);
+      const allowedToAdd = maxStock === null ? safeQuantity : Math.max(0, maxStock - existingQuantity);
+      const quantityToAdd = Math.min(safeQuantity, allowedToAdd);
+
+      if (quantityToAdd <= 0) {
+        return currentCart;
+      }
+
+      addedQuantity = quantityToAdd;
+
+      if (itemIndex === -1) {
+        return [...currentCart, {
+          ...product,
+          cartKey,
+          variantId: null,
+          quantity: quantityToAdd,
+          maxStock,
+          imageUrl: productImageUrl
+        }];
+      }
+
+      const updated = [...currentCart];
+      updated[itemIndex] = {
+        ...updated[itemIndex],
+        quantity: updated[itemIndex].quantity + quantityToAdd,
+        maxStock
+      };
+
+      return updated;
+    });
+
+    if (addedQuantity <= 0) {
+      return;
+    }
 
     sendAnalytics("add_to_cart", {
       productId: product.id,
       productName: product.name,
       variantId: null,
-      quantity: safeQuantity,
+      quantity: addedQuantity,
       unitPrice: Number(product.price || 0)
     });
 
@@ -2168,22 +2225,6 @@ function App() {
     });
     setIsAddPopupOpen(true);
     setAddPopupVersion((current) => current + 1);
-
-    setCart((currentCart) => {
-      const itemIndex = currentCart.findIndex((item) => (item.cartKey || `${item.id}:base`) === cartKey);
-
-      if (itemIndex === -1) {
-        return [...currentCart, { ...product, cartKey, variantId: null, quantity: safeQuantity, imageUrl: productImageUrl }];
-      }
-
-      const updated = [...currentCart];
-      updated[itemIndex] = {
-        ...updated[itemIndex],
-        quantity: updated[itemIndex].quantity + safeQuantity
-      };
-
-      return updated;
-    });
   }
 
   function addVariantToCart(product, variant, quantity = 1) {
@@ -2192,13 +2233,60 @@ function App() {
     const cartKey = `${product.id}:${variant.id}`;
     const unitPrice = Number(product.price || 0) + Number(variant.priceDelta || 0);
     const productImageUrl = getProductImageUrl(product);
+    const maxStock = getStockLimit(variant.stock);
+    let addedQuantity = 0;
+
+    setCart((currentCart) => {
+      const itemIndex = currentCart.findIndex((item) => (item.cartKey || `${item.id}:base`) === cartKey);
+      const existingQuantity = itemIndex === -1 ? 0 : Number(currentCart[itemIndex].quantity || 0);
+      const allowedToAdd = maxStock === null ? safeQuantity : Math.max(0, maxStock - existingQuantity);
+      const quantityToAdd = Math.min(safeQuantity, allowedToAdd);
+
+      if (quantityToAdd <= 0) {
+        return currentCart;
+      }
+
+      addedQuantity = quantityToAdd;
+
+      if (itemIndex === -1) {
+        return [
+          ...currentCart,
+          {
+            ...product,
+            cartKey,
+            variantId: variant.id,
+            variantName: variant.name,
+            variantPresentation: variant.presentation || "",
+            variantStock: maxStock,
+            maxStock,
+            price: unitPrice,
+            quantity: quantityToAdd,
+            imageUrl: productImageUrl
+          }
+        ];
+      }
+
+      const updated = [...currentCart];
+      updated[itemIndex] = {
+        ...updated[itemIndex],
+        quantity: updated[itemIndex].quantity + quantityToAdd,
+        variantStock: maxStock,
+        maxStock
+      };
+
+      return updated;
+    });
+
+    if (addedQuantity <= 0) {
+      return;
+    }
 
     sendAnalytics("add_to_cart", {
       productId: product.id,
       productName: product.name,
       variantId: variant.id,
       variantName: variant.name,
-      quantity: safeQuantity,
+      quantity: addedQuantity,
       unitPrice
     });
 
@@ -2211,45 +2299,32 @@ function App() {
     });
     setIsAddPopupOpen(true);
     setAddPopupVersion((current) => current + 1);
-
-    setCart((currentCart) => {
-      const itemIndex = currentCart.findIndex((item) => (item.cartKey || `${item.id}:base`) === cartKey);
-
-      if (itemIndex === -1) {
-        return [
-          ...currentCart,
-          {
-            ...product,
-            cartKey,
-            variantId: variant.id,
-            variantName: variant.name,
-            variantPresentation: variant.presentation || "",
-            price: unitPrice,
-            quantity: safeQuantity,
-            imageUrl: productImageUrl
-          }
-        ];
-      }
-
-      const updated = [...currentCart];
-      updated[itemIndex] = {
-        ...updated[itemIndex],
-        quantity: updated[itemIndex].quantity + safeQuantity
-      };
-
-      return updated;
-    });
   }
 
   function updateCartQuantity(cartKey, nextQuantity) {
     setCart((currentCart) => {
-      if (nextQuantity <= 0) {
+      const targetItem = currentCart.find((item) => (item.cartKey || `${item.id}:base`) === cartKey);
+
+      if (!targetItem) {
+        return currentCart;
+      }
+
+      const stockLimit = getCartItemStockLimit(targetItem);
+      const boundedQuantity = stockLimit === null
+        ? nextQuantity
+        : Math.min(nextQuantity, stockLimit);
+
+      if (boundedQuantity <= 0) {
         return currentCart.filter((item) => (item.cartKey || `${item.id}:base`) !== cartKey);
       }
 
       return currentCart.map((item) => (
         (item.cartKey || `${item.id}:base`) === cartKey
-          ? { ...item, quantity: nextQuantity }
+          ? {
+            ...item,
+            quantity: boundedQuantity,
+            maxStock: stockLimit ?? item.maxStock ?? null
+          }
           : item
       ));
     });
@@ -2502,10 +2577,13 @@ function App() {
     setRecentSearches((current) => current.filter((item) => normalizeSearchText(item) !== normalizedToRemove));
   }
 
-  function updateCatalogQuantity(productId, delta) {
+  function updateCatalogQuantity(productId, delta, maxQuantity = 99) {
     setCatalogQuantities((current) => {
       const currentValue = Number(current[productId] ?? 1);
-      const nextValue = Math.max(1, Math.min(99, currentValue + delta));
+      const resolvedMax = Number.isFinite(Number(maxQuantity))
+        ? Math.max(1, Math.floor(Number(maxQuantity)))
+        : 99;
+      const nextValue = Math.max(1, Math.min(resolvedMax, currentValue + delta));
       return { ...current, [productId]: nextValue };
     });
   }
@@ -3946,6 +4024,67 @@ function App() {
             </section>
 
             <div className="cart-drawer-content-grid">
+              <div className="cart-drawer-body">
+                {!cart.length ? (
+                  <p className="empty-results">Tu carrito está vacío.</p>
+                ) : (
+                  <ul className="cart-drawer-list">
+                    {cart.map((item) => (
+                      <li key={item.cartKey || `${item.id}:base`} className="cart-drawer-line">
+                        <img className="cart-drawer-image" src={getProductImageUrl(item)} alt={getProductImageAlt(item, 0)} />
+
+                        <div className="cart-drawer-info">
+                          <h3>{item.name}</h3>
+                          {(item.variantPresentation || item.variantName) && (
+                            <p className="cart-drawer-unit-price">
+                              {item.variantPresentation ? `${item.variantPresentation}: ` : ""}
+                              {item.variantName}
+                            </p>
+                          )}
+                          <p className="cart-drawer-unit-price">${Number(item.price).toLocaleString("es-AR")} ARS</p>
+
+                          <div className="cart-drawer-line-footer">
+                            <div className="cart-qty-control" aria-label={`Cantidad de ${item.name}`}>
+                              <button
+                                type="button"
+                                onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity - 1)}
+                                aria-label={`Quitar una unidad de ${item.name}`}
+                              >
+                                -
+                              </button>
+                              <span>{item.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity + 1)}
+                                disabled={isCartItemAtStockLimit(item)}
+                                aria-label={`Agregar una unidad de ${item.name}`}
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            <strong className="cart-drawer-line-total">
+                              ${(Number(item.price) * item.quantity).toLocaleString("es-AR")} ARS
+                            </strong>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="cart-drawer-remove"
+                          onClick={() => removeFromCart(item.cartKey || `${item.id}:base`)}
+                          aria-label={`Eliminar ${item.name}`}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M8 7V5h8v2M5 7h14M9 10v7M15 10v7M7 7l1 12h8l1-12" />
+                          </svg>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               <footer className="cart-drawer-footer">
               <button
                 type="button"
@@ -4008,67 +4147,7 @@ function App() {
                 </span>
                 <span>Pago seguro</span>
               </p>
-            </footer>
-
-              <div className="cart-drawer-body">
-                {!cart.length ? (
-                  <p className="empty-results">Tu carrito está vacío.</p>
-                ) : (
-                  <ul className="cart-drawer-list">
-                    {cart.map((item) => (
-                      <li key={item.cartKey || `${item.id}:base`} className="cart-drawer-line">
-                        <img className="cart-drawer-image" src={getProductImageUrl(item)} alt={getProductImageAlt(item, 0)} />
-
-                        <div className="cart-drawer-info">
-                          <h3>{item.name}</h3>
-                          {(item.variantPresentation || item.variantName) && (
-                            <p className="cart-drawer-unit-price">
-                              {item.variantPresentation ? `${item.variantPresentation}: ` : ""}
-                              {item.variantName}
-                            </p>
-                          )}
-                          <p className="cart-drawer-unit-price">${Number(item.price).toLocaleString("es-AR")} ARS</p>
-
-                          <div className="cart-drawer-line-footer">
-                            <div className="cart-qty-control" aria-label={`Cantidad de ${item.name}`}>
-                              <button
-                                type="button"
-                                onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity - 1)}
-                                aria-label={`Quitar una unidad de ${item.name}`}
-                              >
-                                -
-                              </button>
-                              <span>{item.quantity}</span>
-                              <button
-                                type="button"
-                                onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity + 1)}
-                                aria-label={`Agregar una unidad de ${item.name}`}
-                              >
-                                +
-                              </button>
-                            </div>
-
-                            <strong className="cart-drawer-line-total">
-                              ${(Number(item.price) * item.quantity).toLocaleString("es-AR")} ARS
-                            </strong>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="cart-drawer-remove"
-                          onClick={() => removeFromCart(item.cartKey || `${item.id}:base`)}
-                          aria-label={`Eliminar ${item.name}`}
-                        >
-                          <svg viewBox="0 0 32 32" aria-hidden="true">
-                            <path fill="none" stroke="#1877f2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M28 6H6l2 24h16l2-24H4m12 6v12m5-12l-1 12m-9-12l1 12m0-18l1-4h6l1 4"/>
-                          </svg>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              </footer>
             </div>
           </aside>
         </div>
@@ -4913,6 +4992,7 @@ function App() {
                               <button
                                 type="button"
                                 onClick={() => updateCartQuantity(item.cartKey || `${item.id}:base`, item.quantity + 1)}
+                                disabled={isCartItemAtStockLimit(item)}
                                 aria-label={`Agregar una unidad de ${item.name}`}
                               >
                                 +
@@ -5354,6 +5434,8 @@ function App() {
                 <section className="products-grid" aria-label="Productos favoritos guardados">
                   {favoriteProducts.map((product) => {
                     const selectedQuantity = getCatalogQuantity(product.id);
+                    const stockLimit = getStockLimit(product.stock);
+                    const isQtyAtStockLimit = stockLimit !== null && selectedQuantity >= stockLimit;
                     const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
 
                     return (
@@ -5420,13 +5502,17 @@ function App() {
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                updateCatalogQuantity(product.id, 1);
+                                updateCatalogQuantity(product.id, 1, stockLimit ?? 99);
                               }}
+                              disabled={isQtyAtStockLimit}
+                              data-tooltip={isQtyAtStockLimit ? "Stock maximo alcanzado" : undefined}
                               aria-label={`Agregar una unidad de ${product.name}`}
                             >
                               +
                             </button>
                           </div>
+
+                          {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                           <button
                             type="button"
@@ -5567,7 +5653,11 @@ function App() {
                       <span>{getCatalogQuantity(selectedProduct.id)}</span>
                       <button
                         type="button"
-                        onClick={() => updateCatalogQuantity(selectedProduct.id, 1)}
+                        onClick={() => updateCatalogQuantity(selectedProduct.id, 1, selectedProductEffectiveStock)}
+                        disabled={
+                          Number.isFinite(Number(selectedProductEffectiveStock))
+                          && getCatalogQuantity(selectedProduct.id) >= Math.max(0, Number(selectedProductEffectiveStock))
+                        }
                         aria-label={`Agregar una unidad de ${selectedProduct.name}`}
                       >
                         +
@@ -5883,6 +5973,8 @@ function App() {
                     <section className="products-grid" aria-label={isSpecificCategorySelected ? `Productos de ${selectedCategory}` : "Resultados de búsqueda"}>
                       {visibleGridProducts.map((product) => {
                         const selectedQuantity = getCatalogQuantity(product.id);
+                        const stockLimit = getStockLimit(product.stock);
+                        const isQtyAtStockLimit = stockLimit !== null && selectedQuantity >= stockLimit;
                         const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
 
                         return (
@@ -5948,13 +6040,17 @@ function App() {
                                   type="button"
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    updateCatalogQuantity(product.id, 1);
+                                    updateCatalogQuantity(product.id, 1, stockLimit ?? 99);
                                   }}
+                                  disabled={isQtyAtStockLimit}
+                                  data-tooltip={isQtyAtStockLimit ? "Stock maximo alcanzado" : undefined}
                                   aria-label={`Agregar una unidad de ${product.name}`}
                                 >
                                   +
                                 </button>
                               </div>
+
+                              {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                               <button
                                 type="button"
@@ -6004,6 +6100,8 @@ function App() {
                     <div className="products-row" ref={productsRowRef}>
                       {filteredProducts.map((product) => {
                       const selectedQuantity = getCatalogQuantity(product.id);
+                      const stockLimit = getStockLimit(product.stock);
+                      const isQtyAtStockLimit = stockLimit !== null && selectedQuantity >= stockLimit;
                       const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
 
                       return (
@@ -6068,16 +6166,19 @@ function App() {
                               <span>{selectedQuantity}</span>
                               <button
                                 type="button"
-                                data-tooltip={isProductFavorite(product.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  updateCatalogQuantity(product.id, 1);
+                                  updateCatalogQuantity(product.id, 1, stockLimit ?? 99);
                                 }}
+                                disabled={isQtyAtStockLimit}
+                                data-tooltip={isQtyAtStockLimit ? "Stock maximo alcanzado" : undefined}
                                 aria-label={`Agregar una unidad de ${product.name}`}
                               >
                                 +
                               </button>
                             </div>
+
+                            {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                             <button
                               type="button"
@@ -6144,6 +6245,8 @@ function App() {
                       <div className="products-row saphirus-products-row" ref={saphirusProductsRowRef}>
                         {saphirusGalleryProducts.map((product) => {
                           const selectedQuantity = getCatalogQuantity(product.id);
+                          const stockLimit = getStockLimit(product.stock);
+                          const isQtyAtStockLimit = stockLimit !== null && selectedQuantity >= stockLimit;
                           const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
 
                           return (
@@ -6210,13 +6313,17 @@ function App() {
                                     type="button"
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      updateCatalogQuantity(product.id, 1);
+                                      updateCatalogQuantity(product.id, 1, stockLimit ?? 99);
                                     }}
+                                    disabled={isQtyAtStockLimit}
+                                    data-tooltip={isQtyAtStockLimit ? "Stock maximo alcanzado" : undefined}
                                     aria-label={`Agregar una unidad de ${product.name}`}
                                   >
                                     +
                                   </button>
                                 </div>
+
+                                {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                                 <button
                                   type="button"

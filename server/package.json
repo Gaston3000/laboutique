@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "compress:product-images": "node src/scripts/compress-product-images.js",
     "export:db:snapshot": "node src/scripts/export-db-snapshot.js",
     "create:user:default-client": "node src/scripts/create-default-client-user.js",
     "import:wix": "node src/scripts/import-wix-products.js",
@@ -23,7 +24,8 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.13.1",
-    "resend": "^6.9.3"
+    "resend": "^6.9.3",
+    "sharp": "^0.34.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"
