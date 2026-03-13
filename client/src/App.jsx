@@ -1763,6 +1763,7 @@ function App() {
   const saphirusGalleryProducts = useMemo(() => {
     const saphirusProducts = (products || [])
       .filter((product) => product?.isVisible !== false)
+      .filter((product) => Number(product?.stock || 0) > 0)
       .filter((product) => {
         const normalizedCategories = getProductCategoriesForSearch(product)
           .map((category) => normalizeSearchText(category))
@@ -2146,7 +2147,11 @@ function App() {
         .filter(Boolean)
       : [];
 
-    const visibleProducts = products.filter((product) => product.isVisible !== false && product.id !== selectedProduct.id);
+    const visibleProducts = products.filter((product) => (
+      product.isVisible !== false
+      && product.id !== selectedProduct.id
+      && Number(product?.stock || 0) > 0
+    ));
     const prioritized = visibleProducts.filter((product) => {
       const sameBrand = Boolean(selectedProduct.brand) && product.brand === selectedProduct.brand;
       const productCategories = Array.isArray(product.categories)
@@ -3595,7 +3600,8 @@ function App() {
       return [];
     }
 
-    const shuffledProducts = [...filteredProducts];
+    const inStockProducts = filteredProducts.filter((product) => Number(product?.stock || 0) > 0);
+    const shuffledProducts = [...inStockProducts];
 
     for (let index = shuffledProducts.length - 1; index > 0; index -= 1) {
       const randomIndex = Math.floor(Math.random() * (index + 1));
@@ -3610,6 +3616,9 @@ function App() {
     : sortedFilteredProducts;
   const visibleGridProducts = isSpecificCategorySelected ? visibleCategoryProducts : sortedFilteredProducts;
   const canLoadMoreCategoryProducts = isSpecificCategorySelected && sortedFilteredProducts.length > categoryVisibleCount;
+  const hasCatalogProductsToRender = shouldRenderGridProducts
+    ? filteredProducts.length > 0
+    : productsForCarousel.length > 0;
   const catalogSeoSummary = useMemo(() => {
     if (isSearchActive) {
       return `Resultados de limpieza para "${currentSearchLabel}". Encontrá opciones para hogar y comercio con stock actualizado, promociones y envío rápido.`;
@@ -6434,7 +6443,7 @@ function App() {
                 </div>
               )}
 
-              {filteredProducts.length ? (
+              {hasCatalogProductsToRender ? (
                 shouldRenderGridProducts ? (
                   <>
                     <section className="products-grid" aria-label={isSpecificCategorySelected ? `Productos de ${selectedCategory}` : "Resultados de búsqueda"}>
