@@ -1342,20 +1342,25 @@ function App() {
     }
 
     if (auth.user.role === "admin") {
-      Promise.all([
-        refreshOrders(auth.token),
-        refreshAdminData(auth.token),
-        refreshTicketsData(auth.token, auth.user.role)
-      ]).catch((error) => {
-        setOrders([]);
+      if (activeSection !== "admin") {
+        return;
+      }
 
-        if (isUnauthorizedError(error)) {
-          setAuth({ token: null, user: null });
-          setIsLoginOpen(true);
-          setLoginModalView("login");
-          setAuthError("Tu sesión venció o es inválida. Volvé a iniciar sesión.");
-        }
-      });
+      refreshOrders(auth.token)
+        .then(() => Promise.all([
+          refreshAdminData(auth.token),
+          refreshTicketsData(auth.token, auth.user.role)
+        ]))
+        .catch((error) => {
+          setOrders([]);
+
+          if (isUnauthorizedError(error)) {
+            setAuth({ token: null, user: null });
+            setIsLoginOpen(true);
+            setLoginModalView("login");
+            setAuthError("Tu sesión venció o es inválida. Volvé a iniciar sesión.");
+          }
+        });
       return;
     }
 
@@ -1363,7 +1368,7 @@ function App() {
       setTickets([]);
       setTicketMetrics({ open: 0, inProgress: 0, testing: 0, closed: 0 });
     });
-  }, [auth]);
+  }, [auth, activeSection]);
 
   useEffect(() => {
     const savedAddress = String(auth.user?.address || "").trim();

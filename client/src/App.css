@@ -12218,6 +12218,8 @@ main h1 {
   .delivery-coverage {
     --delivery-panels-height: clamp(320px, 24vw, 390px);
     --delivery-map-y-offset: 0px;
+    --delivery-map-zoom: 1.14;
+    --delivery-map-surface: #eef2f7;
     margin: 12px 0 14px;
     padding: clamp(9px, 1vw, 12px);
     border-radius: 24px;
@@ -12256,17 +12258,18 @@ main h1 {
   .delivery-map-card {
     position: relative;
     min-height: var(--delivery-panels-height);
-    width: min(100%, calc(var(--delivery-panels-height) * 0.98));
+    width: min(100%, calc(var(--delivery-panels-height) * 1.12));
     border-radius: 20px;
     padding: 5px;
-    background: #ffffff;
+    background: var(--delivery-map-surface);
     border: 1px solid rgba(24, 119, 242, 0.12);
     box-shadow: 0 14px 30px rgba(22, 44, 120, 0.08);
-    max-width: 420px;
+    max-width: 470px;
     margin-inline: auto;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
     animation: deliveryFadeUp 0.5s ease-out both;
   }
 
@@ -12278,8 +12281,9 @@ main h1 {
     max-width: 100%;
     aspect-ratio: 8083 / 8820;
     margin-inline: auto;
-    transform: translateY(var(--delivery-map-y-offset));
-    background: #fff;
+    transform: translateY(var(--delivery-map-y-offset)) scale(var(--delivery-map-zoom));
+    transform-origin: center center;
+    background: var(--delivery-map-surface);
     border-radius: 12px;
     overflow: hidden;
     isolation: isolate;
@@ -12290,7 +12294,7 @@ main h1 {
     height: 100%;
     display: block;
     object-fit: contain;
-    background: #fff;
+    background: var(--delivery-map-surface);
     mix-blend-mode: normal;
     filter: none;
   }
@@ -12612,6 +12616,10 @@ main h1 {
   }
 
   @media (max-width: 900px) {
+    .delivery-coverage {
+      --delivery-map-zoom: 1.1;
+    }
+
     .delivery-map-tooltip {
       right: auto;
       left: 10px;
