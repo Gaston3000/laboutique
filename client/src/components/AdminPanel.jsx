@@ -1405,6 +1405,9 @@ export default function AdminPanel({
   const [editorForm, setEditorForm] = useState(() => buildEditorForm(null));
   const [mediaUploadError, setMediaUploadError] = useState("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [draggingMediaIndex, setDraggingMediaIndex] = useState(null);
+  const [dropTargetMediaIndex, setDropTargetMediaIndex] = useState(null);
   const [editorToast, setEditorToast] = useState("");
   const [isToastLeaving, setIsToastLeaving] = useState(false);
   const editorRef = useRef(null);
@@ -2066,13 +2069,8 @@ export default function AdminPanel({
     mediaInputRef.current?.click();
   }
 
-  async function handleMediaSelection(event) {
-    const selectedFiles = Array.from(event.target.files || []);
-    event.target.value = "";
-
-    if (!selectedFiles.length) {
-      return;
-    }
+  async function uploadFiles(files) {
+    if (!files.length) return;
 
     const availableSlots = Math.max(0, MAX_MEDIA_ITEMS - editorForm.media.length);
     if (!availableSlots) {
@@ -2080,7 +2078,7 @@ export default function AdminPanel({
       return;
     }
 
-    const filesToUpload = selectedFiles.slice(0, availableSlots);
+    const filesToUpload = files.slice(0, availableSlots);
     setMediaUploadError("");
     setIsUploadingMedia(true);
 
@@ -2092,7 +2090,7 @@ export default function AdminPanel({
         media: [...current.media, ...(Array.isArray(uploadedItems) ? uploadedItems : [])].slice(0, MAX_MEDIA_ITEMS)
       }));
 
-      if (selectedFiles.length > availableSlots) {
+      if (files.length > availableSlots) {
         setMediaUploadError("Se subieron las primeras imágenes disponibles hasta completar 5.");
       }
     } catch (error) {
@@ -2100,6 +2098,101 @@ export default function AdminPanel({
     } finally {
       setIsUploadingMedia(false);
     }
+  }
+
+  async function handleMediaSelection(event) {
+    const selectedFiles = Array.from(event.target.files || []);
+    event.target.value = "";
+    await uploadFiles(selectedFiles);
+  }
+
+  function reorderMedia(fromIndex, toIndex) {
+    setEditorForm((current) => {
+      const mediaItems = Array.isArray(current.media) ? [...current.media] : [];
+
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= mediaItems.length ||
+        toIndex >= mediaItems.length ||
+        fromIndex === toIndex
+      ) {
+        return current;
+      }
+
+      const [movedItem] = mediaItems.splice(fromIndex, 1);
+      mediaItems.splice(toIndex, 0, movedItem);
+
+      return {
+        ...current,
+        media: mediaItems
+      };
+    });
+    setMediaUploadError("");
+  }
+
+  function handleMediaDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const hasFiles = Array.from(event.dataTransfer?.types || []).includes("Files");
+    if (hasFiles && !isUploadingMedia && editorForm.media.length < MAX_MEDIA_ITEMS) {
+      setIsDraggingOver(true);
+    }
+  }
+
+  function handleMediaDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(false);
+  }
+
+  async function handleMediaDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(false);
+    const droppedFiles = Array.from(event.dataTransfer.files || []).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    if (droppedFiles.length) {
+      await uploadFiles(droppedFiles);
+    }
+  }
+
+  function handleMediaItemDragStart(event, sourceIndex) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(sourceIndex));
+    setDraggingMediaIndex(sourceIndex);
+    setDropTargetMediaIndex(null);
+  }
+
+  function handleMediaItemDragOver(event, targetIndex) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+
+    if (draggingMediaIndex !== null && draggingMediaIndex !== targetIndex) {
+      setDropTargetMediaIndex(targetIndex);
+    }
+  }
+
+  function handleMediaItemDragEnd() {
+    setDraggingMediaIndex(null);
+    setDropTargetMediaIndex(null);
+  }
+
+  function handleMediaItemDrop(event, targetIndex) {
+    event.preventDefault();
+    event.stopPropagation();
+    const sourceIndex = Number(event.dataTransfer.getData("text/plain"));
+    const finalSourceIndex = Number.isInteger(sourceIndex) ? sourceIndex : draggingMediaIndex;
+
+    if (!Number.isInteger(finalSourceIndex)) {
+      handleMediaItemDragEnd();
+      return;
+    }
+
+    reorderMedia(finalSourceIndex, targetIndex);
+    handleMediaItemDragEnd();
   }
 
   function removeMediaItem(indexToRemove) {
@@ -3855,6 +3948,9 @@ export default function AdminPanel({
                       <h4>Imágenes y videos</h4>
                       <p className="admin-media-count">{editorForm.media.length}/{MAX_MEDIA_ITEMS} imágenes</p>
                     </div>
+                    {editorForm.media.length > 1 && (
+                      <p className="admin-media-reorder-hint">Arrastrá y soltá para reordenar la galería.</p>
+                    )}
 
                     <input
                       ref={mediaInputRef}
@@ -3867,11 +3963,21 @@ export default function AdminPanel({
 
                     {mediaUploadError && <p className="admin-media-error">{mediaUploadError}</p>}
 
-                    <div className="admin-media-gallery">
+                    <div
+                      className={`admin-media-gallery${isDraggingOver ? " is-drag-over" : ""}`}
+                      onDragOver={handleMediaDragOver}
+                      onDragLeave={handleMediaDragLeave}
+                      onDrop={handleMediaDrop}
+                    >
                       {editorForm.media.map((item, index) => (
                         <article
                           key={`${item.url}-${index}`}
-                          className={`admin-media-tile ${index === 0 ? "is-primary" : ""}`}
+                          className={`admin-media-tile ${index === 0 ? "is-primary" : ""} ${editorForm.media.length > 1 ? "is-draggable" : ""} ${draggingMediaIndex === index ? "is-dragging" : ""} ${dropTargetMediaIndex === index ? "is-drop-target" : ""}`}
+                          draggable={editorForm.media.length > 1 && !isUploadingMedia}
+                          onDragStart={(event) => handleMediaItemDragStart(event, index)}
+                          onDragEnd={handleMediaItemDragEnd}
+                          onDragOver={(event) => handleMediaItemDragOver(event, index)}
+                          onDrop={(event) => handleMediaItemDrop(event, index)}
                         >
                           <div className="admin-media-preview-wrap">
                             {item.type === "video" ? (
@@ -3885,6 +3991,7 @@ export default function AdminPanel({
                               />
                             )}
                             {index === 0 && <span className="admin-media-primary">Principal</span>}
+                            {index > 0 && <span className="admin-media-order">{index + 1}</span>}
                           </div>
 
                           <div className="admin-media-tile-body">
