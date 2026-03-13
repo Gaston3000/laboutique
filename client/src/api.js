@@ -156,6 +156,54 @@ export async function resendVerificationCode(email) {
   }
 }
 
+export async function forgotPassword(email) {
+  try {
+    const response = await fetch(`${API_URL}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo procesar la solicitud");
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servidor. Verificá que la API esté levantada en puerto 4000.");
+    }
+
+    throw error;
+  }
+}
+
+export async function resetPassword(email, code, newPassword) {
+  try {
+    const response = await fetch(`${API_URL}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code, newPassword })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo restablecer la contraseña");
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servidor. Verificá que la API esté levantada en puerto 4000.");
+    }
+
+    throw error;
+  }
+}
+
 export async function updateMyAddress(token, address) {
   const response = await fetch(`${API_URL}/auth/me/address`, {
     method: "PATCH",

@@ -36,6 +36,8 @@ import {
   register,
   resendVerificationCode,
   verifyEmail,
+  forgotPassword,
+  resetPassword,
   quoteShipping,
   updateTicket,
   updateMyAddress,
@@ -3128,6 +3130,36 @@ function App() {
     }
   }
 
+  async function handleForgotPassword(email) {
+    setIsAuthLoading(true);
+    setAuthError("");
+
+    try {
+      await forgotPassword(email);
+      // Don't set loginModalView here - modal handles its own transition
+    } catch (error) {
+      setAuthError(error.message);
+      throw error; // re-throw so LoginModal knows not to transition
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
+  async function handleResetPassword(email, code, newPassword) {
+    setIsAuthLoading(true);
+    setAuthError("");
+
+    try {
+      await resetPassword(email, code, newPassword);
+      setAuthError("¡Contraseña cambiada! Ya podés iniciar sesión.");
+      setLoginModalView("login");
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
   function handleLogout() {
     if (auth.token && auth.user) {
       saveUserCart(auth.token, cart).catch(() => {
@@ -4555,6 +4587,8 @@ function App() {
         onSubmit={handleLogin}
         onVerifyEmail={handleVerifyEmail}
         onResendCode={handleResendVerificationCode}
+        onForgotPassword={handleForgotPassword}
+        onResetPassword={handleResetPassword}
         isLoading={isAuthLoading}
         error={authError}
         initialView={loginModalView}

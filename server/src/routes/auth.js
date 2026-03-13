@@ -3,7 +3,7 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { query } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
-import { sendVerificationCodeEmail, sendWelcomeEmail } from "../services/emailService.js";
+import { sendVerificationCodeEmail, sendWelcomeEmail, sendPasswordResetEmail } from "../services/emailService.js";
 
 const authRouter = Router();
 const USER_SELECT_FIELDS = "id, name, first_name, last_name, profile_title, phone, avatar_url, email, role, address, email_verified, welcome_discount_active, welcome_discount_expires_at, welcome_discount_used";
@@ -371,6 +371,99 @@ authRouter.post("/resend-verification", async (req, res) => {
   } catch (error) {
     console.error("Resend verification error:", error);
     return res.status(500).json({ error: "No se pudo reenviar el código" });
+  }
+});
+
+// Request password reset code
+authRouter.post("/forgot-password", async (req, res) => {
+  const { email } = req.body || {};
+  const normalizedEmail = String(email || "").toLowerCase().trim();
+
+  if (!normalizedEmail) {
+    return res.status(400).json({ error: "El email es obligatorio" });
+  }
+
+  try {
+    const userResult = await query(
+      "SELECT id, name, email FROM users WHERE email = $1 AND email_verified = TRUE LIMIT 1",
+      [normalizedEmail]
+    );
+
+    const user = userResult.rows[0];
+
+    // Always return success to avoid email enumeration
+    if (!user) {
+      return res.json({ message: "Si el email está registrado, recibirás un código." });
+    }
+
+    const resetCode = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    await query(
+      "UPDATE users SET reset_password_code = $1, reset_password_code_expires_at = $2 WHERE id = $3",
+      [resetCode, expiresAt, user.id]
+    );
+
+    sendPasswordResetEmail(normalizedEmail, { userName: user.name, resetCode }).catch((err) =>
+      console.error("Failed to send password reset email:", err.message)
+    );
+
+    return res.json({ message: "Si el email está registrado, recibirás un código." });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    return res.status(500).json({ error: "No se pudo procesar la solicitud" });
+  }
+});
+
+// Reset password with code
+authRouter.post("/reset-password", async (req, res) => {
+  const { email, code, newPassword } = req.body || {};
+  const normalizedEmail = String(email || "").toLowerCase().trim();
+  const normalizedCode = String(code || "").trim();
+
+  if (!normalizedEmail || !normalizedCode || !newPassword) {
+    return res.status(400).json({ error: "Email, código y nueva contraseña son obligatorios" });
+  }
+
+  if (String(newPassword).length < 4) {
+    return res.status(400).json({ error: "La contraseña debe tener al menos 4 caracteres" });
+  }
+
+  try {
+    const userResult = await query(
+      `SELECT id, reset_password_code, reset_password_code_expires_at FROM users WHERE email = $1 LIMIT 1`,
+      [normalizedEmail]
+    );
+
+    const user = userResult.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    if (!user.reset_password_code) {
+      return res.status(400).json({ error: "No hay código de recuperación activo" });
+    }
+
+    if (new Date() > new Date(user.reset_password_code_expires_at)) {
+      return res.status(400).json({ error: "El código expiró. Solicitá uno nuevo." });
+    }
+
+    if (user.reset_password_code !== normalizedCode) {
+      return res.status(400).json({ error: "Código incorrecto" });
+    }
+
+    const passwordHash = await bcrypt.hash(String(newPassword), 10);
+
+    await query(
+      "UPDATE users SET password_hash = $1, reset_password_code = NULL, reset_password_code_expires_at = NULL WHERE id = $2",
+      [passwordHash, user.id]
+    );
+
+    return res.json({ message: "Contraseña actualizada correctamente" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return res.status(500).json({ error: "No se pudo restablecer la contraseña" });
   }
 });
 

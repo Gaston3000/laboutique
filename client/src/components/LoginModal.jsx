@@ -6,6 +6,8 @@ export default function LoginModal({
   onSubmit,
   onVerifyEmail,
   onResendCode,
+  onForgotPassword,
+  onResetPassword,
   isLoading,
   error,
   initialView = "register",
@@ -22,6 +24,10 @@ export default function LoginModal({
   const [view, setView] = useState("register");
   const [registerStep, setRegisterStep] = useState("options");
   const [localMessage, setLocalMessage] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -29,6 +35,9 @@ export default function LoginModal({
       setRegisterStep(verificationEmail ? "verify" : "options");
       setLocalMessage("");
       setVerificationCode("");
+      setResetCode("");
+      setNewPassword("");
+      setForgotEmail("");
     }
   }, [isOpen, initialView, verificationEmail]);
 
@@ -268,6 +277,125 @@ export default function LoginModal({
               </button>
             </p>
           </>
+        ) : view === "forgot" ? (
+          <>
+            <h2>Recuperar contraseña</h2>
+            <p className="register-intro">
+              Ingresá tu email y te enviamos un código para restablecer tu contraseña.
+            </p>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await onForgotPassword(forgotEmail);
+                setView("reset");
+              } catch {
+                // error shown via props.error, don't transition
+              }
+            }}>
+              <label htmlFor="forgot-email">Email</label>
+              <input
+                id="forgot-email"
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                required
+                autoFocus
+              />
+
+              {error && <p className="form-error">{error}</p>}
+
+              <div className="modal-actions">
+                <button type="button" className="secondary-btn" onClick={() => setView("login")}>
+                  Volver
+                </button>
+                <button type="submit" disabled={isLoading}>
+                  {isLoading ? "Enviando..." : "Enviar código"}
+                </button>
+              </div>
+            </form>
+          </>
+        ) : view === "reset" ? (
+          <>
+            <h2>Nueva contraseña</h2>
+            <p className="register-intro">
+              Ingresá el código que recibiste en <strong>{forgotEmail}</strong> y tu nueva contraseña.
+            </p>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (onResetPassword) onResetPassword(forgotEmail, resetCode, newPassword);
+            }}>
+              <label htmlFor="reset-code">Código de recuperación</label>
+              <input
+                id="reset-code"
+                type="text"
+                value={resetCode}
+                onChange={(e) => setResetCode(e.target.value)}
+                placeholder="000000"
+                maxLength={6}
+                pattern="[0-9]{6}"
+                required
+                autoFocus
+                style={{ fontSize: "24px", textAlign: "center", letterSpacing: "8px" }}
+              />
+
+              <label htmlFor="reset-new-password">Nueva contraseña</label>
+              <div className="password-field">
+                <input
+                  id="reset-new-password"
+                  type={isNewPasswordVisible ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={4}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setIsNewPasswordVisible((v) => !v)}
+                  aria-label={isNewPasswordVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {isNewPasswordVisible ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 4.5 19.5 21" />
+                      <path d="M9.35 9.35A3.8 3.8 0 0 0 12 16a3.8 3.8 0 0 0 2.63-1.05" />
+                      <path d="M6.35 6.35A13.7 13.7 0 0 0 2.5 12s3.2 6 9.5 6c2 0 3.72-.6 5.15-1.53" />
+                      <path d="M10.55 5.2A10.7 10.7 0 0 1 12 5c6.3 0 9.5 7 9.5 7a14.4 14.4 0 0 1-3.1 4.22" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M2.5 12S5.7 5 12 5s9.5 7 9.5 7-3.2 7-9.5 7S2.5 12 2.5 12Z" />
+                      <circle cx="12" cy="12" r="3.6" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+
+              {error && <p className="form-error">{error}</p>}
+
+              <div className="modal-actions">
+                <button type="button" className="secondary-btn" onClick={() => setView("forgot")}>
+                  Volver
+                </button>
+                <button type="submit" disabled={isLoading || resetCode.length !== 6 || newPassword.length < 4}>
+                  {isLoading ? "Guardando..." : "Cambiar contraseña"}
+                </button>
+              </div>
+            </form>
+
+            <p className="register-intro" style={{ marginTop: "20px" }}>
+              ¿No recibiste el código?{" "}
+              <button
+                type="button"
+                className="premium-login-link"
+                onClick={() => { if (onForgotPassword) onForgotPassword(forgotEmail); }}
+                disabled={isLoading}
+              >
+                Reenviar código
+              </button>
+            </p>
+          </>
         ) : (
           <>
             <h2>Iniciar sesión</h2>
@@ -330,6 +458,19 @@ export default function LoginModal({
                 </button>
               </div>
             </form>
+
+            <p className="register-intro" style={{ marginTop: "16px" }}>
+              <button
+                type="button"
+                className="premium-login-link"
+                onClick={() => {
+                  setForgotEmail(email);
+                  setView("forgot");
+                }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </p>
           </>
         )}
       </div>

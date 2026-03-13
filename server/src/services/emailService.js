@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 
 // Email sender configuration
-const FROM_EMAIL = "La Boutique de la Limpieza <noreply@send.emailtestt.com>";
+const FROM_EMAIL = "La Boutique de la Limpieza <noreply@emailtestt.com>";
 
 // Lazy initialization of Resend to ensure env vars are loaded
 let resendInstance = null;
@@ -783,6 +783,65 @@ export async function sendVerificationCodeEmail(userEmail, verificationDetails) 
   } catch (error) {
     console.error("❌ Error sending verification code email:", error);
     throw new Error(`Failed to send verification code email: ${error.message}`);
+  }
+}
+
+export async function sendPasswordResetEmail(userEmail, { userName, resetCode }) {
+  try {
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;width:100%;">
+        <tr>
+          <td style="background-color:#2563eb;padding:30px;text-align:center;">
+            <h1 style="margin:0;color:#ffffff;font-size:24px;">La Boutique de la Limpieza</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px 30px;">
+            <h2 style="margin:0 0 16px 0;color:#1f2937;font-size:22px;">Recuperar contraseña</h2>
+            <p style="margin:0 0 24px 0;color:#374151;font-size:15px;">Hola <strong>${userName}</strong>, recibimos una solicitud para restablecer tu contraseña.</p>
+            <p style="margin:0 0 12px 0;color:#374151;font-size:15px;">Tu código de recuperación es:</p>
+            <div style="background-color:#f3f4f6;border-radius:8px;padding:24px;text-align:center;margin:0 0 24px 0;">
+              <span style="font-size:40px;font-weight:bold;letter-spacing:12px;color:#2563eb;">${resetCode}</span>
+            </div>
+            <div style="background-color:#fef3c7;border-left:4px solid #f59e0b;padding:15px;border-radius:4px;">
+              <p style="margin:0 0 8px 0;font-weight:bold;color:#92400e;font-size:15px;">⏱️ Información importante:</p>
+              <ul style="margin:0;padding-left:20px;color:#78350f;font-size:14px;line-height:1.6;">
+                <li>Este código es válido por <strong>15 minutos</strong></li>
+                <li>No compartas este código con nadie</li>
+                <li>Si no solicitaste esto, ignorá este email</li>
+              </ul>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#f9fafb;padding:24px;text-align:center;border-top:1px solid #e5e7eb;">
+            <p style="margin:0;font-size:13px;color:#6b7280;">La Boutique de la Limpieza &mdash; Email automático, no respondas.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const result = await getResend().emails.send({
+      from: FROM_EMAIL,
+      to: userEmail,
+      subject: `Código de recuperación: ${resetCode} - La Boutique`,
+      html: htmlContent
+    });
+
+    console.log("✅ Password reset email sent:", result);
+    return result;
+  } catch (error) {
+    console.error("❌ Error sending password reset email:", error);
+    throw new Error(`Failed to send password reset email: ${error.message}`);
   }
 }
 
