@@ -38,6 +38,7 @@ import {
   verifyEmail,
   forgotPassword,
   resetPassword,
+  activateWelcomeDiscount,
   quoteShipping,
   updateTicket,
   updateMyAddress,
@@ -3112,13 +3113,11 @@ function App() {
       setIsLoginOpen(false);
       setLoginInviteMessage("");
       setVerificationEmail("");
-      
-      // Show welcome discount modal if activated
-      if (data.welcomeDiscountActivated && userWithAddresses?.welcomeDiscountActive) {
-        setTimeout(() => {
-          setIsWelcomeDiscountModalOpen(true);
-        }, 500);
-      }
+
+      // Always show welcome modal after email verification
+      setTimeout(() => {
+        setIsWelcomeDiscountModalOpen(true);
+      }, 500);
     } catch (error) {
       setAuthError(error.message);
     } finally {
@@ -3934,10 +3933,28 @@ function App() {
   }
 
   function handleActivateWelcomePromo() {
-    handleGoPromotionsSection({
-      focusWelcomePromo: true,
-      inviteMessage: "Iniciá sesión o registrate para activar tu beneficio de bienvenida del 10% OFF."
-    });
+    // If user is not logged in, send them to login/register
+    if (!auth.user) {
+      handleGoPromotionsSection({
+        focusWelcomePromo: true,
+        inviteMessage: "Iniciá sesión o registrate para activar tu beneficio de bienvenida del 10% OFF."
+      });
+      return;
+    }
+
+    // If already active or used, do nothing
+    if (auth.user.welcomeDiscountActive || auth.user.welcomeDiscountUsed) {
+      return;
+    }
+
+    // Logged in — activate via API and return the promise so the modal can await it
+    return activateWelcomeDiscount(auth.token)
+      .then((data) => {
+        setAuth({ token: data.token, user: data.user });
+      })
+      .catch((err) => {
+        console.error("Error activating welcome discount:", err.message);
+      });
   }
 
   function handleGoAboutSection() {
@@ -4459,6 +4476,18 @@ function App() {
               </div>
 
               <footer className="cart-drawer-footer">
+              {auth.user && !auth.user.welcomeDiscountActive && !auth.user.welcomeDiscountUsed && (
+                <button
+                  type="button"
+                  className="cart-drawer-welcome-promo-btn"
+                  onClick={() => {
+                    handleActivateWelcomePromo();
+                  }}
+                >
+                  <span>🎁</span>
+                  <span>Activar 10% OFF en esta compra</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="cart-promo-btn"
@@ -4614,6 +4643,8 @@ function App() {
         isOpen={isWelcomeDiscountModalOpen}
         onClose={() => setIsWelcomeDiscountModalOpen(false)}
         expiresAt={auth.user?.welcomeDiscountExpiresAt}
+        isDiscountActive={auth.user?.welcomeDiscountActive || false}
+        onActivate={handleActivateWelcomePromo}
       />
 
       <div className="container">
@@ -6359,6 +6390,7 @@ function App() {
               {isInicioActive && (
                 <WelcomePromoSpotlight
                   onActivate={handleActivateWelcomePromo}
+                  isActive={auth.user?.welcomeDiscountActive || false}
                 />
               )}
 

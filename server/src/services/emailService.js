@@ -715,15 +715,21 @@ export async function sendVerificationCodeEmail(userEmail, verificationDetails) 
               </p>
               
               <!-- Verification Code Box -->
-              <table style="width: 100%; margin: 30px 0;">
+              <table style="width: 100%; margin: 30px 0;" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #1a4ac8; border-radius: 12px; padding: 30px; display: inline-block;">
-                      <p style="margin: 0 0 10px 0; font-size: 14px; color: #374151; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
-                        Código de Verificación
+                    <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #1a4ac8; border-radius: 12px; padding: 30px 24px 20px; display: inline-block; text-align: center;">
+                      <p style="margin: 0 0 16px 0; font-size: 13px; color: #374151; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                        📋 Código de Verificación
                       </p>
-                      <p style="margin: 0; font-size: 42px; font-weight: bold; color: #1a4ac8; letter-spacing: 8px; font-family: 'Courier New', monospace;">
-                        ${verificationCode}
+                      <!-- Individual digit boxes -->
+                      <table cellpadding="0" cellspacing="6" style="margin: 0 auto 14px auto; border-collapse: separate;">
+                        <tr>
+                          ${verificationCode.split('').map(digit => `<td style="background: #1a4ac8; color: #ffffff; font-size: 32px; font-weight: 900; font-family: 'Courier New', monospace; width: 48px; height: 56px; text-align: center; vertical-align: middle; border-radius: 8px; box-shadow: 0 3px 8px rgba(26,74,200,0.35);">${digit}</td>`).join('')}
+                        </tr>
+                      </table>
+                      <p style="margin: 0; font-size: 12px; color: #6b7280; font-style: italic;">
+                        Mantené presionado el código para copiarlo
                       </p>
                     </div>
                   </td>

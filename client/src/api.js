@@ -156,6 +156,18 @@ export async function resendVerificationCode(email) {
   }
 }
 
+export async function activateWelcomeDiscount(token) {
+  const response = await fetch(`${API_URL}/auth/activate-welcome-discount`, {
+    method: "POST",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo activar el descuento");
+  }
+  return data;
+}
+
 export async function forgotPassword(email) {
   try {
     const response = await fetch(`${API_URL}/auth/forgot-password`, {

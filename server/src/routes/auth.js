@@ -286,20 +286,15 @@ authRouter.post("/verify-email", async (req, res) => {
       return res.status(400).json({ error: "Código incorrecto" });
     }
 
-    // Mark email as verified, clear verification code, and activate welcome discount (24h)
-    const welcomeDiscountExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
+    // Mark email as verified, clear verification code only
     const updatedUserResult = await query(
       `UPDATE users 
        SET email_verified = TRUE,
            verification_code = NULL,
-           verification_code_expires_at = NULL,
-           welcome_discount_active = TRUE,
-           welcome_discount_expires_at = $2,
-           welcome_discount_used = FALSE
+           verification_code_expires_at = NULL
        WHERE id = $1
        RETURNING ${USER_SELECT_FIELDS}`,
-      [userRow.id, welcomeDiscountExpiresAt]
+      [userRow.id]
     );
 
     const verifiedUser = mapUserRow(updatedUserResult.rows[0]);
@@ -314,7 +309,7 @@ authRouter.post("/verify-email", async (req, res) => {
       message: "Email verificado exitosamente",
       token,
       user: verifiedUser,
-      welcomeDiscountActivated: true
+      welcomeDiscountActivated: false
     });
   } catch (error) {
     console.error("Verification error:", error);
@@ -371,6 +366,55 @@ authRouter.post("/resend-verification", async (req, res) => {
   } catch (error) {
     console.error("Resend verification error:", error);
     return res.status(500).json({ error: "No se pudo reenviar el código" });
+  }
+});
+
+// Manually activate welcome discount for logged-in user
+authRouter.post("/activate-welcome-discount", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Check current state
+    const userResult = await query(
+      `SELECT welcome_discount_active, welcome_discount_used FROM users WHERE id = $1`,
+      [userId]
+    );
+    const user = userResult.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+    if (user.welcome_discount_active) {
+      return res.status(400).json({ error: "El descuento ya fue activado" });
+    }
+    if (user.welcome_discount_used) {
+      return res.status(400).json({ error: "El descuento ya fue utilizado" });
+    }
+
+    const welcomeDiscountExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    const updatedResult = await query(
+      `UPDATE users
+       SET welcome_discount_active = TRUE,
+           welcome_discount_expires_at = $2,
+           welcome_discount_used = FALSE
+       WHERE id = $1
+       RETURNING ${USER_SELECT_FIELDS}`,
+      [userId, welcomeDiscountExpiresAt]
+    );
+
+    const updatedUser = mapUserRow(updatedResult.rows[0]);
+    const token = signToken(updatedUser);
+
+    return res.json({
+      message: "Descuento de bienvenida activado",
+      token,
+      user: updatedUser,
+      welcomeDiscountActivated: true
+    });
+  } catch (error) {
+    console.error("Activate welcome discount error:", error);
+    return res.status(500).json({ error: "No se pudo activar el descuento" });
   }
 });
 
