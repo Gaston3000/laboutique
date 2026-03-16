@@ -4476,7 +4476,7 @@ function App() {
               </div>
 
               <footer className="cart-drawer-footer">
-              {auth.user && !auth.user.welcomeDiscountActive && !auth.user.welcomeDiscountUsed && (
+              {!auth.user?.welcomeDiscountActive && !auth.user?.welcomeDiscountUsed && (
                 <button
                   type="button"
                   className="cart-drawer-welcome-promo-btn"
@@ -4485,7 +4485,7 @@ function App() {
                   }}
                 >
                   <span>🎁</span>
-                  <span>Activar 10% OFF en esta compra</span>
+                  <span>{auth.user ? "Activar 10% OFF en esta compra" : "Registrate y activá 10% OFF"}</span>
                 </button>
               )}
               <button
