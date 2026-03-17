@@ -82,6 +82,7 @@ const WELCOME_PROMO_CODE = "PRIMERACOMPRA10";
 const ADMIN_NOTIFICATIONS_SEEN_STORAGE_KEY = "admin:notifications:seen:v1";
 const FREE_SHIPPING_TARGET_ARS = 50000;
 const GUEST_CART_STORAGE_KEY = "cart:guest";
+const CART_STORAGE_KEY = "cart:local";
 
 const FOOTER_ACCOUNT_LINKS = [
   { key: "cuenta", label: "Mi Cuenta" },
@@ -926,10 +927,14 @@ function App() {
     lastName: "",
     customerName: "",
     customerPhone: "",
-    customerAddress: "",
+    street: "",
+    number: "",
+    floor: "",
+    apartment: "",
     city: "Buenos Aires",
-    region: "Buenos Aires",
+    province: "Buenos Aires",
     postalCode: "",
+    notes: "",
     country: "Argentina",
     consumerType: "consumidor-final",
     needsFacturaA: false,
@@ -937,6 +942,7 @@ function App() {
     shippingMethod: "",
     shippingZone: "caba"
   });
+  const [addressValidationErrors, setAddressValidationErrors] = useState([]);
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
@@ -1007,12 +1013,17 @@ function App() {
   const adminNotificationsRef = useRef(null);
   const cartPromoInputRef = useRef(null);
   const cartDrawerPromoInputRef = useRef(null);
+  const addressInputRef = useRef(null);
+  const addressDebounceRef = useRef(null);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
   const hasProcessedInitialProductQueryRef = useRef(false);
   const previousActiveSectionRef = useRef(activeSection);
   const [cart, setCart] = useState(() => {
     try {
-      const savedCart = localStorage.getItem(GUEST_CART_STORAGE_KEY) || localStorage.getItem("cart");
-      return savedCart ? JSON.parse(savedCart) : [];
+      const saved = localStorage.getItem(CART_STORAGE_KEY)
+        || localStorage.getItem(GUEST_CART_STORAGE_KEY)
+        || localStorage.getItem("cart");
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
@@ -1381,25 +1392,25 @@ function App() {
     }
 
     setCheckoutForm((current) => {
-      if (String(current.customerAddress || "").trim()) {
+      if (String(current.street || "").trim()) {
         return current;
       }
 
       return {
         ...current,
-        customerAddress: savedAddress
+        street: savedAddress
       };
     });
   }, [auth.user?.address]);
 
   useEffect(() => {
-    if (auth.user) {
-      localStorage.removeItem("cart");
-      return;
-    }
-
-    localStorage.setItem(GUEST_CART_STORAGE_KEY, JSON.stringify(cart));
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
     localStorage.removeItem("cart");
+    if (!auth.user) {
+      localStorage.setItem(GUEST_CART_STORAGE_KEY, JSON.stringify(cart));
+    } else {
+      localStorage.removeItem(GUEST_CART_STORAGE_KEY);
+    }
   }, [auth.user, cart]);
 
   useEffect(() => {
@@ -1417,6 +1428,26 @@ function App() {
       window.clearTimeout(timeoutId);
     };
   }, [auth.token, auth.user?.id, auth.user?.role, cart]);
+
+  useEffect(() => {
+    if (!auth.token || !auth.user) return;
+
+    let cancelled = false;
+    fetchUserCart(auth.token)
+      .then((response) => {
+        if (cancelled) return;
+        const backendItems = Array.isArray(response?.items) ? response.items : [];
+        if (backendItems.length === 0) return;
+
+        setCart((localCart) => {
+          if (localCart.length === 0) return backendItems;
+          return mergeCartItems(localCart, backendItems);
+        });
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [auth.token, auth.user?.id]);
 
   useEffect(() => {
     localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(recentSearches));
@@ -1642,16 +1673,10 @@ function App() {
   }, [checkoutForm.shippingMethod, checkoutShippingCost]);
 
   const checkoutShippingOptionValue = useMemo(() => {
-    if (checkoutForm.shippingMethod === "pickup") {
-      return "pickup";
-    }
-
-    if (checkoutForm.shippingMethod === "delivery") {
-      return checkoutForm.shippingZone === "gba" ? "gba" : "caba";
-    }
-
+    if (checkoutForm.shippingMethod === "pickup") return "pickup";
+    if (checkoutForm.shippingMethod === "delivery") return "delivery";
     return "";
-  }, [checkoutForm.shippingMethod, checkoutForm.shippingZone]);
+  }, [checkoutForm.shippingMethod]);
 
   useEffect(() => {
     setAppliedCartPromotion(null);
@@ -1703,6 +1728,122 @@ function App() {
 
     setShouldFocusCartPromoInput(false);
   }, [isCartDrawerOpen, isCartPromoOpen, shouldFocusCartPromoInput]);
+
+  useEffect(() => {
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+    if (!apiKey || window.__gmapsScriptLoaded || window.__gmapsAuthFailed) return;
+
+    window.gm_authFailure = () => { window.__gmapsAuthFailed = true; };
+
+    if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
+      const s = document.createElement("script");
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
+      s.async = true;
+      s.onload = () => { window.__gmapsScriptLoaded = true; };
+      document.head.appendChild(s);
+    }
+  }, []);
+
+  function detectShippingZone(city, province, postalCode) {
+    const c = (city || "").trim().toLowerCase();
+    const p = (province || "").trim().toLowerCase();
+    const pc = (postalCode || "").trim().toUpperCase();
+
+    if (pc.startsWith("C1")) return "caba";
+    const pcNum = parseInt(pc, 10);
+    if (pcNum >= 1000 && pcNum <= 1499) return "caba";
+
+    if (p.includes("ciudad aut\u00f3noma") || p === "caba") return "caba";
+    if (c === "buenos aires" && !p.includes("provincia")) return "caba";
+
+    return "gba";
+  }
+
+  function validateAddress(form) {
+    const errors = [];
+    if (form.shippingMethod !== "delivery") return errors;
+    if (!form.street || form.street.trim().length < 3) errors.push("La calle debe tener al menos 3 caracteres.");
+    if (!form.number || !form.number.trim()) errors.push("El n\u00famero es obligatorio.");
+    if (!form.postalCode || form.postalCode.replace(/\D/g, "").length < 4) errors.push("El c\u00f3digo postal debe tener al menos 4 d\u00edgitos.");
+    if (!form.city || form.city.trim().length < 2) errors.push("La ciudad es obligatoria.");
+    if (!form.province || form.province.trim().length < 2) errors.push("La provincia es obligatoria.");
+    return errors;
+  }
+
+  function fetchAddressSuggestions(input) {
+    if (input.length < 2 || !window.google?.maps?.places || window.__gmapsAuthFailed) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    if (!window.__gmapsAutocompleteService) {
+      window.__gmapsAutocompleteService = new window.google.maps.places.AutocompleteService();
+    }
+
+    const searchText = [input, checkoutForm.number].filter(Boolean).join(" ");
+
+    const request = {
+      input: searchText + ", Buenos Aires, Argentina",
+      componentRestrictions: { country: "ar" },
+      types: ["address"],
+    };
+
+    request.bounds = new window.google.maps.LatLngBounds(
+      { lat: -34.950, lng: -58.900 },
+      { lat: -34.300, lng: -58.100 }
+    );
+
+    window.__gmapsAutocompleteService.getPlacePredictions(request, (predictions, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
+        setAddressSuggestions(predictions);
+      } else {
+        setAddressSuggestions([]);
+      }
+    });
+  }
+
+  function handleAddressSuggestionSelect(prediction) {
+    setAddressSuggestions([]);
+
+    if (!window.__gmapsPlacesService) {
+      const div = document.createElement("div");
+      window.__gmapsPlacesService = new window.google.maps.places.PlacesService(div);
+    }
+
+    window.__gmapsPlacesService.getDetails(
+      { placeId: prediction.place_id, fields: ["address_components", "formatted_address"] },
+      (place, status) => {
+        if (status !== window.google.maps.places.PlacesServiceStatus.OK || !place) return;
+
+        let streetNumber = "", streetName = "", city = "", province = "", postalCode = "";
+        let sublocality = "";
+
+        for (const c of place.address_components) {
+          const { types, long_name } = c;
+          if (types.includes("street_number")) streetNumber = long_name;
+          else if (types.includes("route")) streetName = long_name;
+          else if (types.includes("locality")) city = long_name;
+          else if (types.includes("sublocality_level_1") || types.includes("sublocality")) sublocality = long_name;
+          else if (types.includes("administrative_area_level_1")) province = long_name;
+          else if (types.includes("postal_code")) postalCode = long_name;
+        }
+
+        const resolvedCity = city || sublocality;
+        const detectedZone = detectShippingZone(resolvedCity, province, postalCode);
+
+        setCheckoutForm((current) => ({
+          ...current,
+          street: streetName || current.street,
+          number: streetNumber || current.number,
+          city: resolvedCity || current.city,
+          province: province || current.province,
+          postalCode: postalCode || current.postalCode,
+          shippingZone: detectedZone,
+        }));
+        setAddressValidationErrors([]);
+      }
+    );
+  }
 
   const favoriteProducts = useMemo(() => {
     const favoriteIdSet = new Set(favoriteProductIds.map((id) => String(id)));
@@ -2331,6 +2472,28 @@ function App() {
     });
   }, [selectedProduct?.id]);
 
+  function mergeCartItems(localCart, backendCart) {
+    const merged = new Map();
+
+    for (const item of localCart) {
+      const key = item.cartKey || `${item.id}:base`;
+      merged.set(key, { ...item, cartKey: key });
+    }
+
+    for (const item of backendCart) {
+      const key = item.cartKey || `${item.id}:base`;
+      const existing = merged.get(key);
+
+      if (existing) {
+        existing.quantity = Math.max(existing.quantity || 1, item.quantity || 1);
+      } else {
+        merged.set(key, { ...item, cartKey: key });
+      }
+    }
+
+    return Array.from(merged.values());
+  }
+
   function addToCart(product, quantity = 1) {
     const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
     const cartKey = `${product.id}:base`;
@@ -2841,12 +3004,30 @@ function App() {
       return;
     }
 
-    const resolvedCustomerAddress = checkoutForm.shippingMethod === "pickup"
-      ? "Retiro en el local - Acevedo 200"
-      : String(checkoutForm.customerAddress || auth.user?.address || "").trim();
+    if (checkoutForm.shippingMethod === "delivery") {
+      const errors = validateAddress(checkoutForm);
+      if (errors.length > 0) {
+        setAddressValidationErrors(errors);
+        setCheckoutMessage(errors[0]);
+        return;
+      }
+    }
+
     const firstName = String(checkoutForm.firstName || "").trim();
     const lastName = String(checkoutForm.lastName || "").trim();
     const joinedName = [firstName, lastName].filter(Boolean).join(" ");
+
+    let resolvedCustomerAddress;
+    if (checkoutForm.shippingMethod === "pickup") {
+      resolvedCustomerAddress = "Retiro en el local - Acevedo 200";
+    } else {
+      const parts = [checkoutForm.street.trim(), checkoutForm.number.trim()].filter(Boolean).join(" ");
+      const extra = [
+        checkoutForm.floor.trim() ? `Piso ${checkoutForm.floor.trim()}` : "",
+        checkoutForm.apartment.trim() ? `Depto ${checkoutForm.apartment.trim()}` : "",
+      ].filter(Boolean).join(", ");
+      resolvedCustomerAddress = extra ? `${parts}, ${extra}` : parts;
+    }
 
     if (checkoutForm.shippingMethod === "delivery" && !resolvedCustomerAddress) {
       setCheckoutMessage("La dirección es obligatoria para concretar la compra.");
@@ -2855,6 +3036,7 @@ function App() {
 
     setIsCheckoutLoading(true);
     setCheckoutMessage("");
+    setAddressValidationErrors([]);
 
     sendAnalytics("begin_checkout", {
       cartItemsCount: cart.length,
@@ -2878,12 +3060,16 @@ function App() {
         customerPhone,
         contactEmail,
         customerAddress: resolvedCustomerAddress,
+        shippingCity: checkoutForm.shippingMethod === "delivery" ? checkoutForm.city.trim() : null,
+        shippingState: checkoutForm.shippingMethod === "delivery" ? checkoutForm.province.trim() : null,
+        shippingPostalCode: checkoutForm.shippingMethod === "delivery" ? checkoutForm.postalCode.trim() : null,
+        customerNote: checkoutForm.notes.trim() || null,
         shippingMethod: checkoutForm.shippingMethod,
         shippingZone,
         promoCode: appliedCartPromotion?.code || null,
         items: cart.map((item) => ({
           productId: item.id,
-            variantId: item.variantId || null,
+          variantId: item.variantId || null,
           quantity: item.quantity
         }))
       };
@@ -3022,16 +3208,19 @@ function App() {
 
       if (data.token) {
         const cartResponse = await fetchUserCart(data.token);
-        const storedUserCart = Array.isArray(cartResponse?.items) ? cartResponse.items : [];
+        const backendCart = Array.isArray(cartResponse?.items) ? cartResponse.items : [];
+        const localCart = Array.isArray(cart) ? cart : [];
 
-        if (storedUserCart.length > 0) {
-          nextCart = storedUserCart;
+        if (backendCart.length > 0 && localCart.length > 0) {
+          nextCart = mergeCartItems(localCart, backendCart);
+        } else if (backendCart.length > 0) {
+          nextCart = backendCart;
         } else {
-          nextCart = Array.isArray(cart) ? cart : [];
+          nextCart = localCart;
+        }
 
-          if (nextCart.length > 0) {
-            await saveUserCart(data.token, nextCart);
-          }
+        if (nextCart.length > 0) {
+          saveUserCart(data.token, nextCart).catch(() => {});
         }
       }
 
@@ -3099,16 +3288,19 @@ function App() {
 
       if (data.token) {
         const cartResponse = await fetchUserCart(data.token);
-        const storedUserCart = Array.isArray(cartResponse?.items) ? cartResponse.items : [];
+        const backendCart = Array.isArray(cartResponse?.items) ? cartResponse.items : [];
+        const localCart = Array.isArray(cart) ? cart : [];
 
-        if (storedUserCart.length > 0) {
-          nextCart = storedUserCart;
+        if (backendCart.length > 0 && localCart.length > 0) {
+          nextCart = mergeCartItems(localCart, backendCart);
+        } else if (backendCart.length > 0) {
+          nextCart = backendCart;
         } else {
-          nextCart = Array.isArray(cart) ? cart : [];
+          nextCart = localCart;
+        }
 
-          if (nextCart.length > 0) {
-            await saveUserCart(data.token, nextCart);
-          }
+        if (nextCart.length > 0) {
+          saveUserCart(data.token, nextCart).catch(() => {});
         }
       }
 
@@ -3182,9 +3374,7 @@ function App() {
 
   function handleLogout() {
     if (auth.token && auth.user) {
-      saveUserCart(auth.token, cart).catch(() => {
-        // Keep logout immediate even if save fails.
-      });
+      saveUserCart(auth.token, cart).catch(() => {});
     }
 
     clearCart();
@@ -3193,6 +3383,8 @@ function App() {
     setAdminMessage("");
     setAnalyticsData(null);
     localStorage.removeItem("cart");
+    localStorage.removeItem(GUEST_CART_STORAGE_KEY);
+    localStorage.removeItem(CART_STORAGE_KEY);
   }
 
   async function handleReloadAdminAnalytics(period = "30d") {
@@ -5634,15 +5826,22 @@ function App() {
                               setCheckoutForm((current) => ({
                                 ...current,
                                 shippingMethod: selected === "pickup" ? "pickup" : "delivery",
-                                shippingZone: selected === "gba" ? "gba" : "caba"
+                                shippingZone: selected === "delivery" ? "caba" : "",
+                                street: "",
+                                number: "",
+                                floor: "",
+                                apartment: "",
+                                city: "Buenos Aires",
+                                province: "Buenos Aires",
+                                postalCode: "",
+                                notes: "",
                               }));
                             }}
                             required
                           >
                             <option value="">Elegí una opción</option>
                             <option value="pickup">Retiro en el local - Acevedo 200 (Gratis)</option>
-                            <option value="caba">CABA - 5000,00 ARS</option>
-                            <option value="gba">Morón - 7000,00 ARS</option>
+                            <option value="delivery">Envío a domicilio</option>
                           </select>
                         </label>
 
@@ -5752,21 +5951,191 @@ function App() {
                           setCheckoutForm((current) => ({
                             ...current,
                             shippingMethod: selected === "pickup" ? "pickup" : "delivery",
-                            shippingZone: selected === "gba" ? "gba" : "caba"
+                            shippingZone: selected === "delivery" ? "caba" : "",
+                            street: "",
+                            number: "",
+                            floor: "",
+                            apartment: "",
+                            city: "Buenos Aires",
+                            province: "Buenos Aires",
+                            postalCode: "",
+                            notes: "",
                           }));
+                          setAddressValidationErrors([]);
                         }}
                         required
                       >
                         <option value="">Elegí una opción</option>
-                        <option value="caba">Entrega en CABA (5000,00 ARS)</option>
-                        <option value="gba">Entrega en GBA (7000,00 ARS)</option>
-                        <option value="pickup">Retiro en el local - Acevedo 200</option>
+                        <option value="delivery">Envío a domicilio</option>
+                        <option value="pickup">Retiro en el local - Acevedo 200 (Gratis)</option>
                       </select>
                     </label>
 
                     <p className="checkout-details-help">
-                      Seleccioná si preferís recibir el pedido a domicilio en CABA o Gran Buenos Aires, o retirarlo en nuestra tienda de Villa Crespo.
+                      Seleccioná si preferís recibir el pedido a domicilio o retirarlo en nuestra tienda de Villa Crespo.
                     </p>
+
+                    {checkoutForm.shippingMethod === "delivery" && (
+                      <>
+                        <label>
+                          <span>País *</span>
+                          <select
+                            value={checkoutForm.country}
+                            onChange={(event) => setCheckoutForm((current) => ({ ...current, country: event.target.value }))}
+                          >
+                            <option value="Argentina">Argentina</option>
+                          </select>
+                        </label>
+
+                        <div className="checkout-details-grid two-columns">
+                          <label className="checkout-address-field">
+                            <span>Calle *</span>
+                            <input
+                              ref={addressInputRef}
+                              type="text"
+                              name="checkout-street-nofill"
+                              value={checkoutForm.street}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setCheckoutForm((current) => ({ ...current, street: value }));
+                                clearTimeout(addressDebounceRef.current);
+                                addressDebounceRef.current = setTimeout(() => fetchAddressSuggestions(value), 300);
+                              }}
+                              onBlur={() => setTimeout(() => setAddressSuggestions([]), 150)}
+                              placeholder="Ej: Av. Corrientes"
+                              required
+                              autoComplete="new-password"
+                            />
+                            {addressSuggestions.length > 0 && (
+                              <ul className="checkout-address-suggestions">
+                                {addressSuggestions.map((s) => (
+                                  <li key={s.place_id} onMouseDown={() => handleAddressSuggestionSelect(s)}>
+                                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style={{flexShrink:0}}><path fill="#666" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0 9.5A2.5 2.5 0 0 1 9.5 9 2.5 2.5 0 0 1 12 6.5 2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5"/></svg>
+                                    <span>{s.description}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </label>
+                          <label>
+                            <span>Número *</span>
+                            <input
+                              type="text"
+                              value={checkoutForm.number}
+                              onChange={(event) => setCheckoutForm((current) => ({ ...current, number: event.target.value }))}
+                              placeholder="Ej: 5200"
+                              required
+                              autoComplete="new-password"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="checkout-details-grid two-columns">
+                          <label>
+                            <span>Piso</span>
+                            <input
+                              type="text"
+                              value={checkoutForm.floor}
+                              onChange={(event) => setCheckoutForm((current) => ({ ...current, floor: event.target.value }))}
+                              placeholder="Ej: 3"
+                              autoComplete="new-password"
+                            />
+                          </label>
+                          <label>
+                            <span>Departamento</span>
+                            <input
+                              type="text"
+                              value={checkoutForm.apartment}
+                              onChange={(event) => setCheckoutForm((current) => ({ ...current, apartment: event.target.value }))}
+                              placeholder="Ej: A"
+                              autoComplete="new-password"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="checkout-details-grid two-columns">
+                          <label>
+                            <span>Ciudad *</span>
+                            <input
+                              type="text"
+                              value={checkoutForm.city}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setCheckoutForm((current) => ({
+                                  ...current,
+                                  city: value,
+                                  shippingZone: detectShippingZone(value, current.province, current.postalCode),
+                                }));
+                              }}
+                              required
+                            />
+                          </label>
+                          <label>
+                            <span>Provincia *</span>
+                            <input
+                              type="text"
+                              value={checkoutForm.province}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setCheckoutForm((current) => ({
+                                  ...current,
+                                  province: value,
+                                  shippingZone: detectShippingZone(current.city, value, current.postalCode),
+                                }));
+                              }}
+                              required
+                            />
+                          </label>
+                        </div>
+
+                        <label>
+                          <span>Código postal *</span>
+                          <input
+                            type="text"
+                            value={checkoutForm.postalCode}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCheckoutForm((current) => ({
+                                ...current,
+                                postalCode: value,
+                                shippingZone: detectShippingZone(current.city, current.province, value),
+                              }));
+                            }}
+                            placeholder="Ej: 1414"
+                            required
+                          />
+                        </label>
+
+                        <label>
+                          <span>Referencia de entrega</span>
+                          <input
+                            type="text"
+                            value={checkoutForm.notes}
+                            onChange={(event) => setCheckoutForm((current) => ({ ...current, notes: event.target.value }))}
+                            placeholder="Ej: Timbre 2B, portón negro"
+                          />
+                        </label>
+
+                        <div className="checkout-shipping-zone-indicator">
+                          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style={{flexShrink:0}}>
+                            <path fill={checkoutForm.shippingZone === "caba" ? "#2563eb" : "#059669"} d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0 9.5A2.5 2.5 0 0 1 9.5 9 2.5 2.5 0 0 1 12 6.5 2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5"/>
+                          </svg>
+                          <span>
+                            Zona de envío: <strong>{checkoutForm.shippingZone === "caba" ? "CABA" : "GBA"}</strong>
+                            {" — "}
+                            <strong>${(checkoutForm.shippingZone === "caba" ? 5000 : 7000).toLocaleString("es-AR")} ARS</strong>
+                          </span>
+                        </div>
+
+                        {addressValidationErrors.length > 0 && (
+                          <ul className="checkout-address-errors">
+                            {addressValidationErrors.map((err, i) => (
+                              <li key={i}>{err}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    )}
 
                     <label>
                       <span>Tipo de consumidor *</span>
@@ -5801,61 +6170,16 @@ function App() {
                       </label>
                     </fieldset>
 
-                    <label>
-                      <span>País/región *</span>
-                      <select
-                        value={checkoutForm.country}
-                        onChange={(event) => setCheckoutForm((current) => ({ ...current, country: event.target.value }))}
-                      >
-                        <option value="Argentina">Argentina</option>
-                      </select>
-                    </label>
-
-                    <label>
-                      <span>Dirección *</span>
-                      <input
-                        type="text"
-                        value={checkoutForm.customerAddress}
-                        onChange={(event) => setCheckoutForm((current) => ({ ...current, customerAddress: event.target.value }))}
-                        required={checkoutForm.shippingMethod === "delivery"}
-                      />
-                    </label>
-
-                    <label>
-                      <span>Ciudad *</span>
-                      <input
-                        type="text"
-                        value={checkoutForm.city}
-                        onChange={(event) => setCheckoutForm((current) => ({ ...current, city: event.target.value }))}
-                      />
-                    </label>
-
-                    <label>
-                      <span>Región *</span>
-                      <input
-                        type="text"
-                        value={checkoutForm.region}
-                        onChange={(event) => setCheckoutForm((current) => ({ ...current, region: event.target.value }))}
-                      />
-                    </label>
-
-                    <label>
-                      <span>Código postal *</span>
-                      <input
-                        type="text"
-                        value={checkoutForm.postalCode}
-                        onChange={(event) => setCheckoutForm((current) => ({ ...current, postalCode: event.target.value }))}
-                      />
-                    </label>
-
-                    <label className="checkout-checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={checkoutForm.saveAddress}
-                        onChange={(event) => setCheckoutForm((current) => ({ ...current, saveAddress: event.target.checked }))}
-                      />
-                      Guardar esta dirección
-                    </label>
+                    {checkoutForm.shippingMethod === "delivery" && (
+                      <label className="checkout-checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={checkoutForm.saveAddress}
+                          onChange={(event) => setCheckoutForm((current) => ({ ...current, saveAddress: event.target.checked }))}
+                        />
+                        Guardar esta dirección
+                      </label>
+                    )}
 
                     <div className="checkout-details-actions">
                       <button type="button" className="secondary-btn" onClick={() => setActiveSection("cart")}>Usar una dirección diferente</button>

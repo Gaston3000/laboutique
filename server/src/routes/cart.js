@@ -576,6 +576,10 @@ cartRouter.post("/checkout", async (req, res) => {
   const customerName = normalizeText(req.body?.customerName);
   const customerPhone = normalizeText(req.body?.customerPhone) || null;
   const customerAddress = normalizeText(req.body?.customerAddress) || null;
+  const shippingCity = normalizeText(req.body?.shippingCity) || null;
+  const shippingState = normalizeText(req.body?.shippingState) || null;
+  const shippingPostalCode = normalizeText(req.body?.shippingPostalCode) || null;
+  const customerNote = normalizeText(req.body?.customerNote) || null;
   const shippingZone = normalizeText(req.body?.shippingZone).toLowerCase() || null;
   const promoCode = normalizeText(req.body?.promoCode).toUpperCase() || null;
   const authUser = await resolveOptionalAuthUser(req);
@@ -770,21 +774,29 @@ cartRouter.post("/checkout", async (req, res) => {
         customer_phone,
         customer_address,
         contact_email,
+        customer_note,
         shipping_zone,
+        shipping_city,
+        shipping_state,
+        shipping_postal_code,
         shipping_cost_ars,
         discount_ars,
         promo_code,
         total_ars,
         status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'nuevo')
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'nuevo')
       RETURNING id, customer_name, customer_phone, customer_address, shipping_zone, shipping_cost_ars, total_ars, status, created_at`,
       [
         customerName,
         customerPhone,
         customerAddress,
         contactEmail,
+        customerNote,
         shippingData?.zone ?? null,
+        shippingCity,
+        shippingState,
+        shippingPostalCode,
         shippingCost,
         discountAmount,
         promotionResult.code,
