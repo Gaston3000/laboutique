@@ -18,16 +18,30 @@ const allowedImageMimeTypes = new Set([
   "image/avif"
 ]);
 
+function slugifyForFilename(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return "";
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination(_req, _file, callback) {
       fs.mkdirSync(uploadsDir, { recursive: true });
       callback(null, uploadsDir);
     },
-    filename(_req, file, callback) {
+    filename(req, file, callback) {
       const ext = path.extname(file.originalname || "").toLowerCase() || ".jpg";
       const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      callback(null, `${uniqueSuffix}${ext}`);
+      const productSlug = slugifyForFilename(req.body?.productName);
+      const prefix = productSlug || uniqueSuffix;
+      callback(null, `${prefix}-${uniqueSuffix}${ext}`);
     }
   }),
   limits: {
@@ -126,12 +140,33 @@ async function findDuplicateProductId({ name, brand, excludeId = null }) {
   return result.rows[0]?.id || null;
 }
 
-function buildMediaAlt({ name, brand, index }) {
-  const normalizedName = normalizeText(name) || "Producto";
+const MEDIA_ALT_SUFFIXES = [
+  "",
+  "vista detalle",
+  "presentacion del producto",
+  "vista alternativa",
+  "primer plano"
+];
+
+function cleanTrailingPunctuation(text) {
+  return text.replace(/[\s\-–—_.,;:]+$/, "").replace(/^[\s\-–—_.,;:]+/, "");
+}
+
+function buildMediaAlt({ name, brand, categories, index }) {
+  const cleanedName = cleanTrailingPunctuation(normalizeText(name)) || "Producto";
   const normalizedBrand = normalizeText(brand);
-  const suffix = index > 0 ? ` foto ${index + 1}` : "";
+  const categoryList = Array.isArray(categories) ? categories.map((c) => normalizeText(c)).filter(Boolean) : [];
+  const mainCategory = categoryList[0] || "";
+
   const brandPart = normalizedBrand ? ` ${normalizedBrand}` : "";
-  return `${normalizedName}${brandPart}${suffix}`.trim();
+
+  if (index === 0) {
+    const categoryPart = mainCategory ? ` - ${mainCategory.toLowerCase()}` : "";
+    return `${cleanedName}${brandPart}${categoryPart}`.trim();
+  }
+
+  const suffix = MEDIA_ALT_SUFFIXES[index] || `vista ${index + 1}`;
+  return `${cleanedName}${brandPart} - ${suffix}`.trim();
 }
 
 function parseOptionalInteger(value, fallback = 0) {
@@ -221,6 +256,7 @@ function parseMedia(value, context = {}) {
       alt = buildMediaAlt({
         name: context.name,
         brand: context.brand,
+        categories: context.categories,
         index: imageIndex
       });
       imageIndex += 1;
@@ -404,7 +440,7 @@ productsRouter.post("/", requireAuth, requireAdmin, async (req, res) => {
   const parsedThreshold = parseOptionalInteger(lowStockThreshold, 10);
   const parsedVisible = parseBoolean(isVisible, true);
   const parsedCategories = parseCategories(categories);
-  const parsedMedia = parseMedia(media, { name: normalizedName, brand: normalizedBrand });
+  const parsedMedia = parseMedia(media, { name: normalizedName, brand: normalizedBrand, categories: parsedCategories });
   const parsedSeo = parseSeo(seo);
 
   if (parsedMedia === null) {
@@ -466,7 +502,7 @@ productsRouter.put("/:id", requireAuth, requireAdmin, async (req, res) => {
   const parsedThreshold = parseOptionalInteger(lowStockThreshold, 10);
   const parsedVisible = parseBoolean(isVisible, true);
   const parsedCategories = parseCategories(categories);
-  const parsedMedia = parseMedia(media, { name: normalizedName, brand: normalizedBrand });
+  const parsedMedia = parseMedia(media, { name: normalizedName, brand: normalizedBrand, categories: parsedCategories });
   const parsedSeo = parseSeo(seo);
 
   if (parsedMedia === null) {
