@@ -255,6 +255,18 @@ export default function LoginModal({
               {error && <p className="form-error">{error}</p>}
 
               <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  disabled={isLoading}
+                  onClick={() => {
+                    setView("register");
+                    setRegisterStep("options");
+                    setVerificationCode("");
+                  }}
+                >
+                  Volver
+                </button>
                 <button type="submit" disabled={isLoading || verificationCode.length !== 6}>
                   {isLoading ? "Verificando..." : "Verificar"}
                 </button>

@@ -772,6 +772,81 @@ adminRouter.get("/members", requireAuth, requireAdmin, async (_req, res) => {
   }
 });
 
+// Delete a single member
+adminRouter.delete("/members/:id", requireAuth, requireAdmin, async (req, res) => {
+  const targetId = Number(req.params.id);
+
+  if (!Number.isInteger(targetId) || targetId <= 0) {
+    return res.status(400).json({ error: "ID de usuario inválido" });
+  }
+
+  if (targetId === req.user.id) {
+    return res.status(403).json({ error: "No podés eliminar tu propia cuenta" });
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Delete from all tables that reference users
+    await client.query("DELETE FROM ticket_attachments WHERE uploaded_by_user_id = $1", [targetId]);
+    await client.query("DELETE FROM ticket_comments WHERE author_user_id = $1", [targetId]);
+    await client.query("DELETE FROM ticket_history WHERE actor_user_id = $1", [targetId]);
+    await client.query("DELETE FROM tickets WHERE requester_user_id = $1", [targetId]);
+    await client.query("DELETE FROM user_carts WHERE user_id = $1", [targetId]);
+    await client.query("DELETE FROM users WHERE id = $1", [targetId]);
+
+    await client.query("COMMIT");
+    return res.json({ success: true });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al eliminar usuario:", err.message);
+    return res.status(500).json({ error: "No se pudo eliminar el usuario" });
+  } finally {
+    client.release();
+  }
+});
+
+// Bulk delete members
+adminRouter.delete("/members", requireAuth, requireAdmin, async (req, res) => {
+  const ids = req.body?.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: "Debés enviar un array de IDs" });
+  }
+
+  const validIds = ids.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+
+  if (validIds.length === 0) {
+    return res.status(400).json({ error: "Ningún ID válido recibido" });
+  }
+
+  if (validIds.includes(req.user.id)) {
+    return res.status(403).json({ error: "No podés eliminar tu propia cuenta" });
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query("DELETE FROM ticket_attachments WHERE uploaded_by_user_id = ANY($1)", [validIds]);
+    await client.query("DELETE FROM ticket_comments WHERE author_user_id = ANY($1)", [validIds]);
+    await client.query("DELETE FROM ticket_history WHERE actor_user_id = ANY($1)", [validIds]);
+    await client.query("DELETE FROM tickets WHERE requester_user_id = ANY($1)", [validIds]);
+    await client.query("DELETE FROM user_carts WHERE user_id = ANY($1)", [validIds]);
+    const result = await client.query("DELETE FROM users WHERE id = ANY($1)", [validIds]);
+
+    await client.query("COMMIT");
+    return res.json({ success: true, deletedCount: result.rowCount });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al eliminar usuarios:", err.message);
+    return res.status(500).json({ error: "No se pudieron eliminar los usuarios" });
+  } finally {
+    client.release();
+  }
+});
+
 adminRouter.get("/customers/:id/reorder-items", requireAuth, requireAdmin, async (req, res) => {
   const customerId = Number(req.params.id);
 

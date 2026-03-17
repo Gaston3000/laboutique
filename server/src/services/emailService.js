@@ -714,24 +714,55 @@ export async function sendVerificationCodeEmail(userEmail, verificationDetails) 
                 Gracias por registrarte. Para completar tu registro y verificar tu cuenta, ingresá el siguiente código de verificación:
               </p>
               
-              <!-- Verification Code Box -->
-              <table style="width: 100%; margin: 30px 0;" cellpadding="0" cellspacing="0">
+              <!-- Verification Code Box — Stripe-style -->
+              <table style="width: 100%; margin: 32px 0;" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #1a4ac8; border-radius: 12px; padding: 30px 24px 20px; display: inline-block; text-align: center;">
-                      <p style="margin: 0 0 16px 0; font-size: 13px; color: #374151; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
-                        📋 Código de Verificación
-                      </p>
-                      <!-- Individual digit boxes -->
-                      <table cellpadding="0" cellspacing="6" style="margin: 0 auto 14px auto; border-collapse: separate;">
-                        <tr>
-                          ${verificationCode.split('').map(digit => `<td style="background: #1a4ac8; color: #ffffff; font-size: 32px; font-weight: 900; font-family: 'Courier New', monospace; width: 48px; height: 56px; text-align: center; vertical-align: middle; border-radius: 8px; box-shadow: 0 3px 8px rgba(26,74,200,0.35);">${digit}</td>`).join('')}
-                        </tr>
-                      </table>
-                      <p style="margin: 0; font-size: 12px; color: #6b7280; font-style: italic;">
-                        Mantené presionado el código para copiarlo
-                      </p>
-                    </div>
+                    <table cellpadding="0" cellspacing="0" style="width: 380px; max-width: 100%; background: #f8faff; border: 1.5px solid #d1deff; border-radius: 16px; overflow: hidden;">
+
+                      <!-- Top blue accent bar -->
+                      <tr>
+                        <td style="background: #1a4ac8; height: 5px; font-size: 0; line-height: 0;">&nbsp;</td>
+                      </tr>
+
+                      <!-- Label -->
+                      <tr>
+                        <td style="padding: 24px 32px 12px; text-align: center;">
+                          <p style="margin: 0; font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 2px;">
+                            Código de verificación
+                          </p>
+                        </td>
+                      </tr>
+
+                      <!-- Big clickable code with copy icon -->
+                      <tr>
+                        <td style="padding: 0 32px 8px; text-align: center;">
+                          <!-- user-select:all = un solo clic selecciona todo el código -->
+                          <div style="display: inline-flex; align-items: center; gap: 10px; background: #ffffff; border: 2px solid #1a4ac8; border-radius: 12px; padding: 14px 24px; cursor: pointer;" title="Clic para seleccionar el código">
+                            <span style="-webkit-user-select: all; -moz-user-select: all; user-select: all; font-size: 38px; font-weight: 900; font-family: 'Courier New', Courier, monospace; color: #1a4ac8; letter-spacing: 10px; line-height: 1;">
+                              ${verificationCode}
+                            </span>
+                            <!-- Copy icon SVG -->
+                            <span style="flex-shrink: 0; opacity: 0.55;" title="Copiá el código">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="9" y="9" width="13" height="13" rx="2" stroke="#1a4ac8" stroke-width="2" fill="none"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="#1a4ac8" stroke-width="2" stroke-linecap="round"/>
+                              </svg>
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+
+                      <!-- Instruction -->
+                      <tr>
+                        <td style="padding: 10px 32px 28px; text-align: center;">
+                          <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+                            👆 <strong>Un clic</strong> sobre el código lo selecciona · luego <strong>Ctrl+C</strong> para copiar
+                          </p>
+                        </td>
+                      </tr>
+
+                    </table>
                   </td>
                 </tr>
               </table>

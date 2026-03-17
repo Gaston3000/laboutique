@@ -71,7 +71,12 @@ export async function login(email, password) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || "No se pudo iniciar sesión");
+      const err = new Error(data.error || "No se pudo iniciar sesión");
+      if (data.notVerified) {
+        err.notVerified = true;
+        err.email = data.email;
+      }
+      throw err;
     }
 
     return data;
@@ -623,6 +628,35 @@ export async function fetchMembers(token) {
 
   if (!response.ok) {
     throw new Error(data.error || "No se pudo obtener miembros");
+  }
+
+  return data;
+}
+
+export async function deleteMember(token, memberId) {
+  const response = await fetch(`${API_URL}/admin/members/${memberId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo eliminar el usuario");
+  }
+
+  return data;
+}
+
+export async function deleteMembersBulk(token, ids) {
+  const response = await fetch(`${API_URL}/admin/members`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ ids })
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron eliminar los usuarios");
   }
 
   return data;

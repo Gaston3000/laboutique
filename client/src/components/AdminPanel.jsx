@@ -1390,6 +1390,8 @@ export default function AdminPanel({
   onApplyPromotion,
   onLoadCustomerReorder,
   onLoadCustomerActivity,
+  onDeleteMember,
+  onDeleteMembersBulk,
   onCreateTicket,
   onUpdateTicket,
   onAddTicketComment,
@@ -1501,6 +1503,58 @@ export default function AdminPanel({
     () => (Array.isArray(members) ? members.length : 0),
     [members]
   );
+
+  const [selectedMemberIds, setSelectedMemberIds] = useState(new Set());
+  const [memberDeleteConfirm, setMemberDeleteConfirm] = useState(null);
+  const [isMemberDeleting, setIsMemberDeleting] = useState(false);
+  const [memberDeleteMessage, setMemberDeleteMessage] = useState("");
+
+  const allMembersSelected = members.length > 0 && selectedMemberIds.size === members.length;
+
+  function toggleMemberSelection(memberId) {
+    setSelectedMemberIds((current) => {
+      const next = new Set(current);
+      if (next.has(memberId)) {
+        next.delete(memberId);
+      } else {
+        next.add(memberId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllMembers() {
+    if (allMembersSelected) {
+      setSelectedMemberIds(new Set());
+    } else {
+      setSelectedMemberIds(new Set(members.map((m) => m.id)));
+    }
+  }
+
+  async function confirmDeleteMembers() {
+    if (!memberDeleteConfirm) return;
+    const { ids } = memberDeleteConfirm;
+    setIsMemberDeleting(true);
+    setMemberDeleteMessage("");
+    try {
+      if (ids.length === 1) {
+        await onDeleteMember(ids[0]);
+      } else {
+        await onDeleteMembersBulk(ids);
+      }
+      setSelectedMemberIds((current) => {
+        const next = new Set(current);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+      setMemberDeleteMessage(ids.length === 1 ? "Usuario eliminado correctamente." : `${ids.length} usuarios eliminados correctamente.`);
+    } catch (err) {
+      setMemberDeleteMessage(err.message || "Error al eliminar.");
+    } finally {
+      setIsMemberDeleting(false);
+      setMemberDeleteConfirm(null);
+    }
+  }
 
   const visibleShippingRules = useMemo(() => {
     const orderByZone = new Map(SHIPPING_ZONE_OPTIONS.map((option, index) => [option.value, index]));
@@ -5858,27 +5912,76 @@ export default function AdminPanel({
                   <strong>{membersCount}</strong>
                 </div>
 
+                {memberDeleteMessage && (
+                  <p className={`admin-members-msg ${memberDeleteMessage.includes("Error") ? "admin-members-msg-error" : "admin-members-msg-success"}`}>
+                    {memberDeleteMessage}
+                  </p>
+                )}
+
+                {selectedMemberIds.size > 0 && (
+                  <div className="admin-members-bulk-bar">
+                    <span>{selectedMemberIds.size} seleccionado{selectedMemberIds.size > 1 ? "s" : ""}</span>
+                    <button
+                      type="button"
+                      className="admin-members-bulk-delete-btn"
+                      disabled={isMemberDeleting}
+                      onClick={() => setMemberDeleteConfirm({ ids: [...selectedMemberIds] })}
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6zM8 9h8v10H8zm7.5-5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                      Eliminar seleccionados
+                    </button>
+                  </div>
+                )}
+
                 <div className="admin-table-wrap">
                   <table className="admin-table admin-people-table">
                     <thead>
                       <tr>
+                        <th style={{width:"36px"}}>
+                          <input
+                            type="checkbox"
+                            checked={allMembersSelected}
+                            onChange={toggleAllMembers}
+                            aria-label="Seleccionar todos"
+                          />
+                        </th>
                         <th>Nombre</th>
                         <th>Mail</th>
                         <th>Rol</th>
                         <th>Alta</th>
+                        <th style={{width:"44px"}}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {members.length ? members.map((member) => (
-                        <tr key={member.id}>
+                        <tr key={member.id} className={selectedMemberIds.has(member.id) ? "admin-member-row-selected" : ""}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedMemberIds.has(member.id)}
+                              onChange={() => toggleMemberSelection(member.id)}
+                              aria-label={`Seleccionar ${member.name || member.email}`}
+                            />
+                          </td>
                           <td>{member.name || "-"}</td>
                           <td>{member.email || "-"}</td>
                           <td>{member.role || "-"}</td>
                           <td>{formatCustomerDateTime(member.createdAt)}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="admin-member-delete-btn"
+                              title="Eliminar usuario"
+                              disabled={isMemberDeleting}
+                              onClick={() => setMemberDeleteConfirm({ ids: [member.id], name: member.name || member.email })}
+                            >
+                              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6zM8 9h8v10H8zm7.5-5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                            </button>
+                          </td>
                         </tr>
                       )) : (
                         <tr>
-                          <td colSpan={4}>Sin miembros para mostrar.</td>
+                          <td colSpan={6}>Sin miembros para mostrar.</td>
                         </tr>
                       )}
                     </tbody>
@@ -5886,6 +5989,27 @@ export default function AdminPanel({
                 </div>
               </article>
             </section>
+
+            {memberDeleteConfirm && (
+              <div className="admin-members-confirm-backdrop" onClick={() => !isMemberDeleting && setMemberDeleteConfirm(null)}>
+                <div className="admin-members-confirm-modal" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+                  <h3>¿Eliminar {memberDeleteConfirm.ids.length === 1 ? "usuario" : `${memberDeleteConfirm.ids.length} usuarios`}?</h3>
+                  <p>
+                    {memberDeleteConfirm.ids.length === 1
+                      ? `Se eliminará "${memberDeleteConfirm.name}" y todos sus datos asociados. Esta acción no se puede deshacer.`
+                      : `Se eliminarán ${memberDeleteConfirm.ids.length} usuarios y todos sus datos asociados. Esta acción no se puede deshacer.`}
+                  </p>
+                  <div className="admin-members-confirm-actions">
+                    <button type="button" className="secondary-btn" disabled={isMemberDeleting} onClick={() => setMemberDeleteConfirm(null)}>
+                      Cancelar
+                    </button>
+                    <button type="button" className="admin-members-confirm-delete-btn" disabled={isMemberDeleting} onClick={confirmDeleteMembers}>
+                      {isMemberDeleting ? "Eliminando…" : "Eliminar"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         ) : activeSection === "Administradores" ? (
           <>
