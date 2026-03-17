@@ -239,6 +239,26 @@ export default function HomeBanners({ onExploreProducts, onViewPromotions }) {
               </span>
               <span>Ver promociones</span>
             </button>
+            <a
+              href="https://www.mercadolibre.com.ar/tienda/la-boutique-de-la-limpieza"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="home-banners-meli"
+              aria-label="Visitá nuestra tienda en Mercado Libre"
+            >
+              <img
+                src="/fotos/IconoML.png"
+                alt=""
+                className="home-banners-meli-icon"
+                draggable="false"
+              />
+              <img
+                src="/fotos/TituloML.png"
+                alt="Mercado Libre"
+                className="home-banners-meli-title"
+                draggable="false"
+              />
+            </a>
           </div>
         </div>
 

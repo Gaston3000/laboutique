@@ -225,15 +225,36 @@ function normalizeMedia(value) {
   return normalized;
 }
 
-function buildImageAlt({ name, brand, index }) {
-  const normalizedName = normalizeText(name) || "Producto";
-  const normalizedBrand = normalizeText(brand);
-  const suffix = index > 0 ? ` foto ${index + 1}` : "";
-  const brandPart = normalizedBrand ? ` ${normalizedBrand}` : "";
-  return `${normalizedName}${brandPart}${suffix}`.trim();
+const IMAGE_ALT_SUFFIXES = [
+  "",
+  "vista detalle",
+  "presentacion del producto",
+  "vista alternativa",
+  "primer plano"
+];
+
+function cleanTrailingPunctuation(text) {
+  return text.replace(/[\s\-–—_.,;:]+$/, "").replace(/^[\s\-–—_.,;:]+/, "");
 }
 
-function fillMediaAltText(media, product) {
+function buildImageAlt({ name, brand, categories, index }) {
+  const cleanedName = cleanTrailingPunctuation(normalizeText(name)) || "Producto";
+  const normalizedBrand = normalizeText(brand);
+  const categoryList = Array.isArray(categories) ? categories.map((c) => normalizeText(c)).filter(Boolean) : [];
+  const mainCategory = categoryList[0] || "";
+
+  const brandPart = normalizedBrand ? ` ${normalizedBrand}` : "";
+
+  if (index === 0) {
+    const categoryPart = mainCategory ? ` - ${mainCategory.toLowerCase()}` : "";
+    return `${cleanedName}${brandPart}${categoryPart}`.trim();
+  }
+
+  const suffix = IMAGE_ALT_SUFFIXES[index] || `vista ${index + 1}`;
+  return `${cleanedName}${brandPart} - ${suffix}`.trim();
+}
+
+function fillMediaAltText(media, product, { forceRegenerate = false } = {}) {
   const normalized = normalizeMedia(media);
 
   return normalized.map((item, index) => {
@@ -241,13 +262,13 @@ function fillMediaAltText(media, product) {
       return item;
     }
 
-    if (item.alt) {
+    if (item.alt && !forceRegenerate) {
       return item;
     }
 
     return {
       ...item,
-      alt: buildImageAlt({ name: product.name, brand: product.brand, index })
+      alt: buildImageAlt({ name: product.name, brand: product.brand, categories: product.categories, index })
     };
   });
 }
@@ -280,6 +301,11 @@ function sameMedia(a, b) {
 }
 
 async function main() {
+  const forceAlt = process.argv.includes("--force-alt");
+  if (forceAlt) {
+    console.log("Modo --force-alt: se regeneran TODOS los ALT de imagenes.");
+  }
+
   const result = await query("SELECT id, name, brand, categories, short_description, long_description, seo, media FROM products ORDER BY id ASC");
 
   let updated = 0;
@@ -303,7 +329,7 @@ async function main() {
       });
 
       const finalSeo = hasSeoValue(row.seo) ? mergeSeoKeepExisting(row.seo, generatedSeo) : generatedSeo;
-      const finalMedia = fillMediaAltText(row.media, row);
+      const finalMedia = fillMediaAltText(row.media, row, { forceRegenerate: forceAlt });
       const mediaChanged = !sameMedia(row.media, finalMedia);
       const seoChanged = !sameSeo(row.seo, finalSeo);
       const nextShortDescription = hasText(row.short_description)

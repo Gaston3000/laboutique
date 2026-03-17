@@ -285,8 +285,12 @@ export async function updateProduct(token, productId, product) {
   return data;
 }
 
-export async function uploadProductMedia(token, files) {
+export async function uploadProductMedia(token, files, productName) {
   const formData = new FormData();
+
+  if (productName) {
+    formData.append("productName", productName);
+  }
 
   for (const file of files || []) {
     formData.append("files", file);

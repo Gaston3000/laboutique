@@ -2137,7 +2137,7 @@ export default function AdminPanel({
     setIsUploadingMedia(true);
 
     try {
-      const uploadedItems = await onUploadMedia(filesToUpload);
+      const uploadedItems = await onUploadMedia(filesToUpload, editorForm.name);
 
       setEditorForm((current) => ({
         ...current,

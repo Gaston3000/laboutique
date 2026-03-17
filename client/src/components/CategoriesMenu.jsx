@@ -60,6 +60,7 @@ const fallbackMenuIcon = (
 );
 
 const saphirusIconFileByCategory = {
+  aerosoles: "aerosol.png",
   aparatos: "aparato.png",
   difusores: "image.png",
   "difusores premium": "difusorpremium.png",

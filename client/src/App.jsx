@@ -68,11 +68,11 @@ import WelcomeDiscountTimer from "./components/WelcomeDiscountTimer";
 
 const CATEGORY_PAGE_SIZE = 8;
 const RESULTS_SORT_OPTIONS = [
-  { key: "recent", label: "Mas reciente" },
-  { key: "price-desc", label: "Precios mas alto" },
-  { key: "price-asc", label: "Precios mas bajo" },
-  { key: "name-asc", label: "Nombre, creciente" },
-  { key: "name-desc", label: "Nombre, decreciente" }
+  { key: "recent", label: "Mas reciente", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+  { key: "price-desc", label: "Precios mas alto", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="4"/><polyline points="6 10 12 4 18 10"/></svg> },
+  { key: "price-asc", label: "Precios mas bajo", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="4" x2="12" y2="20"/><polyline points="18 14 12 20 6 14"/></svg> },
+  { key: "name-asc", label: "Nombre, creciente", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h10"/><path d="M3 12h7"/><path d="M3 18h4"/><path d="M18 6v12"/><polyline points="15 18 18 21 21 18"/></svg> },
+  { key: "name-desc", label: "Nombre, decreciente", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h4"/><path d="M3 12h7"/><path d="M3 18h10"/><path d="M18 6v12"/><polyline points="15 6 18 3 21 6"/></svg> }
 ];
 const RECENT_SEARCHES_STORAGE_KEY = "search:recent:queries";
 const RECENT_SEARCHES_LIMIT = 6;
@@ -463,8 +463,13 @@ function getProductCategoriesForSearch(product) {
 }
 
 const CATEGORY_FILTER_ALIASES = {
+  aerosoles: ["aerosol", "aerosoles", "aerosol saphirus", "aerosoles saphirus"],
   aparatos: ["aparatos", "aparato", "aparatos saphirus", "aparato saphirus"],
   difusores: ["difusores", "difusor", "difusor saphirus"]
+};
+
+const CATEGORY_BRAND_CONSTRAINT = {
+  aerosoles: "saphirus"
 };
 
 function matchesSelectedCategory(productCategories, normalizedSelectedCategory) {
@@ -1010,6 +1015,7 @@ function App() {
   const saphirusProductsRowRef = useRef(null);
   const cartDrawerLockedScrollYRef = useRef(0);
   const hadCartDrawerBodyLockRef = useRef(false);
+  const savedCatalogScrollYRef = useRef(0);
   const adminNotificationsRef = useRef(null);
   const cartPromoInputRef = useRef(null);
   const cartDrawerPromoInputRef = useRef(null);
@@ -1378,11 +1384,18 @@ function App() {
       return;
     }
 
-    refreshTicketsData(auth.token, auth.user.role).catch(() => {
+    refreshTicketsData(auth.token, auth.user.role).catch((error) => {
       setTickets([]);
       setTicketMetrics({ open: 0, inProgress: 0, testing: 0, closed: 0 });
+
+      if (isUnauthorizedError(error)) {
+        setAuth({ token: null, user: null });
+        setIsLoginOpen(true);
+        setLoginModalView("login");
+        setAuthError("Tu sesión venció o es inválida. Volvé a iniciar sesión.");
+      }
     });
-  }, [auth, activeSection]);
+  }, [auth.token, auth.user?.id, auth.user?.role, activeSection]);
 
   useEffect(() => {
     const savedAddress = String(auth.user?.address || "").trim();
@@ -1419,8 +1432,13 @@ function App() {
     }
 
     const timeoutId = window.setTimeout(() => {
-      saveUserCart(auth.token, cart).catch(() => {
-        // Silent failure: keep checkout UX responsive if autosave fails.
+      saveUserCart(auth.token, cart).catch((error) => {
+        if (isUnauthorizedError(error)) {
+          setAuth({ token: null, user: null });
+          setIsLoginOpen(true);
+          setLoginModalView("login");
+          setAuthError("Tu sesión venció o es inválida. Volvé a iniciar sesión.");
+        }
       });
     }, 300);
 
@@ -1863,7 +1881,16 @@ function App() {
             .map((category) => normalizeSearchText(category))
             .filter(Boolean);
 
-          return matchesSelectedCategory(productCategories, normalizedSelectedCategory);
+          if (!matchesSelectedCategory(productCategories, normalizedSelectedCategory)) {
+            return false;
+          }
+
+          const requiredBrand = CATEGORY_BRAND_CONSTRAINT[normalizedSelectedCategory];
+          if (requiredBrand) {
+            return normalizeSearchText(product?.brand) === requiredBrand;
+          }
+
+          return true;
         });
 
     if (!normalizedSearch) {
@@ -1899,10 +1926,12 @@ function App() {
     return productsToSort;
   }, [filteredProducts, resultsSortKey]);
 
-  const activeResultsSortLabel = useMemo(
-    () => RESULTS_SORT_OPTIONS.find((option) => option.key === resultsSortKey)?.label || "Mas reciente",
+  const activeResultsSortOption = useMemo(
+    () => RESULTS_SORT_OPTIONS.find((option) => option.key === resultsSortKey) || RESULTS_SORT_OPTIONS[0],
     [resultsSortKey]
   );
+  const activeResultsSortLabel = activeResultsSortOption.label;
+  const activeResultsSortIcon = activeResultsSortOption.icon;
 
   const saphirusGalleryProducts = useMemo(() => {
     const saphirusProducts = (products || [])
@@ -2750,11 +2779,20 @@ function App() {
   }
 
   function openProductPreview(product) {
+    savedCatalogScrollYRef.current = window.scrollY || window.pageYOffset || 0;
     setSelectedProduct(product);
     setSelectedProductImageIndex(0);
     setOpenInfoSection("description");
     setActiveSection("product");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function goBackFromProduct() {
+    const savedY = savedCatalogScrollYRef.current || 0;
+    setActiveSection("home");
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: savedY, left: 0, behavior: "smooth" });
+    });
   }
 
   function openCartItemProduct(item) {
@@ -3547,9 +3585,9 @@ function App() {
     }
   }
 
-  async function handleUploadProductMedia(files) {
+  async function handleUploadProductMedia(files, productName) {
     try {
-      const data = await uploadProductMedia(auth.token, files);
+      const data = await uploadProductMedia(auth.token, files, productName);
       setAdminMessage("");
       return data.items || [];
     } catch (error) {
@@ -6409,7 +6447,7 @@ function App() {
             />
           ) : activeSection === "product" && selectedProduct ? (
             <section className="product-detail-view" aria-label="Detalle de producto">
-              <button type="button" className="product-detail-back" onClick={() => setActiveSection("home")}>
+              <button type="button" className="product-detail-back" onClick={goBackFromProduct}>
                 ← Volver al catálogo
               </button>
 
@@ -6631,6 +6669,8 @@ function App() {
                     <div className="products-row" ref={similarProductsRowRef}>
                       {relatedProducts.map((product) => {
                         const selectedQuantity = getCatalogQuantity(product.id);
+                        const stockLimit = getStockLimit(product.stock);
+                        const isQtyAtStockLimit = stockLimit !== null && selectedQuantity >= stockLimit;
                         const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
 
                         return (
@@ -6680,6 +6720,34 @@ function App() {
                               {product.brand && <p className="product-brand">{product.brand}</p>}
                               <h3 className="product-title">{product.name}</h3>
                               <p className="product-price">${Number(product.price).toLocaleString("es-AR")} ARS</p>
+
+                              <div className="product-qty" aria-label={`Cantidad para ${product.name}`}>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    updateCatalogQuantity(product.id, -1);
+                                  }}
+                                  aria-label={`Quitar una unidad de ${product.name}`}
+                                >
+                                  -
+                                </button>
+                                <span>{selectedQuantity}</span>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    updateCatalogQuantity(product.id, 1, stockLimit ?? 99);
+                                  }}
+                                  disabled={isQtyAtStockLimit}
+                                  data-tooltip={isQtyAtStockLimit ? "Stock maximo alcanzado" : undefined}
+                                  aria-label={`Agregar una unidad de ${product.name}`}
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                               <button
                                 type="button"
@@ -6797,6 +6865,7 @@ function App() {
                       aria-haspopup="true"
                       aria-expanded={isResultsFilterOpen}
                     >
+                      {activeResultsSortIcon}
                       Filtro: {activeResultsSortLabel}
                     </button>
 
@@ -6814,6 +6883,7 @@ function App() {
                               setIsResultsFilterOpen(false);
                             }}
                           >
+                            {option.icon}
                             {option.label}
                           </button>
                         ))}

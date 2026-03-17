@@ -82,6 +82,7 @@ export const categoryTree = [
   {
     name: "Saphirus",
     children: [
+      "Aerosoles",
       "Aparatos",
       "Difusores",
       "Difusores Premium",
