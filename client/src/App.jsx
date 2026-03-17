@@ -10,6 +10,8 @@ import {
   createPromotion,
   createProduct,
   deleteAdminCategory,
+  deleteMember,
+  deleteMembersBulk,
   deleteTicket,
   ensureOrderInvoice,
   deleteProduct,
@@ -2548,6 +2550,7 @@ function App() {
     setAuthError("");
     setLoginModalView(view === "login" ? "login" : "register");
     setLoginInviteMessage(inviteMessage);
+    setIsCartDrawerOpen(false);
     setIsLoginOpen(true);
   }
 
@@ -3054,6 +3057,14 @@ function App() {
       setLoginInviteMessage("");
       setVerificationEmail("");
     } catch (error) {
+      // User exists but never verified their email — send them to the verify view
+      if (error.notVerified) {
+        setVerificationEmail(error.email || "");
+        setLoginModalView("verify");
+        setAuthError("Tu cuenta no fue verificada. Ingresá el código que te enviamos por mail o reenvialo.");
+        setIsAuthLoading(false);
+        return;
+      }
       setAuthError(error.message);
     } finally {
       setIsAuthLoading(false);
@@ -3519,6 +3530,17 @@ function App() {
     } catch (error) {
       setAdminMessage(error.message);
     }
+  }
+
+  async function handleDeleteMember(memberId) {
+    await deleteMember(auth.token, memberId);
+    setMembers((current) => current.filter((m) => m.id !== memberId));
+  }
+
+  async function handleDeleteMembersBulk(ids) {
+    await deleteMembersBulk(auth.token, ids);
+    const deletedSet = new Set(ids);
+    setMembers((current) => current.filter((m) => !deletedSet.has(m.id)));
   }
 
   async function handleReloadTickets() {
@@ -4690,6 +4712,8 @@ function App() {
               onApplyPromotion={handleApplyPromotion}
               onLoadCustomerReorder={handleLoadCustomerReorder}
               onLoadCustomerActivity={handleLoadCustomerActivity}
+              onDeleteMember={handleDeleteMember}
+              onDeleteMembersBulk={handleDeleteMembersBulk}
               onCreateTicket={handleCreateTicket}
               onUpdateTicket={handleUpdateTicket}
               onAddTicketComment={handleAddTicketComment}

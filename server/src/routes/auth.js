@@ -92,10 +92,37 @@ authRouter.post("/register", async (req, res) => {
   }
 
   try {
-    const existingUserResult = await query("SELECT id FROM users WHERE email = $1 LIMIT 1", [normalizedEmail]);
+    const existingUserResult = await query("SELECT id, email_verified FROM users WHERE email = $1 LIMIT 1", [normalizedEmail]);
+    const existingUser = existingUserResult.rows[0];
 
-    if (existingUserResult.rows[0]) {
-      return res.status(409).json({ error: "Ya existe una cuenta registrada con ese email" });
+    if (existingUser) {
+      // If the existing user already verified their email, block re-registration
+      if (existingUser.email_verified) {
+        return res.status(409).json({ error: "Ya existe una cuenta registrada con ese email" });
+      }
+
+      // User exists but never verified — update their data and resend a fresh code
+      const passwordHash = await bcrypt.hash(String(password), 10);
+      const verificationCode = generateVerificationCode();
+      const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      await query(
+        `UPDATE users
+         SET name = $1, password_hash = $2, phone = $3, address = $4,
+             verification_code = $5, verification_code_expires_at = $6
+         WHERE id = $7`,
+        [normalizedName, passwordHash, normalizedPhone, addressForStorage, verificationCode, codeExpiresAt, existingUser.id]
+      );
+
+      sendVerificationCodeEmail(normalizedEmail, { userName: normalizedName, verificationCode }).catch((err) =>
+        console.error("Failed to send verification email:", err)
+      );
+
+      return res.status(201).json({
+        message: "Te reenviamos un código de verificación.",
+        user: { email: normalizedEmail, emailVerified: false },
+        requiresVerification: true
+      });
     }
 
     const passwordHash = await bcrypt.hash(String(password), 10);
@@ -110,7 +137,7 @@ authRouter.post("/register", async (req, res) => {
     );
 
     const createdUser = mapUserRow(createdUserResult.rows[0]);
-    
+
     // Send verification email (don't block response if email fails)
     sendVerificationCodeEmail(normalizedEmail, {
       userName: normalizedName,
@@ -156,6 +183,15 @@ authRouter.post("/login", async (req, res) => {
 
     if (!isValidPassword) {
       return res.status(401).json({ error: "Credenciales inválidas" });
+    }
+
+    // Block login if the account was never verified (admins are exempt)
+    if (!userRow.email_verified && userRow.role !== "admin") {
+      return res.status(403).json({
+        error: "Tu cuenta no fue verificada. Revisá tu email e ingresá el código, o reenvialo.",
+        notVerified: true,
+        email: userRow.email
+      });
     }
 
     const user = mapUserRow(userRow);
