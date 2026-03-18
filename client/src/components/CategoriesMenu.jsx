@@ -402,12 +402,15 @@ export default function CategoriesMenu({
   user,
   accountAddress,
   onAccountClick,
+  onLoginClick,
   onMyAccountClick,
+  onOrdersClick,
   onLogout,
   onFavoritesClick
 }) {
   const menuRef = useRef(null);
   const previousHeaderZIndexRef = useRef(null);
+  const [isMobileAccountOpen, setIsMobileAccountOpen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [backdropTop, setBackdropTop] = useState(0);
@@ -572,6 +575,7 @@ export default function CategoriesMenu({
     setMobileRootView("home");
     setMobileSlideDirection("forward");
     setMobileViewAnimationKey(0);
+    setIsMobileAccountOpen(false);
   }
 
   function toggleMenu() {
@@ -586,6 +590,7 @@ export default function CategoriesMenu({
     setMobileRootView("home");
     setMobileSlideDirection("forward");
     setMobileViewAnimationKey(0);
+    setIsMobileAccountOpen(false);
   }
 
   function onLevelOneHover(index) {
@@ -691,7 +696,7 @@ export default function CategoriesMenu({
       id: "favorites",
       label: "Favoritos",
       icon: shortcutIcons.favorites,
-      isVisible: true,
+      isVisible: !isCompactViewport,
       isActive: false,
       onClick: () => handleShortcutClick(onFavoritesClick)
     },
@@ -827,6 +832,117 @@ export default function CategoriesMenu({
                   </button>
                 ) : null}
               </header>
+
+              {mobileRootView === "home" && mobileLevelState.depth === 0 && (
+                <div className="mega-mobile-account-section">
+                  {user ? (() => {
+                    const rawName = String(user.firstName || user.name?.split(" ")[0] || "").trim() || "usuario";
+                    const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+                    const firstInitial = String(user.firstName || user.name || "").trim().charAt(0).toUpperCase();
+                    const lastInitial = String(user.lastName || "").trim().charAt(0).toUpperCase()
+                      || String(user.name || "").trim().split(/\s+/)[1]?.charAt(0)?.toUpperCase() || "";
+                    const initials = (firstInitial + lastInitial) || "U";
+
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          className="mega-mobile-account-greeting"
+                          onClick={() => setIsMobileAccountOpen((prev) => !prev)}
+                        >
+                          <span className="mega-mobile-account-avatar is-logged" aria-hidden="true">
+                            <span className="mega-mobile-account-initials">{initials}</span>
+                          </span>
+                          <span className="mega-mobile-account-text">
+                            <strong>¡Hola, {displayName}!</strong>
+                            <span className="mega-mobile-account-email">{String(user.email || "").trim()}</span>
+                          </span>
+                          <span className={`mega-mobile-account-arrow${isMobileAccountOpen ? " is-open" : ""}`} aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" /></svg>
+                          </span>
+                        </button>
+                        <div className={`mega-mobile-account-submenu${isMobileAccountOpen ? " is-open" : ""}`}>
+                          <button
+                            type="button"
+                            className="mega-mobile-account-submenu-item"
+                            onClick={() => { closeMenu(); onMyAccountClick?.(); }}
+                          >
+                            <span className="mega-mobile-account-submenu-icon" aria-hidden="true">
+                              <svg viewBox="0 0 24 24">
+                                <circle cx="12" cy="8" r="3" />
+                                <path d="M5 19c1.2-3 3.8-4.6 7-4.6s5.8 1.6 7 4.6" />
+                              </svg>
+                            </span>
+                            <span>Mi cuenta</span>
+                            <span className="mega-mobile-account-submenu-chevron" aria-hidden="true">›</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="mega-mobile-account-submenu-item"
+                            onClick={() => { closeMenu(); onOrdersClick?.(); }}
+                          >
+                            <span className="mega-mobile-account-submenu-icon" aria-hidden="true">
+                              <svg viewBox="0 0 24 24">
+                                <rect x="4" y="3" width="16" height="18" rx="2" />
+                                <path d="M8 7h8" />
+                                <path d="M8 11h8" />
+                                <path d="M8 15h5" />
+                              </svg>
+                            </span>
+                            <span>Mis pedidos</span>
+                            <span className="mega-mobile-account-submenu-chevron" aria-hidden="true">›</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="mega-mobile-account-submenu-item"
+                            onClick={() => { closeMenu(); onFavoritesClick?.(); }}
+                          >
+                            <span className="mega-mobile-account-submenu-icon" aria-hidden="true">
+                              <svg viewBox="0 0 24 24">
+                                <path d="M12 2.75 14.85 8l5.9.85-4.27 4.1 1.01 5.8L12 16.03 6.51 18.75l1-5.8-4.26-4.1L9.15 8 12 2.75Z" />
+                              </svg>
+                            </span>
+                            <span>Favoritos</span>
+                            <span className="mega-mobile-account-submenu-chevron" aria-hidden="true">›</span>
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })() : (
+                    <>
+                      <div className="mega-mobile-account-guest">
+                        <span className="mega-mobile-account-avatar" aria-hidden="true">
+                          <svg viewBox="0 0 48 48">
+                            <circle cx="24" cy="24" r="23" />
+                            <circle cx="24" cy="18" r="7" fill="#fff" />
+                            <path d="M10 40c2-6.5 7.8-10 14-10s12 3.5 14 10" fill="#fff" />
+                          </svg>
+                        </span>
+                        <span className="mega-mobile-account-text">
+                          <strong>¡Hola!</strong>
+                          <span>Ingresá a tu cuenta o registrate</span>
+                        </span>
+                      </div>
+                      <div className="mega-mobile-account-actions">
+                        <button
+                          type="button"
+                          className="mega-mobile-account-btn mega-mobile-account-btn-outline"
+                          onClick={() => { closeMenu(); onAccountClick?.(); }}
+                        >
+                          Registrarme
+                        </button>
+                        <button
+                          type="button"
+                          className="mega-mobile-account-btn mega-mobile-account-btn-solid"
+                          onClick={() => { closeMenu(); onLoginClick?.(); }}
+                        >
+                          Ingresar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {mobileRootView === "home" && mobileLevelState.depth === 0 && (
                 <button type="button" className="mega-mobile-shipping" onClick={handleMobileAddressClick}>

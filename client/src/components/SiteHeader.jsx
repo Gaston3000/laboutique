@@ -11,7 +11,9 @@ export default function SiteHeader({
   onSearchSubmit,
   user,
   onAccountClick,
+  onLoginClick,
   onMyAccountClick,
+  onOrdersClick,
   onLogout,
   onFavoritesClick,
   onCartClick,
@@ -270,7 +272,9 @@ export default function SiteHeader({
             user={user}
             accountAddress={accountAddress}
             onAccountClick={onAccountClick}
+            onLoginClick={onLoginClick}
             onMyAccountClick={onMyAccountClick}
+            onOrdersClick={onOrdersClick}
             onLogout={onLogout}
             onFavoritesClick={onFavoritesClick}
           />

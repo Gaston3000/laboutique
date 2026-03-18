@@ -288,6 +288,20 @@ export default function HomeBanners({ onExploreProducts, onViewPromotions }) {
         </button>
       </div>
 
+      <div className="home-banners-dots" role="tablist" aria-label="Selector de banners">
+        {slides.map((slide, index) => (
+          <button
+            key={slide.id}
+            type="button"
+            className={`home-banners-dot${activeIndex === index ? " is-active" : ""}`}
+            onClick={() => goToSlide(index)}
+            aria-label={`Ver banner ${index + 1}`}
+            aria-selected={activeIndex === index}
+            role="tab"
+          />
+        ))}
+      </div>
+
       <div className="home-banners-mobile-actions">
         <a
           href="https://www.mercadolibre.com.ar/tienda/la-boutique-de-la-limpieza"
@@ -330,20 +344,6 @@ export default function HomeBanners({ onExploreProducts, onViewPromotions }) {
           </span>
           <span>Explorar productos</span>
         </button>
-      </div>
-
-      <div className="home-banners-dots" role="tablist" aria-label="Selector de banners">
-        {slides.map((slide, index) => (
-          <button
-            key={slide.id}
-            type="button"
-            className={`home-banners-dot${activeIndex === index ? " is-active" : ""}`}
-            onClick={() => goToSlide(index)}
-            aria-label={`Ver banner ${index + 1}`}
-            aria-selected={activeIndex === index}
-            role="tab"
-          />
-        ))}
       </div>
     </section>
   );

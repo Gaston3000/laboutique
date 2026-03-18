@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addTicketComment,
   applyPromotion,
@@ -976,6 +976,10 @@ function App() {
   const [lastAddedProduct, setLastAddedProduct] = useState(null);
   const [addPopupVersion, setAddPopupVersion] = useState(0);
   const [catalogQuantities, setCatalogQuantities] = useState({});
+  const [mobileCarouselPage, setMobileCarouselPage] = useState(0);
+  const [mobileCarouselAnimKey, setMobileCarouselAnimKey] = useState(0);
+  const [saphirusMobileCarouselPage, setSaphirusMobileCarouselPage] = useState(0);
+  const [saphirusMobileCarouselAnimKey, setSaphirusMobileCarouselAnimKey] = useState(0);
   const [favoriteProductIds, setFavoriteProductIds] = useState([]);
   const [complaintForm, setComplaintForm] = useState(INITIAL_COMPLAINT_FORM);
   const [complaintAttachmentFile, setComplaintAttachmentFile] = useState(null);
@@ -1026,6 +1030,8 @@ function App() {
   const [showHeader, setShowHeader] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const productsRowRef = useRef(null);
+  const mobileSwipeStartXRef = useRef(null);
+  const saphirusMobileSwipeStartXRef = useRef(null);
   const similarProductsRowRef = useRef(null);
   const saphirusProductsRowRef = useRef(null);
   const cartDrawerLockedScrollYRef = useRef(0);
@@ -2570,26 +2576,25 @@ function App() {
     const cartKey = `${product.id}:base`;
     const productImageUrl = getProductImageUrl(product);
     const maxStock = getStockLimit(product.stock);
-    let addedQuantity = 0;
+
+    const existingItem = cart.find((item) => (item.cartKey || `${item.id}:base`) === cartKey);
+    const existingQuantity = existingItem ? Number(existingItem.quantity || 0) : 0;
+    const allowedToAdd = maxStock === null ? safeQuantity : Math.max(0, maxStock - existingQuantity);
+    const addedQuantity = Math.min(safeQuantity, allowedToAdd);
+
+    if (addedQuantity <= 0) {
+      return;
+    }
 
     setCart((currentCart) => {
       const itemIndex = currentCart.findIndex((item) => (item.cartKey || `${item.id}:base`) === cartKey);
-      const existingQuantity = itemIndex === -1 ? 0 : Number(currentCart[itemIndex].quantity || 0);
-      const allowedToAdd = maxStock === null ? safeQuantity : Math.max(0, maxStock - existingQuantity);
-      const quantityToAdd = Math.min(safeQuantity, allowedToAdd);
-
-      if (quantityToAdd <= 0) {
-        return currentCart;
-      }
-
-      addedQuantity = quantityToAdd;
 
       if (itemIndex === -1) {
         return [...currentCart, {
           ...product,
           cartKey,
           variantId: null,
-          quantity: quantityToAdd,
+          quantity: addedQuantity,
           maxStock,
           imageUrl: productImageUrl
         }];
@@ -2598,16 +2603,12 @@ function App() {
       const updated = [...currentCart];
       updated[itemIndex] = {
         ...updated[itemIndex],
-        quantity: updated[itemIndex].quantity + quantityToAdd,
+        quantity: updated[itemIndex].quantity + addedQuantity,
         maxStock
       };
 
       return updated;
     });
-
-    if (addedQuantity <= 0) {
-      return;
-    }
 
     setCartStockMessage("");
     setCartStockMessageCartKey("");
@@ -2638,19 +2639,18 @@ function App() {
     const unitPrice = Number(product.price || 0) + Number(variant.priceDelta || 0);
     const productImageUrl = getProductImageUrl(product);
     const maxStock = getStockLimit(variant.stock);
-    let addedQuantity = 0;
+
+    const existingItem = cart.find((item) => (item.cartKey || `${item.id}:base`) === cartKey);
+    const existingQuantity = existingItem ? Number(existingItem.quantity || 0) : 0;
+    const allowedToAdd = maxStock === null ? safeQuantity : Math.max(0, maxStock - existingQuantity);
+    const addedQuantity = Math.min(safeQuantity, allowedToAdd);
+
+    if (addedQuantity <= 0) {
+      return;
+    }
 
     setCart((currentCart) => {
       const itemIndex = currentCart.findIndex((item) => (item.cartKey || `${item.id}:base`) === cartKey);
-      const existingQuantity = itemIndex === -1 ? 0 : Number(currentCart[itemIndex].quantity || 0);
-      const allowedToAdd = maxStock === null ? safeQuantity : Math.max(0, maxStock - existingQuantity);
-      const quantityToAdd = Math.min(safeQuantity, allowedToAdd);
-
-      if (quantityToAdd <= 0) {
-        return currentCart;
-      }
-
-      addedQuantity = quantityToAdd;
 
       if (itemIndex === -1) {
         return [
@@ -2664,7 +2664,7 @@ function App() {
             variantStock: maxStock,
             maxStock,
             price: unitPrice,
-            quantity: quantityToAdd,
+            quantity: addedQuantity,
             imageUrl: productImageUrl
           }
         ];
@@ -2673,17 +2673,13 @@ function App() {
       const updated = [...currentCart];
       updated[itemIndex] = {
         ...updated[itemIndex],
-        quantity: updated[itemIndex].quantity + quantityToAdd,
+        quantity: updated[itemIndex].quantity + addedQuantity,
         variantStock: maxStock,
         maxStock
       };
 
       return updated;
     });
-
-    if (addedQuantity <= 0) {
-      return;
-    }
 
     setCartStockMessage("");
     setCartStockMessageCartKey("");
@@ -3070,12 +3066,65 @@ function App() {
     const rowStyles = window.getComputedStyle(rowRef.current);
     const rowGap = Number.parseFloat(rowStyles.columnGap || rowStyles.gap || "0") || 0;
     const amountPerCard = firstCard ? firstCard.getBoundingClientRect().width + rowGap : 240;
-    const amount = amountPerCard * 3;
+    const isMobile = window.innerWidth <= 640;
+    const amount = amountPerCard * (isMobile ? 2 : 3);
 
     rowRef.current.scrollBy({
       left: direction === "left" ? -amount : amount,
       behavior: "smooth"
     });
+  }
+
+  function handleMobileSwipeStart(event) {
+    mobileSwipeStartXRef.current = event.touches[0].clientX;
+  }
+
+  function handleMobileSwipeEnd(event) {
+    if (mobileSwipeStartXRef.current === null) {
+      return;
+    }
+
+    const deltaX = event.changedTouches[0].clientX - mobileSwipeStartXRef.current;
+    mobileSwipeStartXRef.current = null;
+    const SWIPE_THRESHOLD = 50;
+
+    if (Math.abs(deltaX) < SWIPE_THRESHOLD) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      setMobileCarouselPage((p) => Math.min(mobileCarouselTotalPages - 1, p + 1));
+      setMobileCarouselAnimKey((k) => k + 1);
+    } else {
+      setMobileCarouselPage((p) => Math.max(0, p - 1));
+      setMobileCarouselAnimKey((k) => k + 1);
+    }
+  }
+
+  function handleSaphirusMobileSwipeStart(event) {
+    saphirusMobileSwipeStartXRef.current = event.touches[0].clientX;
+  }
+
+  function handleSaphirusMobileSwipeEnd(event) {
+    if (saphirusMobileSwipeStartXRef.current === null) {
+      return;
+    }
+
+    const deltaX = event.changedTouches[0].clientX - saphirusMobileSwipeStartXRef.current;
+    saphirusMobileSwipeStartXRef.current = null;
+    const SWIPE_THRESHOLD = 50;
+
+    if (Math.abs(deltaX) < SWIPE_THRESHOLD) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      setSaphirusMobileCarouselPage((p) => Math.min(saphirusMobileCarouselTotalPages - 1, p + 1));
+      setSaphirusMobileCarouselAnimKey((k) => k + 1);
+    } else {
+      setSaphirusMobileCarouselPage((p) => Math.max(0, p - 1));
+      setSaphirusMobileCarouselAnimKey((k) => k + 1);
+    }
   }
 
   async function handleCheckoutSubmit(event) {
@@ -3934,6 +3983,13 @@ function App() {
     return shuffledProducts;
   }, [isInicioActive, filteredProducts]);
   const productsForCarousel = isInicioActive ? homeRandomProducts : filteredProducts;
+  const MOBILE_CAROUSEL_PAGE_SIZE = 2;
+  const mobileCarouselTotalPages = Math.max(1, Math.ceil(productsForCarousel.length / MOBILE_CAROUSEL_PAGE_SIZE));
+  const safeMobileCarouselPage = Math.min(mobileCarouselPage, mobileCarouselTotalPages - 1);
+  const mobileCarouselStart = safeMobileCarouselPage * MOBILE_CAROUSEL_PAGE_SIZE;
+  const saphirusMobileCarouselTotalPages = Math.max(1, Math.ceil(saphirusGalleryProducts.length / MOBILE_CAROUSEL_PAGE_SIZE));
+  const safeSaphirusMobileCarouselPage = Math.min(saphirusMobileCarouselPage, saphirusMobileCarouselTotalPages - 1);
+  const saphirusMobileCarouselStart = safeSaphirusMobileCarouselPage * MOBILE_CAROUSEL_PAGE_SIZE;
   const visibleCategoryProducts = isSpecificCategorySelected
     ? sortedFilteredProducts.slice(0, categoryVisibleCount)
     : sortedFilteredProducts;
@@ -3942,6 +3998,7 @@ function App() {
   const hasCatalogProductsToRender = shouldRenderGridProducts
     ? filteredProducts.length > 0
     : productsForCarousel.length > 0;
+  const [seoExpanded, setSeoExpanded] = useState(false);
   const catalogSeoSummary = useMemo(() => {
     if (isSearchActive) {
       return `Resultados de limpieza para "${currentSearchLabel}". Encontrá opciones para hogar y comercio con stock actualizado, promociones y envío rápido.`;
@@ -4494,7 +4551,9 @@ function App() {
         onSearchSubmit={handleSearchSubmit}
         user={auth.user}
         onAccountClick={() => openLoginModal("register")}
+        onLoginClick={() => openLoginModal("login")}
         onMyAccountClick={handleOpenMyAccount}
+        onOrdersClick={() => { setAccountInitialTab("pedidos"); setActiveSection("account"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
         onLogout={handleLogout}
         onFavoritesClick={handleOpenFavoritesSection}
         onCartClick={openCartDrawer}
@@ -6506,7 +6565,7 @@ function App() {
                             </button>
                           </div>
 
-                          {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
+                          {isQtyAtStockLimit && catalogQuantities[product.id] !== undefined && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                           <button
                             type="button"
@@ -6856,7 +6915,7 @@ function App() {
                                 </button>
                               </div>
 
-                              {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
+                              {isQtyAtStockLimit && catalogQuantities[product.id] !== undefined && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                               <button
                                 type="button"
@@ -6912,7 +6971,7 @@ function App() {
 
               {isInicioActive && <BrandsCarousel onSelectBrand={handleSelectBrandFromCarousel} />}
 
-              {isInicioActive && (
+              {isInicioActive && !auth.user?.welcomeDiscountUsed && (
                 <WelcomePromoSpotlight
                   onActivate={handleActivateWelcomePromo}
                   isActive={auth.user?.welcomeDiscountActive || false}
@@ -6925,20 +6984,35 @@ function App() {
                 {isInicioActive ? "Nuestro catalogo" : catalogSubtitle}
               </p>
               {!isInicioActive && (
-                <section className="catalog-seo-copy" aria-label="Información de catálogo">
-                  <p className="catalog-seo-copy-text">{catalogSeoSummary}</p>
-                  {topCatalogCategories.length > 0 && (
-                    <div className="catalog-seo-links" aria-label="Categorías destacadas">
-                      {topCatalogCategories.map((category) => (
-                        <button
-                          type="button"
-                          key={`catalog-seo-category-${category.name}`}
-                          className="catalog-seo-link"
-                          onClick={() => handleSelectCategory(category.name)}
-                        >
-                          {category.name} ({category.count})
-                        </button>
-                      ))}
+                <section className={`catalog-seo-copy${seoExpanded ? " catalog-seo-copy--open" : ""}`} aria-label="Información de catálogo">
+                  <button
+                    type="button"
+                    className="catalog-seo-toggle"
+                    onClick={() => setSeoExpanded(prev => !prev)}
+                    aria-expanded={seoExpanded}
+                  >
+                    <span>Más sobre esta categoría</span>
+                    <svg className="catalog-seo-toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                  {seoExpanded && (
+                    <div className="catalog-seo-body">
+                      <p className="catalog-seo-copy-text">{catalogSeoSummary}</p>
+                      {topCatalogCategories.length > 0 && (
+                        <div className="catalog-seo-links" aria-label="Categorías destacadas">
+                          {topCatalogCategories.map((category) => (
+                            <button
+                              type="button"
+                              key={`catalog-seo-category-${category.name}`}
+                              className="catalog-seo-link"
+                              onClick={() => handleSelectCategory(category.name)}
+                            >
+                              {category.name} ({category.count})
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </section>
@@ -7085,7 +7159,7 @@ function App() {
                                 </button>
                               </div>
 
-                              {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
+                              {isQtyAtStockLimit && catalogQuantities[product.id] !== undefined && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                               <button
                                 type="button"
@@ -7136,17 +7210,20 @@ function App() {
                       </span>
                     </button>
 
-                    <div className="products-row" ref={productsRowRef}>
-                      {productsForCarousel.map((product) => {
+                    <div className="products-row" ref={productsRowRef} onTouchStart={handleMobileSwipeStart} onTouchEnd={handleMobileSwipeEnd}>
+                      {productsForCarousel.map((product, productIndex) => {
                       const selectedQuantity = getCatalogQuantity(product.id);
                       const stockLimit = getStockLimit(product.stock);
                       const isQtyAtStockLimit = stockLimit !== null && selectedQuantity >= stockLimit;
                       const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
+                      const isInMobilePage = productIndex >= mobileCarouselStart && productIndex < mobileCarouselStart + MOBILE_CAROUSEL_PAGE_SIZE;
+                      const mobileCardIndex = productIndex - mobileCarouselStart;
 
                       return (
                         <article
-                          key={product.id}
-                          className="product-card"
+                          key={isInMobilePage ? `${product.id}-anim-${mobileCarouselAnimKey}` : product.id}
+                          className={`product-card${isInMobilePage ? "" : " mobile-carousel-hidden"}`}
+                          style={isInMobilePage ? { animationDelay: `${mobileCardIndex * 0.08}s` } : undefined}
                           role="button"
                           tabIndex={0}
                           onClick={() => openProductPreview(product)}
@@ -7217,7 +7294,7 @@ function App() {
                               </button>
                             </div>
 
-                            {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
+                            {isQtyAtStockLimit && catalogQuantities[product.id] !== undefined && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                             <button
                               type="button"
@@ -7253,6 +7330,38 @@ function App() {
                         </svg>
                       </span>
                     </button>
+
+                    <div className="products-carousel-mobile-arrows">
+                      <button
+                        type="button"
+                        className="carousel-arrow carousel-arrow-left"
+                        onClick={() => { setMobileCarouselPage((p) => Math.max(0, p - 1)); setMobileCarouselAnimKey((k) => k + 1); }}
+                        disabled={safeMobileCarouselPage === 0}
+                        aria-label="Ver productos anteriores"
+                      >
+                        <span className="nav-arrow-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                            <path d="M7 10.5 12 15.5 17 10.5" />
+                          </svg>
+                        </span>
+                      </button>
+                      <span className="mobile-carousel-page-indicator">
+                        {safeMobileCarouselPage + 1} / {mobileCarouselTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        className="carousel-arrow carousel-arrow-right"
+                        onClick={() => { setMobileCarouselPage((p) => Math.min(mobileCarouselTotalPages - 1, p + 1)); setMobileCarouselAnimKey((k) => k + 1); }}
+                        disabled={safeMobileCarouselPage >= mobileCarouselTotalPages - 1}
+                        aria-label="Ver más productos"
+                      >
+                        <span className="nav-arrow-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                            <path d="M7 10.5 12 15.5 17 10.5" />
+                          </svg>
+                        </span>
+                      </button>
+                    </div>
                   </section>
                 )
               ) : (
@@ -7289,17 +7398,20 @@ function App() {
                         </span>
                       </button>
 
-                      <div className="products-row saphirus-products-row" ref={saphirusProductsRowRef}>
-                        {saphirusGalleryProducts.map((product) => {
+                      <div className="products-row saphirus-products-row" ref={saphirusProductsRowRef} onTouchStart={handleSaphirusMobileSwipeStart} onTouchEnd={handleSaphirusMobileSwipeEnd}>
+                        {saphirusGalleryProducts.map((product, productIndex) => {
                           const selectedQuantity = getCatalogQuantity(product.id);
                           const stockLimit = getStockLimit(product.stock);
                           const isQtyAtStockLimit = stockLimit !== null && selectedQuantity >= stockLimit;
                           const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
+                          const isInSaphirusMobilePage = productIndex >= saphirusMobileCarouselStart && productIndex < saphirusMobileCarouselStart + MOBILE_CAROUSEL_PAGE_SIZE;
+                          const saphirusMobileCardIndex = productIndex - saphirusMobileCarouselStart;
 
                           return (
                             <article
-                              key={`saphirus-${product.id}`}
-                              className="product-card"
+                              key={isInSaphirusMobilePage ? `saphirus-${product.id}-anim-${saphirusMobileCarouselAnimKey}` : `saphirus-${product.id}`}
+                              className={`product-card${isInSaphirusMobilePage ? "" : " mobile-carousel-hidden"}`}
+                              style={isInSaphirusMobilePage ? { animationDelay: `${saphirusMobileCardIndex * 0.08}s` } : undefined}
                               role="button"
                               tabIndex={0}
                               onClick={() => openProductPreview(product)}
@@ -7370,7 +7482,7 @@ function App() {
                                   </button>
                                 </div>
 
-                                {isQtyAtStockLimit && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
+                                {isQtyAtStockLimit && catalogQuantities[product.id] !== undefined && <p className="product-stock-limit-note">Stock maximo alcanzado</p>}
 
                                 <button
                                   type="button"
@@ -7406,6 +7518,38 @@ function App() {
                           </svg>
                         </span>
                       </button>
+
+                      <div className="products-carousel-mobile-arrows">
+                        <button
+                          type="button"
+                          className="carousel-arrow carousel-arrow-left"
+                          onClick={() => { setSaphirusMobileCarouselPage((p) => Math.max(0, p - 1)); setSaphirusMobileCarouselAnimKey((k) => k + 1); }}
+                          disabled={safeSaphirusMobileCarouselPage === 0}
+                          aria-label="Ver productos Saphirus anteriores"
+                        >
+                          <span className="nav-arrow-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                              <path d="M7 10.5 12 15.5 17 10.5" />
+                            </svg>
+                          </span>
+                        </button>
+                        <span className="mobile-carousel-page-indicator">
+                          {safeSaphirusMobileCarouselPage + 1} / {saphirusMobileCarouselTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          className="carousel-arrow carousel-arrow-right"
+                          onClick={() => { setSaphirusMobileCarouselPage((p) => Math.min(saphirusMobileCarouselTotalPages - 1, p + 1)); setSaphirusMobileCarouselAnimKey((k) => k + 1); }}
+                          disabled={safeSaphirusMobileCarouselPage >= saphirusMobileCarouselTotalPages - 1}
+                          aria-label="Ver más productos Saphirus"
+                        >
+                          <span className="nav-arrow-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                              <path d="M7 10.5 12 15.5 17 10.5" />
+                            </svg>
+                          </span>
+                        </button>
+                      </div>
                     </section>
                   ) : (
                     <p className="empty-results">No encontramos productos en la categoría Saphirus por el momento.</p>
