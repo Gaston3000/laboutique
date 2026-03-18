@@ -326,6 +326,10 @@ html {
   transform: rotate(-90deg);
 }
 
+.home-banners-mobile-actions {
+  display: none;
+}
+
 .home-banners-dots {
   margin-top: 6px;
   display: flex;
@@ -569,33 +573,48 @@ html {
   .welcome-spotlight {
     --welcome-spotlight-radius: 16px;
     border-radius: var(--welcome-spotlight-radius);
-    margin-bottom: 14px;
+    margin: 8px 0 14px;
+    box-shadow: 0 12px 32px rgba(24, 119, 242, 0.1);
   }
 
   .welcome-spotlight-content {
-    padding: 12px 12px 10px;
+    padding: 16px 16px 12px;
+  }
+
+  .welcome-spotlight-eyebrow {
+    margin-bottom: 6px;
+    font-size: 0.68rem;
   }
 
   .welcome-spotlight h2 {
     white-space: normal;
-    max-width: 14ch;
-    line-height: 1.08;
+    max-width: none;
+    font-size: 1.3rem;
+    line-height: 1.12;
   }
 
   .welcome-spotlight-code-line {
-    margin-top: 8px;
+    margin-top: 10px;
+    font-size: 0.88rem;
+    line-height: 1.38;
+  }
+
+  .welcome-spotlight-terms {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    line-height: 1.34;
   }
 
   .welcome-spotlight-cta {
-    min-height: 50px;
+    min-height: 48px;
     font-size: 0.92rem;
-    padding-inline: 12px;
+    padding-inline: 14px;
     gap: 8px;
   }
 
   .welcome-spotlight-cta-icon {
-    width: 23px;
-    height: 23px;
+    width: 22px;
+    height: 22px;
   }
 }
 
@@ -1179,7 +1198,13 @@ html {
 
 @media (max-width: 860px) {
   .home-banners-slide {
-    height: clamp(208px, 60vw, 300px);
+    height: auto;
+  }
+
+  .home-banners-slide img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
   }
 
   .home-banners-overlay {
@@ -1196,36 +1221,60 @@ html {
     font-size: 0.62rem;
   }
 
-  .home-banners-actions {
-    display: grid;
-    width: 100%;
-    max-width: 330px;
+  .home-banners-overlay {
+    display: none;
   }
 
-  .home-banners-primary,
-  .home-banners-secondary {
-    width: 100%;
-    min-height: 30px;
-    font-size: 0.76rem;
+  .home-banners-mobile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 12px 0;
   }
 
-  .home-banners-meli {
-    width: 100%;
-    min-height: 30px;
-    padding: 0 12px;
+  .home-banners-mobile-actions .home-banners-primary,
+  .home-banners-mobile-actions .home-banners-secondary {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 34px;
+    font-size: 0.78rem;
+  }
+
+  .home-banners-mobile-actions .home-banners-secondary {
+    border-color: var(--blue);
+  }
+
+  .home-banners-mobile-actions .home-banners-primary {
+    flex: 1 1 100%;
+  }
+
+  .home-banners-mobile-actions .home-banners-meli {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 34px;
     justify-content: center;
   }
 
-  .home-banners-meli-icon {
+  .home-banners-mobile-actions .home-banners-meli-icon {
     height: 18px;
   }
 
-  .home-banners-meli-title {
+  .home-banners-mobile-actions .home-banners-meli-title {
     height: 13px;
   }
 
   .home-banners-arrow {
-    display: none;
+    width: 32px;
+    height: 32px;
+  }
+
+  .home-banners-arrow-prev {
+    left: 6px;
+  }
+
+  .home-banners-arrow-next {
+    right: 6px;
   }
 
   .home-faq {
