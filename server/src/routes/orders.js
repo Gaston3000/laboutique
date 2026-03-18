@@ -1,12 +1,15 @@
 import { Router } from "express";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { query } from "../db.js";
+import { handleOrderStatusChange } from "../services/notificationService.js";
 
 const ordersRouter = Router();
 const allowedStatuses = [
   "nuevo",
   "pago",
+  "confirmado",
   "preparado",
+  "listo_retiro",
   "enviado",
   "entregado",
   "cancelado"
@@ -179,31 +182,30 @@ ordersRouter.patch("/:id/status", requireAuth, requireAdmin, async (req, res) =>
     return res.status(400).json({ error: "Estado de pedido inválido" });
   }
 
+  const trackingNumber = typeof req.body?.trackingNumber === "string"
+    ? req.body.trackingNumber.trim()
+    : undefined;
+
   try {
-    const result = await query(
-      `UPDATE orders
-       SET status = $1
-       WHERE id = $2
-       RETURNING id, customer_name, total_ars, status, created_at`,
-      [normalizedStatus, orderId]
-    );
+    const { order } = await handleOrderStatusChange(orderId, normalizedStatus, {
+      trackingNumber: trackingNumber || undefined
+    });
 
-    const updated = result.rows[0];
-
-    if (!updated) {
+    if (!order) {
       return res.status(404).json({ error: "Pedido no encontrado" });
     }
 
     return res.json({
       item: {
-        id: updated.id,
-        customerName: updated.customer_name,
-        total: Number(updated.total_ars),
-        status: updated.status,
-        createdAt: updated.created_at
+        id: order.orderId,
+        customerName: order.customerName,
+        total: order.totalArs,
+        status: normalizedStatus,
+        createdAt: order._raw?.created_at
       }
     });
-  } catch {
+  } catch (err) {
+    console.error(`Error actualizando pedido #${orderId}:`, err.message);
     return res.status(500).json({ error: "No se pudo actualizar el pedido" });
   }
 });

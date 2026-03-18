@@ -276,7 +276,9 @@ function normalizeOrderFulfillmentStatus(value, orderStatus = "") {
   const normalizedOrderStatus = String(orderStatus || "").trim().toLowerCase();
 
   if (
-    normalizedOrderStatus.includes("preparado")
+    normalizedOrderStatus.includes("confirmado")
+    || normalizedOrderStatus.includes("preparado")
+    || normalizedOrderStatus.includes("listo_retiro")
     || normalizedOrderStatus.includes("enviado")
     || normalizedOrderStatus.includes("entregado")
   ) {
@@ -308,7 +310,9 @@ function normalizeOrderFulfillmentStatus(value, orderStatus = "") {
 }
 
 function orderStatusBadgeTone(label) {
-  return label === "Pagado" || label === "Cumplido" ? "is-positive" : "is-negative";
+  if (label === "Pagado" || label === "Cumplido") return "is-positive";
+  if (label === "Confirmado" || label === "Listo para retiro") return "is-positive";
+  return "is-negative";
 }
 
 function formatAnalyticsNumber(value) {
@@ -1373,6 +1377,8 @@ export default function AdminPanel({
   isAnalyticsLoading = false,
   lowStockAlerts = { productAlerts: [], variantAlerts: [] },
   orderNavigationRequest = null,
+  notifications = [],
+  unreadNotificationsCount = 0,
   onCreate,
   onUpdate,
   onUploadMedia,
@@ -1399,6 +1405,8 @@ export default function AdminPanel({
   onDeleteTicket,
   onReloadTickets,
   onReloadAnalytics,
+  onMarkNotificationRead,
+  onMarkAllNotificationsRead,
   message
 }) {
   const [editorMode, setEditorMode] = useState(null);
@@ -1418,6 +1426,7 @@ export default function AdminPanel({
   const toastTimeoutRef = useRef(null);
   const categoryUndoTimeoutRef = useRef(null);
   const [activeSection, setActiveSection] = useState("Pedidos");
+  const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [editorVariantForm, setEditorVariantForm] = useState({
     optionName: "",
     optionValue: "",
@@ -2356,7 +2365,17 @@ export default function AdminPanel({
     }
   }
 
-  const orderStatuses = ["nuevo", "pago", "preparado", "enviado", "entregado", "cancelado"];
+  const orderStatuses = ["nuevo", "pago", "confirmado", "preparado", "listo_retiro", "enviado", "entregado", "cancelado"];
+  const orderStatusLabels = {
+    nuevo: "Nuevo",
+    pago: "Pagado",
+    confirmado: "Confirmado",
+    preparado: "Preparado",
+    listo_retiro: "Listo para retiro",
+    enviado: "Enviado",
+    entregado: "Entregado",
+    cancelado: "Cancelado",
+  };
   const orderFulfillmentOptions = useMemo(() => {
     const values = new Set();
 
@@ -3897,7 +3916,79 @@ export default function AdminPanel({
   return (
     <section className="admin-panel" aria-label="Panel de administración">
       <aside className="admin-sidebar" aria-label="Secciones de administración">
-        <h3>Admin</h3>
+        <div className="admin-sidebar-header">
+          <h3>Admin</h3>
+          <div className="admin-notification-bell-wrapper">
+            <button
+              type="button"
+              className="admin-notification-bell"
+              onClick={() => setIsNotificationPanelOpen((prev) => !prev)}
+              aria-label={`Notificaciones${unreadNotificationsCount > 0 ? ` (${unreadNotificationsCount} sin leer)` : ""}`}
+            >
+              🔔
+              {unreadNotificationsCount > 0 && (
+                <span className="admin-notification-badge">{unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount}</span>
+              )}
+            </button>
+
+            {isNotificationPanelOpen && (
+              <div className="admin-notification-dropdown">
+                <div className="admin-notification-dropdown-header">
+                  <strong>Notificaciones</strong>
+                  {unreadNotificationsCount > 0 && (
+                    <button
+                      type="button"
+                      className="admin-notification-mark-all"
+                      onClick={() => {
+                        if (onMarkAllNotificationsRead) onMarkAllNotificationsRead();
+                        setIsNotificationPanelOpen(false);
+                      }}
+                    >
+                      Marcar todas como leídas
+                    </button>
+                  )}
+                </div>
+                <ul className="admin-notification-list">
+                  {notifications.length === 0 ? (
+                    <li className="admin-notification-empty">Sin notificaciones</li>
+                  ) : (
+                    notifications.slice(0, 30).map((n) => (
+                      <li
+                        key={n.id}
+                        className={`admin-notification-item ${n.isRead ? "" : "is-unread"}`}
+                        onClick={() => {
+                          if (!n.isRead && onMarkNotificationRead) onMarkNotificationRead(n.id);
+                          const matchedOrder = orders.find((o) => o.id === n.orderId);
+                          if (matchedOrder) {
+                            setActiveSection("Pedidos");
+                          }
+                          setIsNotificationPanelOpen(false);
+                        }}
+                      >
+                        <span className="admin-notification-icon">
+                          {n.eventType === "ORDER_CREATED" ? "🛒" :
+                           n.eventType === "PAYMENT_APPROVED" ? "✅" :
+                           n.eventType === "ORDER_CONFIRMED" ? "📋" :
+                           n.eventType === "ORDER_PROCESSING" ? "⚙️" :
+                           n.eventType === "ORDER_READY_FOR_PICKUP" ? "🏪" :
+                           n.eventType === "ORDER_SHIPPED" ? "🚚" :
+                           n.eventType === "ORDER_DELIVERED" ? "🎉" :
+                           n.eventType === "PAYMENT_FAILED" ? "⚠️" : "🔔"}
+                        </span>
+                        <div className="admin-notification-content">
+                          <p className="admin-notification-message">{n.message}</p>
+                          <span className="admin-notification-time">
+                            {new Date(n.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
         <ul>
           {sections.map((section) => (
             <li key={section}>
@@ -5553,7 +5644,7 @@ export default function AdminPanel({
                                 onChange={(event) => onOrderStatusChange(order.id, event.target.value)}
                               >
                                 {orderStatuses.map((status) => (
-                                  <option key={status} value={status}>{status}</option>
+                                  <option key={status} value={status}>{orderStatusLabels[status] || status}</option>
                                 ))}
                               </select>
                             </div>

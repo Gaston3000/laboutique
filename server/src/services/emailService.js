@@ -2,6 +2,7 @@ import { Resend } from "resend";
 
 // Email sender configuration
 const FROM_EMAIL = "La Boutique de la Limpieza <noreply@emailtestt.com>";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "gaston.costabella@davinci.edu.ar";
 
 // Lazy initialization of Resend to ensure env vars are loaded
 let resendInstance = null;
@@ -14,6 +15,32 @@ function getResend() {
     resendInstance = new Resend(process.env.RESEND_API_KEY);
   }
   return resendInstance;
+}
+
+/**
+ * Generic: send a pre-built order email to a customer.
+ */
+export async function sendOrderEmail(toEmail, subject, html) {
+  const result = await getResend().emails.send({
+    from: FROM_EMAIL,
+    to: toEmail,
+    subject,
+    html,
+  });
+  return result;
+}
+
+/**
+ * Generic: send a pre-built email to the admin address(es).
+ */
+export async function sendAdminOrderEmail(subject, html) {
+  const result = await getResend().emails.send({
+    from: FROM_EMAIL,
+    to: ADMIN_EMAIL,
+    subject,
+    html,
+  });
+  return result;
 }
 
 /**

@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS orders (
   discount_ars NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (discount_ars >= 0),
   promo_code TEXT,
   total_ars NUMERIC(12, 2) NOT NULL CHECK (total_ars >= 0),
-  status TEXT NOT NULL CHECK (status IN ('nuevo', 'pago', 'preparado', 'enviado', 'entregado', 'cancelado')),
+  status TEXT NOT NULL CHECK (status IN ('nuevo', 'pago', 'confirmado', 'preparado', 'listo_retiro', 'enviado', 'entregado', 'cancelado')),
   source TEXT,
   raw_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -268,6 +268,33 @@ CREATE INDEX IF NOT EXISTS idx_web_analytics_session_id ON web_analytics_events(
 CREATE INDEX IF NOT EXISTS idx_web_analytics_visitor_id ON web_analytics_events(visitor_id);
 CREATE INDEX IF NOT EXISTS idx_order_invoices_order_id ON order_invoices(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_invoices_invoice_number ON order_invoices(invoice_number);
+
+CREATE TABLE IF NOT EXISTS order_notifications (
+  id SERIAL PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_notifications_unread
+  ON order_notifications (is_read, created_at DESC)
+  WHERE is_read = FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_order_notifications_order
+  ON order_notifications (order_id);
+
+CREATE TABLE IF NOT EXISTS order_email_log (
+  id SERIAL PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  email_type TEXT NOT NULL,
+  recipient TEXT NOT NULL,
+  sent_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_order_email_log_unique
+  ON order_email_log (order_id, email_type);
 
 UPDATE tickets
 SET public_id = id::text

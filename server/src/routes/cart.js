@@ -1,7 +1,7 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { db, query } from "../db.js";
-import { sendOrderConfirmationEmail } from "../services/emailService.js";
+import { handleOrderStatusChange } from "../services/notificationService.js";
 
 const cartRouter = Router();
 const MERCADOPAGO_API_URL = "https://api.mercadopago.com";
@@ -878,6 +878,11 @@ cartRouter.post("/checkout", async (req, res) => {
       throw paymentError;
     }
 
+    // Fire ORDER_CREATED notification (non-blocking)
+    handleOrderStatusChange(order.id, "nuevo", { skipDbUpdate: true }).catch((err) => {
+      console.error(`⚠️ Error en notificación ORDER_CREATED para pedido #${order.id}:`, err.message);
+    });
+
     return res.status(201).json({
       item: {
         id: order.id,
@@ -901,6 +906,7 @@ cartRouter.post("/checkout", async (req, res) => {
       },
       payment: mercadoPago
     });
+
   } catch (error) {
     if (transactionOpen) {
       await client.query("ROLLBACK");
@@ -965,47 +971,15 @@ cartRouter.post("/mercadopago/webhook", async (req, res) => {
       ]
     );
 
-    // Send order confirmation email after successful payment
+    // Fire notification for payment status change (non-blocking)
     if (mpStatus === "approved") {
-      try {
-        const orderResult = await query(
-          `SELECT o.id, o.customer_name, o.customer_phone, o.customer_address, o.contact_email,
-                  o.total_ars, o.shipping_cost_ars, o.discount_ars, o.promo_code, o.shipping_zone,
-                  oi.product_name, oi.quantity, oi.unit_price_ars, oi.variant_id
-           FROM orders o
-           LEFT JOIN order_items oi ON oi.order_id = o.id
-           WHERE o.id = $1`,
-          [externalReference]
-        );
-
-        if (orderResult.rows.length > 0) {
-          const firstRow = orderResult.rows[0];
-          const subtotal = orderResult.rows.reduce((sum, row) => sum + (row.unit_price_ars * row.quantity), 0);
-          
-          await sendOrderConfirmationEmail(firstRow.contact_email, {
-            orderId: firstRow.id,
-            customerName: firstRow.customer_name,
-            customerPhone: firstRow.customer_phone,
-            totalArs: Number(firstRow.total_ars),
-            subtotalArs: subtotal,
-            shippingCostArs: Number(firstRow.shipping_cost_ars || 0),
-            discountArs: Number(firstRow.discount_ars || 0),
-            promoCode: firstRow.promo_code,
-            items: orderResult.rows.map((row) => ({
-              product_name: row.product_name,
-              wix_variant: row.variant_id ? row.product_name.split('(')[1]?.replace(')', '') : null,
-              quantity: row.quantity,
-              unit_price_ars: Number(row.unit_price_ars)
-            })),
-            deliveryAddress: firstRow.customer_address || null,
-            shippingZone: firstRow.shipping_zone || null
-          });
-          console.log(`✅ Email de confirmación enviado a ${firstRow.contact_email} para pedido #${firstRow.id} después del pago`);
-        }
-      } catch (emailError) {
-        console.error(`⚠️ Error al enviar email de confirmación para pedido #${externalReference}:`, emailError.message);
-        // No fallar el webhook si el email falla, solo loguear el error
-      }
+      handleOrderStatusChange(externalReference, "pago", { skipDbUpdate: true }).catch((err) => {
+        console.error(`⚠️ Error en notificación PAYMENT_APPROVED para pedido #${externalReference}:`, err.message);
+      });
+    } else if (["cancelled", "rejected", "refunded", "charged_back"].includes(mpStatus)) {
+      handleOrderStatusChange(externalReference, "cancelado", { skipDbUpdate: true }).catch((err) => {
+        console.error(`⚠️ Error en notificación PAYMENT_FAILED para pedido #${externalReference}:`, err.message);
+      });
     }
 
     return res.status(200).json({ ok: true, orderStatus: mappedOrderStatus });

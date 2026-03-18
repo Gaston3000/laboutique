@@ -52,7 +52,10 @@ import {
   submitLegalTicket,
   saveUserCart,
   uploadProductMedia,
-  trackAnalyticsEvent
+  trackAnalyticsEvent,
+  fetchNotifications,
+  markNotificationRead,
+  markAllNotificationsRead
 } from "./api";
 import AdminPanel from "./components/AdminPanel";
 import AccountPanel from "./components/AccountPanel";
@@ -910,6 +913,8 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
   const [orders, setOrders] = useState([]);
+  const [serverNotifications, setServerNotifications] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [shippingRules, setShippingRules] = useState([]);
   const [categories, setCategories] = useState([]);
   const [promotions, setPromotions] = useState([]);
@@ -1056,6 +1061,17 @@ function App() {
   async function refreshOrders(token) {
     const data = await fetchOrders(token);
     setOrders(data.items || []);
+  }
+
+  async function refreshServerNotifications(token) {
+    try {
+      const data = await fetchNotifications(token, { limit: 50 });
+      const items = data.items || [];
+      setServerNotifications(items);
+      setUnreadNotificationsCount(items.filter((n) => !n.isRead).length);
+    } catch {
+      /* ignore */
+    }
   }
 
   async function refreshAdminAnalytics(token, period = "30d") {
@@ -1369,7 +1385,8 @@ function App() {
       refreshOrders(auth.token)
         .then(() => Promise.all([
           refreshAdminData(auth.token),
-          refreshTicketsData(auth.token, auth.user.role)
+          refreshTicketsData(auth.token, auth.user.role),
+          refreshServerNotifications(auth.token)
         ]))
         .catch((error) => {
           setOrders([]);
@@ -1396,6 +1413,18 @@ function App() {
       }
     });
   }, [auth.token, auth.user?.id, auth.user?.role, activeSection]);
+
+  useEffect(() => {
+    if (!auth.token || auth.user?.role !== "admin" || activeSection !== "admin") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      refreshServerNotifications(auth.token);
+    }, 45_000);
+
+    return () => clearInterval(interval);
+  }, [auth.token, auth.user?.role, activeSection]);
 
   useEffect(() => {
     const savedAddress = String(auth.user?.address || "").trim();
@@ -1692,9 +1721,11 @@ function App() {
 
   const checkoutShippingOptionValue = useMemo(() => {
     if (checkoutForm.shippingMethod === "pickup") return "pickup";
-    if (checkoutForm.shippingMethod === "delivery") return "delivery";
+    if (checkoutForm.shippingMethod === "delivery") {
+      return checkoutForm.shippingZone === "gba" ? "delivery-gba" : "delivery-caba";
+    }
     return "";
-  }, [checkoutForm.shippingMethod]);
+  }, [checkoutForm.shippingMethod, checkoutForm.shippingZone]);
 
   useEffect(() => {
     setAppliedCartPromotion(null);
@@ -3606,13 +3637,36 @@ function App() {
     }
   }
 
-  async function handleOrderStatusChange(orderId, status) {
+  async function handleOrderStatusChange(orderId, status, opts = {}) {
     try {
-      await updateOrderStatus(auth.token, orderId, status);
+      await updateOrderStatus(auth.token, orderId, status, opts);
       await refreshOrders(auth.token);
+      refreshServerNotifications(auth.token);
       setAdminMessage("Estado de pedido actualizado");
     } catch (error) {
       setAdminMessage(error.message);
+    }
+  }
+
+  async function handleMarkNotificationRead(notifId) {
+    try {
+      await markNotificationRead(auth.token, notifId);
+      setServerNotifications((prev) =>
+        prev.map((n) => (n.id === notifId ? { ...n, isRead: true } : n))
+      );
+      setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    try {
+      await markAllNotificationsRead(auth.token);
+      setServerNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadNotificationsCount(0);
+    } catch {
+      /* ignore */
     }
   }
 
@@ -4090,6 +4144,34 @@ function App() {
     ? "99+"
     : String(unseenAdminNotificationsCount);
   const visibleAdminNotifications = adminNotifications.slice(0, 8);
+  const prevUnseenCountRef = useRef(unseenAdminNotificationsCount);
+  const prevServerUnreadRef = useRef(unreadNotificationsCount);
+
+  useEffect(() => {
+    const prevUnseen = prevUnseenCountRef.current;
+    const prevServer = prevServerUnreadRef.current;
+    prevUnseenCountRef.current = unseenAdminNotificationsCount;
+    prevServerUnreadRef.current = unreadNotificationsCount;
+
+    const grew = unseenAdminNotificationsCount > prevUnseen || unreadNotificationsCount > prevServer;
+    if (!grew || !isAdmin) return;
+
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.3);
+      osc.onended = () => ctx.close();
+    } catch { /* audio not available */ }
+  }, [unseenAdminNotificationsCount, unreadNotificationsCount, isAdmin]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -4951,6 +5033,10 @@ function App() {
               onDeleteTicket={handleDeleteTicket}
               onReloadTickets={handleReloadTickets}
               onReloadAnalytics={handleReloadAdminAnalytics}
+              notifications={serverNotifications}
+              unreadNotificationsCount={unreadNotificationsCount}
+              onMarkNotificationRead={handleMarkNotificationRead}
+              onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
               message={adminMessage}
             />
           ) : activeSection === "promotions" ? (
@@ -5861,10 +5947,11 @@ function App() {
                             value={checkoutShippingOptionValue}
                             onChange={(event) => {
                               const selected = event.target.value;
+                              const isDelivery = selected === "delivery-caba" || selected === "delivery-gba";
                               setCheckoutForm((current) => ({
                                 ...current,
-                                shippingMethod: selected === "pickup" ? "pickup" : "delivery",
-                                shippingZone: selected === "delivery" ? "caba" : "",
+                                shippingMethod: selected === "pickup" ? "pickup" : isDelivery ? "delivery" : "",
+                                shippingZone: selected === "delivery-gba" ? "gba" : selected === "delivery-caba" ? "caba" : "",
                                 street: "",
                                 number: "",
                                 floor: "",
@@ -5878,8 +5965,9 @@ function App() {
                             required
                           >
                             <option value="">Elegí una opción</option>
-                            <option value="pickup">Retiro en el local - Acevedo 200 (Gratis)</option>
-                            <option value="delivery">Envío a domicilio</option>
+                            <option value="pickup">Retiro en el local (Gratis)</option>
+                            <option value="delivery-caba">Envío a CABA ($5.000)</option>
+                            <option value="delivery-gba">Envío a GBA ($7.000)</option>
                           </select>
                         </label>
 
@@ -5986,10 +6074,11 @@ function App() {
                         value={checkoutShippingOptionValue}
                         onChange={(event) => {
                           const selected = event.target.value;
+                          const isDelivery = selected === "delivery-caba" || selected === "delivery-gba";
                           setCheckoutForm((current) => ({
                             ...current,
-                            shippingMethod: selected === "pickup" ? "pickup" : "delivery",
-                            shippingZone: selected === "delivery" ? "caba" : "",
+                            shippingMethod: selected === "pickup" ? "pickup" : isDelivery ? "delivery" : "",
+                            shippingZone: selected === "delivery-gba" ? "gba" : selected === "delivery-caba" ? "caba" : "",
                             street: "",
                             number: "",
                             floor: "",
@@ -6004,8 +6093,9 @@ function App() {
                         required
                       >
                         <option value="">Elegí una opción</option>
-                        <option value="delivery">Envío a domicilio</option>
-                        <option value="pickup">Retiro en el local - Acevedo 200 (Gratis)</option>
+                        <option value="pickup">Retiro en el local (Gratis)</option>
+                        <option value="delivery-caba">Envío a CABA ($5.000)</option>
+                        <option value="delivery-gba">Envío a GBA ($7.000)</option>
                       </select>
                     </label>
 

@@ -340,11 +340,14 @@ export async function fetchOrders(token) {
   return data;
 }
 
-export async function updateOrderStatus(token, orderId, status) {
+export async function updateOrderStatus(token, orderId, status, opts = {}) {
+  const body = { status };
+  if (opts.trackingNumber) body.trackingNumber = opts.trackingNumber;
+
   const response = await fetch(`${API_URL}/orders/${orderId}/status`, {
     method: "PATCH",
     headers: getAuthHeaders(token),
-    body: JSON.stringify({ status })
+    body: JSON.stringify(body)
   });
 
   const data = await response.json();
@@ -982,6 +985,53 @@ export async function deleteTicket(token, ticketRef) {
 
   if (!response.ok) {
     throw new Error(data.error || "No se pudo borrar el ticket");
+  }
+
+  return data;
+}
+
+// ── Notifications ────────────────────────────────────────
+
+export async function fetchNotifications(token, { unread = false, limit = 50 } = {}) {
+  const params = new URLSearchParams();
+  if (unread) params.set("unread", "true");
+  if (limit) params.set("limit", String(limit));
+
+  const response = await fetch(`${API_URL}/notifications?${params}`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar las notificaciones");
+  }
+
+  return data;
+}
+
+export async function markNotificationRead(token, notifId) {
+  const response = await fetch(`${API_URL}/notifications/${notifId}/read`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo marcar como leída");
+  }
+
+  return data;
+}
+
+export async function markAllNotificationsRead(token) {
+  const response = await fetch(`${API_URL}/notifications/read-all`, {
+    method: "POST",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron marcar como leídas");
   }
 
   return data;
