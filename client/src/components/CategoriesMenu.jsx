@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { categoryTree } from "./categoryTree";
 
-const MOBILE_MENU_BREAKPOINT = 1100;
+const MOBILE_MENU_BREAKPOINT = 1000;
 
 const limpiezaHogarIconPaths = {
   "Limpieza del hogar": "/fotos/icono%20limpieza%20del%20hogar/casa.png",
@@ -50,7 +50,12 @@ const levelOneIcons = {
       className="menu-item-icon-image menu-item-icon-image-saphirus-brand"
     />
   ),
-  Marcas: renderMenuPngIcon(marcasIconPath)
+  Marcas: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12.6 3.1 21 11.5a1 1 0 0 1 0 1.4l-7.1 7.1a1 1 0 0 1-1.4 0L3 11.5V4.1a1 1 0 0 1 1-1h8.6Z" />
+      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+    </svg>
+  )
 };
 
 const fallbackMenuIcon = (
@@ -96,6 +101,11 @@ const shortcutIcons = {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 3 3 7.5 12 12l9-4.5L12 3Z" />
       <path d="M5 10.5V16l7 3.5 7-3.5v-5.5" />
+    </svg>
+  ),
+  favorites: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.75 14.85 8l5.9.85-4.27 4.1 1.01 5.8L12 16.03 6.51 18.75l1-5.8-4.26-4.1L9.15 8 12 2.75Z" />
     </svg>
   )
 };
@@ -390,13 +400,16 @@ export default function CategoriesMenu({
   onGoAbout,
   onGoAdmin,
   user,
+  accountAddress,
   onAccountClick,
   onMyAccountClick,
-  onLogout
+  onLogout,
+  onFavoritesClick
 }) {
   const menuRef = useRef(null);
   const previousHeaderZIndexRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [backdropTop, setBackdropTop] = useState(0);
   const [activeLevelOneIndex, setActiveLevelOneIndex] = useState(-1);
   const [activeLevelTwoIndex, setActiveLevelTwoIndex] = useState(-1);
@@ -428,8 +441,10 @@ export default function CategoriesMenu({
   const mobileLevelState = useMemo(() => {
     let currentItems = levelOneItems;
     let currentNode = null;
+    let parentNode = null;
 
     for (const pathIndex of mobilePath) {
+      parentNode = currentNode;
       currentNode = currentItems[pathIndex] || null;
       currentItems = currentNode?.children || [];
     }
@@ -437,6 +452,7 @@ export default function CategoriesMenu({
     return {
       depth: mobilePath.length,
       currentNode,
+      parentNode,
       currentItems
     };
   }, [levelOneItems, mobilePath]);
@@ -462,21 +478,13 @@ export default function CategoriesMenu({
   useEffect(() => {
     function handleDocumentClick(event) {
       if (!menuRef.current?.contains(event.target)) {
-        setIsOpen(false);
-        setActiveLevelOneIndex(-1);
-        setActiveLevelTwoIndex(-1);
-        setMobilePath([]);
-        setMobileRootView("home");
+        closeMenu();
       }
     }
 
     function handleEscape(event) {
       if (event.key === "Escape") {
-        setIsOpen(false);
-        setActiveLevelOneIndex(-1);
-        setActiveLevelTwoIndex(-1);
-        setMobilePath([]);
-        setMobileRootView("home");
+        closeMenu();
       }
     }
 
@@ -508,6 +516,8 @@ export default function CategoriesMenu({
     if (headerElement) {
       previousHeaderZIndexRef.current = headerElement.style.zIndex;
       headerElement.style.zIndex = "10001";
+      headerElement.style.willChange = "auto";
+      headerElement.style.transform = "none";
     }
 
     syncBackdropTop();
@@ -520,6 +530,8 @@ export default function CategoriesMenu({
 
       if (headerElement) {
         headerElement.style.zIndex = previousHeaderZIndexRef.current || "";
+        headerElement.style.willChange = "";
+        headerElement.style.transform = "";
       }
     };
   }, [isOpen]);
@@ -541,8 +553,33 @@ export default function CategoriesMenu({
     setHideLevelThreeScrollHint(false);
   }, [isOpen, activeLevelOneIndex, activeLevelTwoIndex, hasDenseLevelThreeItems]);
 
+  const closeMenuRef = useRef(null);
+  closeMenuRef.current = () => {
+    if (!isOpen || isClosing) return;
+    setIsClosing(true);
+  };
+
+  function closeMenu() {
+    closeMenuRef.current();
+  }
+
+  function handleCloseAnimationEnd() {
+    setIsClosing(false);
+    setIsOpen(false);
+    setActiveLevelOneIndex(-1);
+    setActiveLevelTwoIndex(-1);
+    setMobilePath([]);
+    setMobileRootView("home");
+    setMobileSlideDirection("forward");
+    setMobileViewAnimationKey(0);
+  }
+
   function toggleMenu() {
-    setIsOpen((current) => !current);
+    if (isOpen) {
+      closeMenu();
+    } else {
+      setIsOpen(true);
+    }
     setActiveLevelOneIndex(-1);
     setActiveLevelTwoIndex(-1);
     setMobilePath([]);
@@ -561,11 +598,7 @@ export default function CategoriesMenu({
       onSelectCategory(categoryName);
     }
 
-    setIsOpen(false);
-    setActiveLevelOneIndex(-1);
-    setActiveLevelTwoIndex(-1);
-    setMobilePath([]);
-    setMobileRootView("home");
+    closeMenu();
   }
 
   function getMobileItemIcon(item, depth) {
@@ -614,11 +647,7 @@ export default function CategoriesMenu({
       onNavigate();
     }
 
-    setIsOpen(false);
-    setActiveLevelOneIndex(-1);
-    setActiveLevelTwoIndex(-1);
-    setMobilePath([]);
-    setMobileRootView("home");
+    closeMenu();
   }
 
   function handleLevelThreeScroll(event) {
@@ -659,6 +688,14 @@ export default function CategoriesMenu({
       onClick: () => handleShortcutClick(onGoAbout)
     },
     {
+      id: "favorites",
+      label: "Favoritos",
+      icon: shortcutIcons.favorites,
+      isVisible: true,
+      isActive: false,
+      onClick: () => handleShortcutClick(onFavoritesClick)
+    },
+    {
       id: "admin",
       label: "Admin",
       icon: shortcutIcons.admin,
@@ -668,6 +705,7 @@ export default function CategoriesMenu({
     }
   ].filter((item) => item.isVisible);
 
+  const isMobileBrandsView = mobileLevelState.depth === 1 && mobileLevelState.currentNode?.name === "Marcas";
   const isMobileCategoriesView = mobileRootView === "categories" || mobileLevelState.depth > 0;
   const mobileHeaderTitle = isMobileCategoriesView
     ? mobileLevelState.depth > 0
@@ -675,12 +713,65 @@ export default function CategoriesMenu({
       : "Categorías"
     : "";
 
+  const mobileHeaderIcon = (() => {
+    if (!isMobileCategoriesView || mobileLevelState.depth === 0) return null;
+    const node = mobileLevelState.currentNode;
+    if (!node) return null;
+
+    if (mobileLevelState.depth === 1) {
+      return levelOneIcons[node.name] || fallbackMenuIcon;
+    }
+
+    if (mobileLevelState.depth === 2) {
+      const parentName = mobileLevelState.parentNode?.name || "";
+      if (parentName === "Saphirus") {
+        const src = getSaphirusIconPath(node.name);
+        return src
+          ? <img src={src} alt="" aria-hidden="true" className="menu-item-icon-image menu-item-icon-image-saphirus" />
+          : fallbackMenuIcon;
+      }
+      return resolveLevelTwoIcon(node.name, parentName);
+    }
+
+    return fallbackMenuIcon;
+  })();
+
+  const mobileAddressSummary = useMemo(() => {
+    if (!user) return null;
+    const primaryAddress = Array.isArray(user?.addressBook)
+      ? user.addressBook.find((entry) => entry?.id === user?.primaryAddressId) || user.addressBook[0]
+      : null;
+
+    if (primaryAddress) {
+      const street = String(primaryAddress.street || "").trim();
+      const height = String(primaryAddress.height || "").trim();
+      const postalCode = String(primaryAddress.postalCode || "").trim();
+      const city = String(primaryAddress.city || "").trim();
+      const headline = [street, height].filter(Boolean).join(" ");
+      const cpPart = postalCode ? `CP${postalCode}` : "";
+      const parts = [headline, cpPart, city].filter(Boolean);
+      if (parts.length > 0) return parts.join(", ");
+    }
+
+    if (accountAddress) return accountAddress;
+    return null;
+  }, [user, accountAddress]);
+
+  function handleMobileAddressClick() {
+    if (user) {
+      onMyAccountClick?.();
+    } else {
+      onAccountClick?.();
+    }
+    closeMenu();
+  }
+
   return (
-    <div className={`categories-wrapper ${isOpen ? "is-open" : ""}`} ref={menuRef}>
+    <div className={`categories-wrapper ${isOpen ? "is-open" : ""}${isClosing ? " is-closing" : ""}`} ref={menuRef}>
       <button
         className="categories-toggle"
         type="button"
-        aria-expanded={isOpen}
+        aria-expanded={isOpen && !isClosing}
         onClick={toggleMenu}
       >
         <span className="hamburger" aria-hidden="true">
@@ -695,14 +786,18 @@ export default function CategoriesMenu({
         <>
           <button
             type="button"
-            className="categories-backdrop"
+            className={`categories-backdrop${isClosing ? " is-closing" : ""}`}
             aria-label="Cerrar menú de categorías"
             onClick={toggleMenu}
             style={isCompactViewport ? { top: 0 } : { top: `${backdropTop}px` }}
           />
 
           {isCompactViewport ? (
-            <section className="mega-menu mega-menu-mobile" aria-label="Menú de categorías">
+            <section
+              className={`mega-menu mega-menu-mobile${isClosing ? " is-closing" : ""}`}
+              aria-label="Menú de categorías"
+              onAnimationEnd={isClosing ? handleCloseAnimationEnd : undefined}
+            >
               <header className="mega-mobile-header">
                 <button type="button" className="mega-mobile-back" onClick={handleMobileBack}>
                   <span className="mega-mobile-back-icon" aria-hidden="true">
@@ -713,7 +808,14 @@ export default function CategoriesMenu({
                   </span>
                   {!isMobileCategoriesView && <span>Volver</span>}
                 </button>
-                <strong>{mobileHeaderTitle}</strong>
+                <strong className="mega-mobile-header-title">
+                  {mobileHeaderIcon && (
+                    <span className="mega-mobile-header-icon" aria-hidden="true">
+                      {mobileHeaderIcon}
+                    </span>
+                  )}
+                  {mobileHeaderTitle}
+                </strong>
                 {isMobileCategoriesView ? (
                   <button
                     type="button"
@@ -725,6 +827,39 @@ export default function CategoriesMenu({
                   </button>
                 ) : null}
               </header>
+
+              {mobileRootView === "home" && mobileLevelState.depth === 0 && (
+                <button type="button" className="mega-mobile-shipping" onClick={handleMobileAddressClick}>
+                  <span className="mega-mobile-shipping-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M1 12.5h1m0 0V11a1 1 0 0 1 1-1h9V6a1 1 0 0 1 1-1h3.28a1 1 0 0 1 .8.4l3.52 4.7a1 1 0 0 1 .2.6V17a1 1 0 0 1-1 1h-1m-16.8-5.5V17a1 1 0 0 0 1 1h1.8" />
+                      <circle cx="7.5" cy="18.5" r="1.5" />
+                      <circle cx="17.5" cy="18.5" r="1.5" />
+                      <path d="M9 18h6.5" />
+                    </svg>
+                  </span>
+                  <span className="mega-mobile-shipping-info">
+                    {user && mobileAddressSummary ? (
+                      <>
+                        <span className="mega-mobile-shipping-label">
+                          Envío a <strong>{mobileAddressSummary}</strong>
+                        </span>
+                        <span className="mega-mobile-shipping-action">Cambiar dirección</span>
+                      </>
+                    ) : user ? (
+                      <>
+                        <span className="mega-mobile-shipping-label">Agregá tu dirección de envío</span>
+                        <span className="mega-mobile-shipping-action">Configurar dirección</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="mega-mobile-shipping-label">Elegí tu zona de envío</span>
+                        <span className="mega-mobile-shipping-action">Iniciar sesión</span>
+                      </>
+                    )}
+                  </span>
+                </button>
+              )}
 
               <div
                 key={mobileViewAnimationKey}
@@ -774,36 +909,75 @@ export default function CategoriesMenu({
                   </>
                 )}
 
-                {(mobileRootView === "categories" || mobileLevelState.depth > 0) && mobileLevelState.currentItems.map((item, index) => (
-                  <button
-                    key={item.name}
-                    type="button"
-                    className="menu-item"
-                    role="menuitem"
-                    onClick={() => handleMobileItemClick(item, index)}
-                  >
-                    <span className="menu-item-main">
-                      <span className="menu-item-icon" aria-hidden="true">
-                        {mobileLevelState.depth === 1 && mobileLevelState.currentNode?.name === "Saphirus" ? (
+                {(mobileRootView === "categories" || mobileLevelState.depth > 0) && (
+                  isMobileBrandsView ? (
+                    <div className="mega-mobile-brands-grid">
+                      {mobileLevelState.currentItems.map((item, index) => (
+                        <button
+                          key={item.name}
+                          type="button"
+                          className="mega-mobile-brand-card"
+                          role="menuitem"
+                          onClick={() => handleMobileItemClick(item, index)}
+                        >
                           <img
-                            src={getSaphirusIconPath(item.name) || ""}
-                            alt=""
-                            aria-hidden="true"
-                            className="menu-item-icon-image menu-item-icon-image-saphirus"
+                            src={getBrandLogoPath(item.name)}
+                            alt={`${item.name} logo`}
+                            className="mega-mobile-brand-logo"
+                            onError={(e) => { e.target.style.opacity = "0"; }}
                           />
-                        ) : (
-                          getMobileItemIcon(item, mobileLevelState.depth)
-                        )}
-                      </span>
-                      <span className="menu-item-label">{item.name}</span>
-                    </span>
-                    {hasChildren(item) && <span className="chevron">›</span>}
-                  </button>
-                ))}
+                          <span className="mega-mobile-brand-name">{item.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    mobileLevelState.currentItems.map((item, index) => (
+                      <button
+                        key={item.name}
+                        type="button"
+                        className="menu-item"
+                        role="menuitem"
+                        onClick={() => handleMobileItemClick(item, index)}
+                      >
+                        <span className="menu-item-main">
+                          {mobileLevelState.depth < 2 && (
+                            mobileLevelState.depth === 1 && mobileLevelState.currentNode?.name === "Marcas" ? (
+                              <img
+                                src={getBrandLogoPath(item.name)}
+                                alt={`${item.name} logo`}
+                                className="brand-logo-icon"
+                                onError={(e) => { e.target.style.display = "none"; }}
+                              />
+                            ) : (
+                              <span className="menu-item-icon" aria-hidden="true">
+                                {mobileLevelState.depth === 1 && mobileLevelState.currentNode?.name === "Saphirus" ? (
+                                  <img
+                                    src={getSaphirusIconPath(item.name) || ""}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="menu-item-icon-image menu-item-icon-image-saphirus"
+                                  />
+                                ) : (
+                                  getMobileItemIcon(item, mobileLevelState.depth)
+                                )}
+                              </span>
+                            )
+                          )}
+                          <span className="menu-item-label">{item.name}</span>
+                        </span>
+                        {hasChildren(item) && <span className="chevron">›</span>}
+                      </button>
+                    ))
+                  )
+                )}
               </div>
             </section>
           ) : (
-            <section className="mega-menu" aria-label="Menú de categorías">
+            <section
+              className={`mega-menu${isClosing ? " is-closing" : ""}`}
+              aria-label="Menú de categorías"
+              onAnimationEnd={isClosing ? handleCloseAnimationEnd : undefined}
+            >
               <div className="mega-menu-inner">
                 <div className="mega-column level-one">
                   <div className="mega-shortcuts-title">Categorías</div>

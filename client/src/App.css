@@ -1504,6 +1504,7 @@ html {
   position: relative;
   width: 100%;
   max-width: none;
+  min-width: 0;
 }
 
 .search-wrap {
@@ -1530,6 +1531,7 @@ html {
 
 .search-wrap input {
   flex: 1;
+  min-width: 0;
   height: 100%;
   border: 0;
   outline: 0;
@@ -1544,6 +1546,7 @@ html {
 }
 
 .search-clear-btn {
+  flex-shrink: 0;
   width: 30px;
   height: 30px;
   border: 0;
@@ -1567,6 +1570,7 @@ html {
 }
 
 .search-separator {
+  flex-shrink: 0;
   color: var(--text-main);
   opacity: 0.35;
   font-size: 1rem;
@@ -1575,6 +1579,7 @@ html {
 }
 
 .search-btn {
+  flex-shrink: 0;
   width: 45px;
   height: 45px;
   border: 0;
@@ -2701,9 +2706,41 @@ html {
 
 @media (prefers-reduced-motion: reduce) {
   .cart-drawer-backdrop,
-  .cart-drawer {
+  .cart-drawer,
+  .cart-drawer-backdrop.is-closing,
+  .cart-drawer.is-closing {
     animation: none;
   }
+}
+
+@keyframes cart-backdrop-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes cart-drawer-slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(100%);
+    opacity: 0.55;
+  }
+}
+
+.cart-drawer-backdrop.is-closing {
+  animation: cart-backdrop-fade-out 220ms cubic-bezier(0.4, 0, 0.7, 0.2) forwards;
+}
+
+.cart-drawer.is-closing {
+  animation: cart-drawer-slide-out 260ms cubic-bezier(0.36, 0, 0.66, -0.06) forwards;
 }
 
 .cart-drawer-header {
@@ -8205,7 +8242,8 @@ html {
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));
   align-content: start;
-  gap: 6px 16px;
+  gap: 4px 10px;
+  padding: 10px 14px;
 }
 
 .menu-item {
@@ -8309,10 +8347,8 @@ html {
 
 /* Brand logo styling for Marcas menu */
 .brand-logo-icon {
-  height: 32px;
-  width: auto;
-  max-width: 70px;
-  margin-right: 12px;
+  height: 28px;
+  width: 28px;
   object-fit: contain;
   flex-shrink: 0;
   vertical-align: middle;
@@ -8328,6 +8364,11 @@ html {
   transform-origin: left center;
 }
 
+.menu-item-brand {
+  min-height: 44px;
+  padding: 0 10px;
+}
+
 .menu-item-brand .menu-item-main {
   gap: 10px;
 }
@@ -8338,7 +8379,7 @@ html {
 }
 
 .menu-item-brand .menu-item-label {
-  font-size: 1.04rem;
+  font-size: 0.92rem;
   font-weight: 500;
   transform-origin: left center;
   transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1), font-weight 220ms ease, color 220ms ease;
@@ -8538,6 +8579,88 @@ html {
   padding: 0 18px;
 }
 
+.mega-mobile-shipping {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 20px;
+  border: 0;
+  border-bottom: 1px solid rgba(45, 45, 45, 0.08);
+  background: linear-gradient(135deg, rgba(24, 119, 242, 0.04) 0%, rgba(24, 119, 242, 0.01) 100%);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: background-color 0.18s ease;
+}
+
+.mega-mobile-shipping:hover {
+  background: rgba(24, 119, 242, 0.07);
+}
+
+.mega-mobile-shipping:active {
+  background: rgba(24, 119, 242, 0.1);
+}
+
+.mega-mobile-shipping-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(24, 119, 242, 0.1);
+  color: var(--blue);
+}
+
+.mega-mobile-shipping-icon svg {
+  display: none;
+}
+
+.mega-mobile-shipping-icon::after {
+  content: "";
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: var(--blue);
+  -webkit-mask-image: url("/fotos/icono-camion.png");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  mask-image: url("/fotos/icono-camion.png");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
+
+.mega-mobile-shipping-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mega-mobile-shipping-label {
+  font-size: 0.92rem;
+  color: var(--text-main);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mega-mobile-shipping-label strong {
+  font-weight: 700;
+}
+
+.mega-mobile-shipping-action {
+  font-size: 0.82rem;
+  color: #16a34a;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
 .mega-mobile-header strong {
   color: rgba(45, 45, 45, 0.88);
   letter-spacing: 0.01em;
@@ -8546,6 +8669,34 @@ html {
   font-size: 1.2rem;
   line-height: 1.25;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mega-mobile-header-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mega-mobile-header-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mega-mobile-header-icon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 
 .mega-mobile-back {
@@ -8628,6 +8779,27 @@ html {
   padding: 10px 0 18px;
   background: var(--white);
   animation: categories-mobile-view-forward 300ms cubic-bezier(0.2, 0.85, 0.2, 1);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(45, 45, 45, 0.18) transparent;
+}
+
+.mega-mobile-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.mega-mobile-list::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+
+.mega-mobile-list::-webkit-scrollbar-thumb {
+  background: rgba(45, 45, 45, 0.16);
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.mega-mobile-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 45, 45, 0.3);
 }
 
 .mega-mobile-list.is-backward {
@@ -8830,6 +9002,52 @@ html {
   margin-right: 14px;
 }
 
+.mega-mobile-brands-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.mega-mobile-brand-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 6px;
+  border: 1px solid rgba(45, 45, 45, 0.1);
+  border-radius: 12px;
+  background: var(--white);
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.mega-mobile-brand-card:active {
+  transform: scale(0.96);
+  border-color: var(--blue);
+  box-shadow: 0 2px 8px rgba(24, 119, 242, 0.12);
+}
+
+.mega-mobile-brand-logo {
+  width: auto;
+  height: 44px;
+  max-width: 90px;
+  object-fit: contain;
+}
+
+.mega-mobile-brand-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(45, 45, 45, 0.78);
+  text-align: center;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 .mega-shortcuts-title,
 .mega-mobile-shortcuts-title {
   font-size: 0.84rem;
@@ -9011,6 +9229,52 @@ html {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+@keyframes categories-menu-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+@keyframes categories-backdrop-exit {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes categories-drawer-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+}
+
+.categories-backdrop.is-closing {
+  animation: categories-backdrop-exit 200ms cubic-bezier(0.4, 0, 0.7, 0.2) forwards;
+}
+
+.mega-menu.is-closing {
+  animation: categories-menu-exit 200ms cubic-bezier(0.4, 0, 0.7, 0.2) forwards;
+}
+
+.mega-menu-mobile.is-closing {
+  animation: categories-drawer-exit 240ms cubic-bezier(0.4, 0, 0.7, 0.2) forwards;
 }
 
 main {
@@ -11670,9 +11934,15 @@ main h1 {
   font-size: 0.95rem;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1160px) {
+  .header-inner {
+    grid-template-columns: 198px minmax(140px, 174px) minmax(100px, 1fr) auto;
+  }
+}
+
+@media (max-width: 1000px) {
   body {
-    padding-top: 212px;
+    padding-top: 154px;
   }
 
   .site-header {
@@ -11692,11 +11962,7 @@ main h1 {
   }
 
   .nav-bar {
-    top: 154px;
-  }
-
-  .nav-bar-hidden {
-    transform: translateY(-178px);
+    display: none;
   }
 
   .header-inner {
@@ -11708,6 +11974,11 @@ main h1 {
     align-items: center;
     gap: 10px 8px;
     padding: 10px 0 12px;
+  }
+
+  .search-wrap input {
+    padding: 0 18px;
+    font-size: 1rem;
   }
 
   .brand-block {
@@ -11723,6 +11994,33 @@ main h1 {
     grid-area: actions;
     justify-content: flex-end;
     gap: 4px;
+  }
+
+  .icon-only,
+  .cart-item,
+  .account-item.is-guest,
+  .account-item.is-logged {
+    width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(45, 45, 45, 0.18);
+    gap: 0;
+  }
+
+  .account-item.is-logged .account-chevron,
+  .account-item.is-logged .account-logged-label,
+  .account-item.is-logged .account-avatar {
+    display: none;
+  }
+
+  .account-item.is-logged .account-logged-icon {
+    display: inline-flex;
+  }
+
+  .account-guest-label {
+    display: none;
   }
 
   .search-block {
@@ -12274,10 +12572,6 @@ main h1 {
 }
 
 @media (max-width: 640px) {
-  .favorites-item {
-    display: none;
-  }
-
   .account-item.is-guest {
     min-height: 44px;
     padding: 6px;

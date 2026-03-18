@@ -511,7 +511,16 @@ function matchesProductSearch(product, query) {
     return true;
   }
 
-  return getProductSearchableText(product).some((text) => isFuzzySearchMatch(query, text));
+  const queryWords = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+
+  if (queryWords.length <= 1) {
+    return getProductSearchableText(product).some((text) => isFuzzySearchMatch(query, text));
+  }
+
+  const searchableTexts = getProductSearchableText(product);
+  const combinedText = searchableTexts.join(" ");
+
+  return queryWords.every((word) => isFuzzySearchMatch(word, combinedText));
 }
 
 function getSearchSuggestionScore(query, option) {
@@ -956,6 +965,7 @@ function App() {
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [isCartDrawerClosing, setIsCartDrawerClosing] = useState(false);
   const [isAddPopupOpen, setIsAddPopupOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedVariantByProduct, setSelectedVariantByProduct] = useState({});
@@ -1219,6 +1229,7 @@ function App() {
     }
 
     setActiveSection("cart");
+    setIsCartDrawerClosing(false);
     setIsCartDrawerOpen(false);
 
     if (checkoutStatus === "success") {
@@ -1548,7 +1559,7 @@ function App() {
         }
 
         if (isCartDrawerOpen) {
-          setIsCartDrawerOpen(false);
+          closeCartDrawer();
         }
       }
     }
@@ -2762,6 +2773,12 @@ function App() {
   }
 
   function closeCartDrawer() {
+    if (!isCartDrawerOpen || isCartDrawerClosing) return;
+    setIsCartDrawerClosing(true);
+  }
+
+  function handleCartDrawerCloseAnimationEnd() {
+    setIsCartDrawerClosing(false);
     setIsCartDrawerOpen(false);
   }
 
@@ -2773,6 +2790,7 @@ function App() {
     setAuthError("");
     setLoginModalView(view === "login" ? "login" : "register");
     setLoginInviteMessage(inviteMessage);
+    setIsCartDrawerClosing(false);
     setIsCartDrawerOpen(false);
     setIsLoginOpen(true);
   }
@@ -4668,12 +4686,13 @@ function App() {
       )}
 
       {isCartDrawerOpen && (
-        <div className="cart-drawer-backdrop" onClick={closeCartDrawer}>
+        <div className={`cart-drawer-backdrop${isCartDrawerClosing ? " is-closing" : ""}`} onClick={closeCartDrawer}>
           <aside
-            className="cart-drawer"
+            className={`cart-drawer${isCartDrawerClosing ? " is-closing" : ""}`}
             aria-label="Carrito"
             role="dialog"
             aria-modal="true"
+            onAnimationEnd={isCartDrawerClosing ? handleCartDrawerCloseAnimationEnd : undefined}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="cart-drawer-header">

@@ -268,9 +268,11 @@ export default function SiteHeader({
             onGoAbout={onGoAbout}
             onGoAdmin={onGoAdmin}
             user={user}
+            accountAddress={accountAddress}
             onAccountClick={onAccountClick}
             onMyAccountClick={onMyAccountClick}
             onLogout={onLogout}
+            onFavoritesClick={onFavoritesClick}
           />
         </div>
 
@@ -436,17 +438,6 @@ export default function SiteHeader({
               </div>
             )}
           </div>
-
-          <button
-            className="action-item icon-only favorites-item"
-            type="button"
-            aria-label={user ? "Favoritos" : "Registrate para guardar favoritos"}
-            onClick={onFavoritesClick}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 2.75 14.85 8l5.9.85-4.27 4.1 1.01 5.8L12 16.03 6.51 18.75l1-5.8-4.26-4.1L9.15 8 12 2.75Z" />
-            </svg>
-          </button>
 
           <button className="action-item icon-only cart-item" type="button" aria-label="Carrito" onClick={onCartClick}>
             <span className="cart-icon" aria-hidden="true">
