@@ -101,7 +101,7 @@ export default function DeliveryCoverageSection() {
   const mapContent = (
     <div className="delivery-map-card">
       <div className={`delivery-map${hoveredZone ? " has-highlight" : ""}`} role="img" aria-label="Mapa de zonas de entrega numeradas">
-        <img src="/fotos/pngmapasinnumeros.png" alt="Mapa de zonas de entrega" />
+        <img src="/fotos/mapaBSAS-SinFondo.png" alt="Mapa de zonas de entrega" />
         {Array.from({ length: 38 }, (_, index) => index + 1).map((zoneId) => {
           const isActive = hoveredZone === zoneId;
           const localityName = DELIVERY_LOCALITIES[zoneId - 1] || "";
@@ -125,6 +125,27 @@ export default function DeliveryCoverageSection() {
           <span className="delivery-map-tooltip-zone">Zona {mapTooltipZone || "-"}</span>
           <span className="delivery-map-tooltip-name">{mapTooltipZone ? DELIVERY_LOCALITIES[mapTooltipZone - 1] : ""}</span>
         </div>
+        <span className="delivery-map-caba" aria-hidden="true">C.A.B.A.</span>
+      </div>
+    </div>
+  );
+
+  const mobileMapContent = (
+    <div className="delivery-map-card delivery-map-card--old">
+      <div className={`delivery-map delivery-map--old${hoveredZone ? " has-highlight" : ""}`} role="img" aria-label="Mapa de zonas de entrega numeradas">
+        <img src="/fotos/pngmapasinnumeros.webp" alt="Mapa de zonas de entrega" />
+        {Array.from({ length: 38 }, (_, index) => index + 1).map((zoneId) => {
+          const localityName = DELIVERY_LOCALITIES[zoneId - 1] || "";
+          return (
+            <span
+              key={zoneId}
+              className={`delivery-map-label delivery-map-label--old zone-old-${zoneId}`}
+              aria-label={`Zona ${zoneId}, ${localityName}`}
+            >
+              {zoneId}
+            </span>
+          );
+        })}
         <span className="delivery-map-caba" aria-hidden="true">C.A.B.A.</span>
       </div>
     </div>
@@ -208,7 +229,7 @@ export default function DeliveryCoverageSection() {
         </button>
       </nav>
 
-      {/* Desktop: side by side */}
+      {/* Desktop: side by side (interactive map) */}
       <div className="delivery-coverage-layout delivery-desktop-layout">
         {mapContent}
         {desktopTableContent}
@@ -216,7 +237,7 @@ export default function DeliveryCoverageSection() {
 
       {/* Mobile: tab content */}
       <div className="delivery-mobile-panel">
-        {mobileTab === "map" ? mapContent : mobileTableContent}
+        {mobileTab === "map" ? mobileMapContent : mobileTableContent}
       </div>
     </section>
   );

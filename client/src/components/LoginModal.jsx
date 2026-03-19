@@ -462,11 +462,11 @@ export default function LoginModal({
               {error && <p className="form-error">{error}</p>}
 
               <div className="modal-actions login-actions">
-                <button type="submit" disabled={isLoading}>
-                  {isLoading ? "Ingresando..." : "Ingresar"}
-                </button>
                 <button type="button" className="secondary-btn" onClick={onClose}>
                   Cancelar
+                </button>
+                <button type="submit" disabled={isLoading}>
+                  {isLoading ? "Ingresando..." : "Ingresar"}
                 </button>
               </div>
             </form>

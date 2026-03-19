@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import CategoriesMenu from "./CategoriesMenu";
 
 export default function SiteHeader({
@@ -28,6 +29,7 @@ export default function SiteHeader({
 }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const accountMenuRef = useRef(null);
   const searchRef = useRef(null);
 
@@ -187,8 +189,17 @@ export default function SiteHeader({
   }
 
   function handleLogoutClick() {
+    setIsLogoutConfirmOpen(true);
+  }
+
+  function handleLogoutConfirm() {
+    setIsLogoutConfirmOpen(false);
     setIsAccountMenuOpen(false);
     onLogout();
+  }
+
+  function handleLogoutCancel() {
+    setIsLogoutConfirmOpen(false);
   }
 
   function handleMyAccountClick() {
@@ -254,7 +265,7 @@ export default function SiteHeader({
           <a href="#" className="logo-link" aria-label="Ir al inicio" onClick={handleLogoClick}>
             <img
               className="logo-image"
-              src="/fotos/logo/La boutique de la limpiezalogo.png"
+              src="/fotos/logo/La boutique de la limpiezalogo.webp"
               alt="La Boutique de la Limpieza"
             />
           </a>
@@ -442,6 +453,23 @@ export default function SiteHeader({
               </div>
             )}
           </div>
+
+          {isLogoutConfirmOpen && createPortal(
+            <div className="logout-confirm-overlay" onClick={handleLogoutCancel}>
+              <div className="logout-confirm-modal" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+                <p>¿Estás seguro de que querés cerrar sesión?</p>
+                <div className="logout-confirm-actions">
+                  <button type="button" className="logout-confirm-cancel" onClick={handleLogoutCancel}>Cancelar</button>
+                  <button type="button" className="logout-confirm-accept" onClick={handleLogoutConfirm}>Cerrar sesión</button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+          <button className="action-item icon-only favorites-item" type="button" aria-label="Favoritos" onClick={onFavoritesClick}>
+            <span aria-hidden="true">★</span>
+          </button>
 
           <button className="action-item icon-only cart-item" type="button" aria-label="Carrito" onClick={onCartClick}>
             <span className="cart-icon" aria-hidden="true">

@@ -672,7 +672,7 @@ function resolveOrderLineImageUrl(line, products) {
   const lineName = normalizeComparableText(line?.productName);
 
   if (!lineName) {
-    return "/fotos/foto-inicio.png";
+    return "/fotos/foto-inicio.webp";
   }
 
   const matchingProduct = (products || []).find((product) => {
@@ -684,7 +684,7 @@ function resolveOrderLineImageUrl(line, products) {
     ? matchingProduct.media.find((item) => item && typeof item === "object" && item.url)
     : null;
 
-  return firstMedia?.url || "/fotos/foto-inicio.png";
+  return firstMedia?.url || "/fotos/foto-inicio.webp";
 }
 
 function buildOrderActivityItems(order, paymentLabel, fulfillmentLabel) {
@@ -835,7 +835,7 @@ function openPrintableOrderDocument(order, type = "invoice", invoiceMeta = null,
     })
     .join("");
 
-  const logoUrl = `${window.location.origin}/fotos/Logo%20AI.png`;
+  const logoUrl = `${window.location.origin}/fotos/logo/La%20boutique%20de%20la%20limpiezalogo.webp`;
   const html = `
     <!doctype html>
     <html lang="es">
@@ -3439,11 +3439,11 @@ export default function AdminPanel({
 
   function getProductPrimaryImage(product) {
     if (!Array.isArray(product?.media)) {
-      return "/fotos/foto-inicio.png";
+      return "/fotos/foto-inicio.webp";
     }
 
     const firstMedia = product.media.find((item) => item && typeof item === "object" && item.url);
-    return firstMedia?.url || "/fotos/foto-inicio.png";
+    return firstMedia?.url || "/fotos/foto-inicio.webp";
   }
 
   function handleViewCategoryProducts(category) {
@@ -4547,7 +4547,7 @@ export default function AdminPanel({
                             <div className="admin-product-cell">
                               <img
                                 className="admin-product-thumb"
-                                src={Array.isArray(product.media) && product.media[0]?.url ? product.media[0].url : "/fotos/foto-inicio.png"}
+                                src={Array.isArray(product.media) && product.media[0]?.url ? product.media[0].url : "/fotos/foto-inicio.webp"}
                                 alt={product.name}
                                 loading="lazy"
                               />
@@ -4721,7 +4721,7 @@ export default function AdminPanel({
                           <div className="admin-product-cell">
                             <img
                               className="admin-product-thumb"
-                              src={Array.isArray(product.media) && product.media[0]?.url ? product.media[0].url : "/fotos/foto-inicio.png"}
+                              src={Array.isArray(product.media) && product.media[0]?.url ? product.media[0].url : "/fotos/foto-inicio.webp"}
                               alt={product.name}
                               loading="lazy"
                             />

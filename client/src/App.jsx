@@ -2104,12 +2104,12 @@ function App() {
 
   const selectedProductImages = useMemo(() => {
     if (!selectedProduct) {
-      return ["/fotos/foto-inicio.png"];
+      return ["/fotos/foto-inicio.webp"];
     }
 
     const urls = selectedProductMedia.map((item) => item.url).filter(Boolean);
 
-    return urls.length ? urls : ["/fotos/foto-inicio.png"];
+    return urls.length ? urls : ["/fotos/foto-inicio.webp"];
   }, [selectedProduct, selectedProductMedia]);
 
   const getCardImagePair = (product) => {
@@ -2117,7 +2117,7 @@ function App() {
     const urls = mediaItems.map((item) => item.url).filter(Boolean);
 
     return {
-      primaryImageUrl: urls[0] || "/fotos/foto-inicio.png",
+      primaryImageUrl: urls[0] || "/fotos/foto-inicio.webp",
       secondaryImageUrl: urls[1] || "",
       primaryImageAlt: getProductImageAlt(product, 0),
       secondaryImageAlt: getProductImageAlt(product, 1)
@@ -2127,7 +2127,7 @@ function App() {
   const getProductImageUrl = (product) => {
     const urls = getProductMediaItems(product).map((item) => item.url).filter(Boolean);
 
-    return urls[0] || product?.imageUrl || "/fotos/foto-inicio.png";
+    return urls[0] || product?.imageUrl || "/fotos/foto-inicio.webp";
   };
 
   useEffect(() => {
@@ -2187,7 +2187,7 @@ function App() {
 
     if (activeSection !== "product" || !selectedProduct) {
       document.title = defaultTitle;
-      const defaultImage = `${window.location.origin}/fotos/foto-inicio.png`;
+      const defaultImage = `${window.location.origin}/fotos/foto-inicio.webp`;
       upsertMeta("name", "description", defaultDescription);
       upsertMeta("name", "robots", "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1");
       upsertMeta("property", "og:type", "website");
@@ -2216,7 +2216,7 @@ function App() {
             "@type": "Organization",
             name: siteName,
             url: `${window.location.origin}${window.location.pathname}`,
-            logo: `${window.location.origin}/fotos/Logo%20AI.png`
+            logo: `${window.location.origin}/fotos/logo/La%20boutique%20de%20la%20limpiezalogo.webp`
           },
           {
             "@type": "WebSite",
@@ -2253,11 +2253,11 @@ function App() {
     upsertMeta("property", "og:type", "product");
     upsertMeta("property", "og:title", ogTitle);
     upsertMeta("property", "og:description", ogDescription);
-    upsertMeta("property", "og:image", selectedProductImages[0] || "/fotos/foto-inicio.png");
+    upsertMeta("property", "og:image", selectedProductImages[0] || "/fotos/foto-inicio.webp");
     upsertMeta("name", "twitter:card", "summary_large_image");
     upsertMeta("name", "twitter:title", twitterTitle);
     upsertMeta("name", "twitter:description", twitterDescription);
-    upsertMeta("name", "twitter:image", selectedProductImages[0] || "/fotos/foto-inicio.png");
+    upsertMeta("name", "twitter:image", selectedProductImages[0] || "/fotos/foto-inicio.webp");
 
     const canonicalFromSeo = String(seo.canonicalUrl || "").trim();
     const slug = String(getProductSeoSlug(selectedProduct) || "").trim();
@@ -5177,7 +5177,7 @@ function App() {
                 </div>
 
                 <div className="shipping-promo-side" aria-hidden="true">
-                  <img src="/fotos/bannerEnvio.png" alt="Promoción de envíos gratis en CABA y Gran Buenos Aires" />
+                  <img src="/fotos/bannerEnvio.webp" alt="Promoción de envíos gratis en CABA y Gran Buenos Aires" />
                 </div>
               </article>
             </section>
@@ -5186,7 +5186,7 @@ function App() {
               <section className="about-hero" aria-label="Nuestra historia">
                 <div className="about-hero-media">
                   <img
-                    src="/fotos/NahuelyGri.jpg"
+                    src="/fotos/NahuelyGri.webp"
                     alt="Frente del local de La Boutique de la Limpieza"
                   />
                 </div>
@@ -5277,7 +5277,7 @@ function App() {
             <section className="legal-info-view consumer-defense-view" aria-label="Defensa al consumidor">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Defensa al Consumidor</h1>
@@ -5297,7 +5297,7 @@ function App() {
             <section className="legal-info-view legal-terms-view" aria-label="Términos y condiciones">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Términos y Condiciones</h1>
@@ -5401,7 +5401,7 @@ function App() {
             <section className="legal-info-view legal-terms-view" aria-label="Políticas de cambios y devoluciones">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Políticas De Cambios y Devoluciones</h1>
@@ -5431,7 +5431,7 @@ function App() {
             <section className="legal-info-view legal-terms-view" aria-label="Políticas de envíos">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Políticas De Envíos</h1>
@@ -5473,7 +5473,7 @@ function App() {
             <section className="legal-info-view legal-terms-view" aria-label="Datos fiscales">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Datos fiscales</h1>
@@ -5494,7 +5494,7 @@ function App() {
                   rel="noreferrer"
                   className="legal-fiscal-image-link"
                 >
-                  <img src="/fotos/DataFiscal.jpg" alt="Data Fiscal AFIP" />
+                  <img src="/fotos/DataFiscal.webp" alt="Data Fiscal AFIP" />
                 </a>
               </div>
             </section>
@@ -5502,7 +5502,7 @@ function App() {
             <section className="legal-info-view legal-terms-view" aria-label="Libro de Quejas Online">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Libro de Quejas Online</h1>
@@ -5639,7 +5639,7 @@ function App() {
             <section className="legal-info-view legal-terms-view" aria-label="Información comercial">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Información Comercial</h1>
@@ -5654,7 +5654,7 @@ function App() {
 
                 <p>
                   <strong>CUIT:</strong><br />
-                  20409938311 (Constancia de CUIL Link: <a href="/fotos/DataFiscal.jpg" target="_blank" rel="noreferrer">ver más</a>)
+                  20409938311 (Constancia de CUIL Link: <a href="/fotos/DataFiscal.webp" target="_blank" rel="noreferrer">ver más</a>)
                 </p>
 
                 <p><strong>Condición frente al IVA:</strong><br />Responsable inscripto</p>
@@ -5672,7 +5672,7 @@ function App() {
             <section className="legal-info-view legal-terms-view" aria-label="Políticas de privacidad">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Políticas De Privacidad</h1>
@@ -5725,7 +5725,7 @@ function App() {
             <section className="legal-info-view legal-terms-view" aria-label="Botón de Arrepentimiento">
               <img
                 className="legal-info-logo"
-                src="/fotos/Logo AI.png"
+                src="/fotos/logo/La boutique de la limpiezalogo.webp"
                 alt="La Boutique de la Limpieza"
               />
               <h1>Botón de Arrepentimiento</h1>
@@ -6100,7 +6100,7 @@ function App() {
             <section className="checkout-details-view" aria-label="Página de pago">
               <header className="checkout-details-header">
                 <div className="checkout-details-title-wrap">
-                  <img src="/fotos/Logo AI.png" alt="La Boutique de la Limpieza" className="checkout-details-logo" />
+                  <img src="/fotos/logo/La boutique de la limpiezalogo.webp" alt="La Boutique de la Limpieza" className="checkout-details-logo" />
                   <h1>PÁGINA DE PAGO</h1>
                 </div>
                 <button type="button" className="checkout-details-back" onClick={() => setActiveSection("home")}>Seguir navegando</button>
@@ -6981,8 +6981,11 @@ function App() {
               <div id="home-catalog-start" />
               {!isInicioActive && <h1>{catalogHeading}</h1>}
               <p className={`subtitle${isInicioActive ? " home-catalog-subtitle" : ""}`}>
-                {isInicioActive ? "Nuestro catalogo" : catalogSubtitle}
+                {isInicioActive ? "Nuestro catálogo" : catalogSubtitle}
               </p>
+              {isInicioActive && (
+                <p className="home-catalog-description">Explorá todas las marcas y productos de limpieza para tu hogar o negocio.</p>
+              )}
               {!isInicioActive && (
                 <section className={`catalog-seo-copy${seoExpanded ? " catalog-seo-copy--open" : ""}`} aria-label="Información de catálogo">
                   <button
@@ -7726,7 +7729,7 @@ function App() {
       <footer className="site-footer" aria-label="Pie de página">
           <div className="site-footer-inner">
             <div className="site-footer-mobile-logo-wrap" aria-hidden="true">
-              <img className="site-footer-mobile-logo" src="/fotos/logo/La boutique de la limpiezalogo.png" alt="" />
+              <img className="site-footer-mobile-logo" src="/fotos/logo/La boutique de la limpiezalogo.webp" alt="" />
             </div>
 
             <div className="site-footer-top">
@@ -7753,7 +7756,7 @@ function App() {
                 className={`site-footer-contact${activeFooterMobileTab === "contact" ? " is-mobile-active" : ""}`}
                 aria-label="Contacto de la tienda"
               >
-                <img className="site-footer-logo" src="/fotos/logo/La boutique de la limpiezalogo.png" alt="La Boutique de la Limpieza" />
+                <img className="site-footer-logo" src="/fotos/logo/La boutique de la limpiezalogo.webp" alt="La Boutique de la Limpieza" />
 
                 <ul className="site-footer-contact-list">
                   <li>
@@ -7844,7 +7847,7 @@ function App() {
                     onClick={() => handleOpenInfoPage("fiscal-data")}
                     aria-label="Ver datos fiscales"
                   >
-                    <img src="/fotos/DataFiscal.jpg" alt="Data Fiscal" />
+                    <img src="/fotos/DataFiscal.webp" alt="Data Fiscal" />
                   </button>
                 </div>
               </nav>
@@ -7901,7 +7904,7 @@ function App() {
             <div className="site-footer-payments">
               <p>Métodos de Pago:</p>
               <div className="site-footer-mercado-pago" aria-label="Mercado Pago">
-                <img src="/fotos/mercado-pago.jpg" alt="Mercado Pago" />
+                <img src="/fotos/mercado-pago.webp" alt="Mercado Pago" />
               </div>
             </div>
 

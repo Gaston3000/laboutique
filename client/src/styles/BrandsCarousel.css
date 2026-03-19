@@ -11,7 +11,7 @@
   background:
     radial-gradient(circle at 20% 0%, rgba(15, 102, 181, 0.08), transparent 38%),
     linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%);
-  padding: 28px 0;
+  padding: 18px 0;
   margin: 0;
   overflow: hidden;
   position: relative;
@@ -37,12 +37,12 @@
 /* The scrolling track container */
 .brands-track {
   display: inline-flex;
-  gap: 58px;
+  gap: 44px;
   animation: scroll-brands 44s linear infinite;
   width: max-content;
   min-width: max-content;
   align-items: center;
-  padding: 6px 28px;
+  padding: 4px 20px;
   will-change: transform;
 }
 
@@ -70,9 +70,9 @@
 
 /* Logo images - clean, original colors, larger size */
 .brand-item img {
-  height: 114px;
+  height: 60px;
   width: auto;
-  max-width: 225px;
+  max-width: 140px;
   object-fit: contain;
   opacity: 0.88;
   filter: none;
@@ -122,53 +122,53 @@
 /* Tablet */
 @media (max-width: 1024px) {
   .brands-carousel-section {
-    padding: 24px 0;
+    padding: 16px 0;
   }
 
   .brands-track {
-    gap: 46px;
+    gap: 36px;
     animation-duration: 40s;
-    padding: 6px 24px;
+    padding: 4px 18px;
   }
 
   .brand-item img {
-    height: 102px;
-    max-width: 200px;
+    height: 52px;
+    max-width: 120px;
   }
 }
 
 /* Mobile */
 @media (max-width: 640px) {
   .brands-carousel-section {
-    padding: 22px 0;
+    padding: 14px 0;
   }
 
   .brands-track {
-    gap: 34px;
+    gap: 28px;
     animation-duration: 34s;
-    padding: 5px 20px;
+    padding: 3px 14px;
   }
 
   .brand-item img {
-    height: 88px;
-    max-width: 174px;
+    height: 44px;
+    max-width: 100px;
   }
 }
 
 /* Small mobile devices */
 @media (max-width: 480px) {
   .brands-carousel-section {
-    padding: 18px 0;
+    padding: 12px 0;
   }
 
   .brands-track {
-    gap: 26px;
+    gap: 22px;
     animation-duration: 28s;
-    padding: 4px 14px;
+    padding: 3px 10px;
   }
 
   .brand-item img {
-    height: 74px;
-    max-width: 148px;
+    height: 36px;
+    max-width: 84px;
   }
 }

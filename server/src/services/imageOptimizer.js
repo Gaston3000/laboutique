@@ -16,29 +16,8 @@ function shouldSkipOptimization({ extension, mimeType }) {
   return false;
 }
 
-function buildOutputPipeline(image, { extension, hasAlpha }) {
-  if (extension === ".jpg" || extension === ".jpeg") {
-    return image.jpeg({ quality: 62, mozjpeg: true });
-  }
-
-  if (extension === ".webp") {
-    return image.webp({ quality: 60, effort: 6 });
-  }
-
-  if (extension === ".avif") {
-    return image.avif({ quality: 42, effort: 5 });
-  }
-
-  if (extension === ".png" || hasAlpha) {
-    return image.png({
-      compressionLevel: 9,
-      effort: 10,
-      palette: true,
-      quality: 62
-    });
-  }
-
-  return image.jpeg({ quality: 62, mozjpeg: true });
+function buildOutputPipeline(image) {
+  return image.webp({ quality: 82, effort: 4 });
 }
 
 export async function optimizeImageFile(filePath, options = {}) {
@@ -63,7 +42,6 @@ export async function optimizeImageFile(filePath, options = {}) {
   });
 
   const metadata = await image.metadata();
-  const hasAlpha = Boolean(metadata.hasAlpha);
 
   const transformed = image
     .rotate()
@@ -74,7 +52,7 @@ export async function optimizeImageFile(filePath, options = {}) {
       withoutEnlargement: true
     });
 
-  const outputBuffer = await buildOutputPipeline(transformed, { extension, hasAlpha }).toBuffer();
+  const outputBuffer = await buildOutputPipeline(transformed).toBuffer();
 
   if (!outputBuffer.length || outputBuffer.length >= beforeBytes) {
     return {
@@ -85,14 +63,22 @@ export async function optimizeImageFile(filePath, options = {}) {
     };
   }
 
-  const tempPath = `${filePath}.tmp`;
+  // Always output as .webp
+  const webpPath = filePath.replace(/\.(png|jpe?g|avif|webp)$/i, ".webp");
+  const tempPath = `${webpPath}.tmp`;
   await fs.writeFile(tempPath, outputBuffer);
-  await fs.rename(tempPath, filePath);
+  await fs.rename(tempPath, webpPath);
+
+  // Remove original if it had a different extension
+  if (webpPath !== filePath) {
+    await fs.unlink(filePath).catch(() => {});
+  }
 
   return {
     changed: true,
     beforeBytes,
     afterBytes: outputBuffer.length,
+    newPath: webpPath,
     reason: "optimized"
   };
 }

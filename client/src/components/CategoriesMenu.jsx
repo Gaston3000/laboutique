@@ -4,24 +4,24 @@ import { categoryTree } from "./categoryTree";
 const MOBILE_MENU_BREAKPOINT = 1000;
 
 const limpiezaHogarIconPaths = {
-  "Limpieza del hogar": "/fotos/icono%20limpieza%20del%20hogar/casa.png",
-  "Pisos y Superficies": "/fotos/icono%20limpieza%20del%20hogar/pisosysuperficies.png",
-  "Cuidado de Ropa": "/fotos/icono%20limpieza%20del%20hogar/cuidado%20de%20ropa.png",
-  Cocina: "/fotos/icono%20limpieza%20del%20hogar/cocina.png",
-  "Baño": "/fotos/icono%20limpieza%20del%20hogar/ba%C3%B1o.png",
-  Ambientes: "/fotos/icono%20limpieza%20del%20hogar/ambientes.png",
-  "Casa y Jardin": "/fotos/icono%20limpieza%20del%20hogar/casa%20y%20jardin.png"
+  "Limpieza del hogar": "/fotos/icono%20limpieza%20del%20hogar/casa.webp",
+  "Pisos y Superficies": "/fotos/icono%20limpieza%20del%20hogar/pisosysuperficies.webp",
+  "Cuidado de Ropa": "/fotos/icono%20limpieza%20del%20hogar/cuidado%20de%20ropa.webp",
+  Cocina: "/fotos/icono%20limpieza%20del%20hogar/cocina.webp",
+  "Baño": "/fotos/icono%20limpieza%20del%20hogar/ba%C3%B1o.webp",
+  Ambientes: "/fotos/icono%20limpieza%20del%20hogar/ambientes.webp",
+  "Casa y Jardin": "/fotos/icono%20limpieza%20del%20hogar/casa%20y%20jardin.webp"
 };
 
-const productosEspecificosIconPath = "/fotos/IconoClientesEspecificos/productosespecificos.png";
+const productosEspecificosIconPath = "/fotos/IconoClientesEspecificos/productosespecificos.webp";
 
 const productosEspecificosSubcategoryIconPaths = {
-  Accesorios: "/fotos/IconoClientesEspecificos/accesorios.png",
-  "Limpieza Profunda": "/fotos/IconoClientesEspecificos/limpiezaProfunda.png",
-  Otros: "/fotos/IconoClientesEspecificos/otros.png"
+  Accesorios: "/fotos/IconoClientesEspecificos/accesorios.webp",
+  "Limpieza Profunda": "/fotos/IconoClientesEspecificos/limpiezaProfunda.webp",
+  Otros: "/fotos/IconoClientesEspecificos/otros.webp"
 };
 
-const marcasIconPath = "/fotos/logos marcas/marcas.png";
+const marcasIconPath = "/fotos/logos marcas/marcas.webp";
 
 function renderMenuPngIcon(src) {
   if (!src) {
@@ -44,7 +44,7 @@ const levelOneIcons = {
   "Productos específicos": renderMenuPngIcon(productosEspecificosIconPath),
   Saphirus: (
     <img
-      src="/fotos/iconos saphirus/logoS.png"
+      src="/fotos/iconos saphirus/logoS.webp"
       alt=""
       aria-hidden="true"
       className="menu-item-icon-image menu-item-icon-image-saphirus-brand"
@@ -65,15 +65,15 @@ const fallbackMenuIcon = (
 );
 
 const saphirusIconFileByCategory = {
-  aerosoles: "aerosol.png",
-  aparatos: "aparato.png",
-  difusores: "image.png",
-  "difusores premium": "difusorpremium.png",
-  home: "home.png",
+  aerosoles: "aerosol.webp",
+  aparatos: "aparato.webp",
+  difusores: "image.webp",
+  "difusores premium": "difusorpremium.webp",
+  home: "home.webp",
   holder: "icono_holder_clean.svg",
-  "holder sensaciones": "pruebaaaaa.png",
-  sensaciones: "iconosensaciones.png",
-  textil: "textil.png"
+  "holder sensaciones": "pruebaaaaa.webp",
+  sensaciones: "iconosensaciones.webp",
+  textil: "textil.webp"
 };
 
 const shortcutIcons = {
@@ -293,7 +293,7 @@ function resolveLevelTwoIcon(itemName, levelOneName = "") {
 
 /**
  * Convert brand name to logo file path
- * Example: "Ariel" -> "/fotos/logos marcas/ariel.png"
+ * Example: "Ariel" -> "/fotos/logos marcas/ariel.webp"
  */
 function getBrandLogoPath(brandName) {
   // Special case mappings for brands with different file names
@@ -319,7 +319,7 @@ function getBrandLogoPath(brandName) {
     normalized = normalized.replace(/\s+/g, "");
   }
   
-  return `/fotos/logos marcas/${normalized}.png`;
+  return `/fotos/logos marcas/${normalized}.webp`;
 }
 
 function normalizeItem(item) {
@@ -544,11 +544,14 @@ export default function CategoriesMenu({
       return undefined;
     }
 
-    const previousOverflow = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
     };
   }, [isOpen]);
 

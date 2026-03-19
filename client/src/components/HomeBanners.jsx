@@ -3,22 +3,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const BANNER_SLIDES = [
   {
     id: "banner-1",
-    desktopSrc: "/fotos/Banners/banner1.png",
-    mobileSrc: "/fotos/Banners/bannercelu1.png",
+    desktopSrc: "/fotos/Banners/banner1.webp",
+    mobileSrc: "/fotos/Banners/bannercelu1.webp",
     alt: "Promoción destacada de limpieza",
     title: "Soluciones premium para cada espacio"
   },
   {
     id: "banner-2",
-    desktopSrc: "/fotos/Banners/banner2.png",
-    mobileSrc: "/fotos/Banners/bannercelu2.png",
+    desktopSrc: "/fotos/Banners/banner2.webp",
+    mobileSrc: "/fotos/Banners/bannercelu2.webp",
     alt: "Novedades para el hogar y la limpieza profesional",
     title: "Novedades que elevan tu rutina"
   },
   {
     id: "banner-3",
-    desktopSrc: "/fotos/Banners/banner3.png",
-    mobileSrc: "/fotos/Banners/bannercelu3.png",
+    desktopSrc: "/fotos/Banners/banner3.webp",
+    mobileSrc: "/fotos/Banners/bannercelu3.webp",
     alt: "Ofertas exclusivas en productos de limpieza",
     title: "Promos exclusivas por tiempo limitado"
   }
@@ -247,13 +247,13 @@ export default function HomeBanners({ onExploreProducts, onViewPromotions }) {
               aria-label="Visitá nuestra tienda en Mercado Libre"
             >
               <img
-                src="/fotos/IconoML.png"
+                src="/fotos/IconoML.webp"
                 alt=""
                 className="home-banners-meli-icon"
                 draggable="false"
               />
               <img
-                src="/fotos/TituloML.png"
+                src="/fotos/TituloML.webp"
                 alt="Mercado Libre"
                 className="home-banners-meli-title"
                 draggable="false"
@@ -311,13 +311,13 @@ export default function HomeBanners({ onExploreProducts, onViewPromotions }) {
           aria-label="Visitá nuestra tienda en Mercado Libre"
         >
           <img
-            src="/fotos/IconoML.png"
+            src="/fotos/IconoML.webp"
             alt=""
             className="home-banners-meli-icon"
             draggable="false"
           />
           <img
-            src="/fotos/TituloML.png"
+            src="/fotos/TituloML.webp"
             alt="Mercado Libre"
             className="home-banners-meli-title"
             draggable="false"

@@ -317,7 +317,11 @@ async function optimizeUploadedFiles(files) {
       }
 
       try {
-        await optimizeImageFile(inputPath, { mimeType: file.mimetype });
+        const result = await optimizeImageFile(inputPath, { mimeType: file.mimetype });
+        if (result.changed && result.newPath) {
+          file.path = result.newPath;
+          file.filename = path.basename(result.newPath);
+        }
       } catch {
         // Keep original file if optimization fails for any reason.
       }
