@@ -12,7 +12,7 @@
 
 body {
   margin: 0;
-  padding-top: 192px;
+  padding-top: 150px;
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text-main);
   background: var(--white);
@@ -66,7 +66,7 @@ html {
   position: relative;
   width: 100%;
   flex: 0 0 100%;
-  height: clamp(260px, 28vw, 380px);
+  height: clamp(234px, 25.2vw, 342px);
   background: transparent;
   overflow: hidden;
 }
@@ -1128,6 +1128,16 @@ html {
   align-content: start;
 }
 
+.home-google-reviews-list-wrap {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.home-google-reviews-scroll-hint {
+  display: none;
+}
+
 @media (max-width: 600px) {
   .home-google-reviews-list {
     display: flex;
@@ -1136,8 +1146,6 @@ html {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding-bottom: 4px;
-    mask-image: linear-gradient(to right, #000 85%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, #000 85%, transparent 100%);
   }
   .home-google-reviews-list::-webkit-scrollbar {
     display: none;
@@ -1148,6 +1156,34 @@ html {
     flex-shrink: 0;
     scroll-snap-align: start;
   }
+  .home-google-reviews-scroll-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 36px;
+    z-index: 2;
+    background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%);
+    color: #3366cc;
+    animation: reviewScrollPulse 1.8s ease-in-out infinite;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .home-google-reviews-scroll-hint svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+@keyframes reviewScrollPulse {
+  0%, 100% { opacity: 1; transform: translateX(0); }
+  50% { opacity: 0.5; transform: translateX(4px); }
 }
 
 .home-google-review-card {
@@ -1225,11 +1261,12 @@ html {
 @media (max-width: 860px) {
   .home-banners-slide {
     height: auto;
+    aspect-ratio: 8 / 9;
   }
 
   .home-banners-slide img {
     width: 100%;
-    height: auto;
+    height: 100%;
     object-fit: contain;
   }
 
@@ -1539,11 +1576,11 @@ html {
 }
 
 .site-header.header-hidden {
-  transform: translateY(-158px);
+  transform: translateY(-130px);
 }
 
 .header-inner {
-  min-height: 100px;
+  min-height: 72px;
   display: grid;
   grid-template-columns: 198px minmax(140px, 174px) minmax(460px, 1fr) 280px;
   align-items: center;
@@ -1569,10 +1606,10 @@ html {
 
 .logo-image {
   display: block;
-  width: 185px;
+  width: 170px;
   max-width: 100%;
   height: auto;
-  max-height: 60px;
+  max-height: 50px;
   object-fit: contain;
 }
 
@@ -2324,7 +2361,7 @@ html {
   background: var(--surface-gray);
   border-bottom: 1px solid var(--surface-gray);
   position: fixed;
-  top: 134px;
+  top: 106px;
   left: 0;
   right: 0;
   width: 100%;
@@ -2334,11 +2371,11 @@ html {
 }
 
 .nav-bar-hidden {
-  transform: translateY(-158px);
+  transform: translateY(-130px);
 }
 
 .nav-inner {
-  min-height: 58px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -14089,7 +14126,7 @@ main h1 {
   .delivery-map-label.zone-18 { left: 42.06%; top: 70.02%; }
   .delivery-map-label.zone-19 { left: 37.51%; top: 61.31%; }
   .delivery-map-label.zone-20 { left: 33.23%; top: 53.5%; }
-  .delivery-map-label.zone-21 { left: 27.78%; top: 45.11%; }
+  .delivery-map-label.zone-21 { left: 29.78%; top: 45.11%; }
   .delivery-map-label.zone-22 { left: 37.24%; top: 41.33%; }
   .delivery-map-label.zone-23 { left: 33%; top: 36.96%; }
   .delivery-map-label.zone-24 { left: 37.8%; top: 35.05%; }

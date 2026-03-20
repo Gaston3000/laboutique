@@ -1042,6 +1042,7 @@ function App() {
   const cartDrawerPromoInputRef = useRef(null);
   const addressInputRef = useRef(null);
   const addressDebounceRef = useRef(null);
+  const reviewsListRef = useRef(null);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const hasProcessedInitialProductQueryRef = useRef(false);
   const previousActiveSectionRef = useRef(activeSection);
@@ -7694,29 +7695,44 @@ function App() {
                       </a>
                     </div>
 
-                    <div className="home-google-reviews-list">
-                      {HOME_GOOGLE_REVIEWS.map((review) => (
-                        <article
-                          key={`${review.author}-${review.when}`}
-                          className="home-google-review-card"
-                        >
-                          <header className="home-google-review-head">
-                            <div className="home-google-review-author">
-                              <span className="home-google-review-avatar" aria-hidden="true">
-                                {review.author.charAt(0).toUpperCase()}
-                              </span>
-                              <strong>{review.author}</strong>
-                            </div>
-                            <span>{review.when}</span>
-                          </header>
+                    <div className="home-google-reviews-list-wrap">
+                      <div className="home-google-reviews-list" ref={reviewsListRef}>
+                        {HOME_GOOGLE_REVIEWS.map((review) => (
+                          <article
+                            key={`${review.author}-${review.when}`}
+                            className="home-google-review-card"
+                          >
+                            <header className="home-google-review-head">
+                              <div className="home-google-review-author">
+                                <span className="home-google-review-avatar" aria-hidden="true">
+                                  {review.author.charAt(0).toUpperCase()}
+                                </span>
+                                <strong>{review.author}</strong>
+                              </div>
+                              <span>{review.when}</span>
+                            </header>
 
-                          <p className="home-google-review-stars" aria-label={`${review.rating} de 5`}>
-                            {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
-                          </p>
+                            <p className="home-google-review-stars" aria-label={`${review.rating} de 5`}>
+                              {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                            </p>
 
-                          <p>{review.text}</p>
-                        </article>
-                      ))}
+                            <p>{review.text}</p>
+                          </article>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        className="home-google-reviews-scroll-hint"
+                        aria-label="Ver más reseñas"
+                        onClick={() => {
+                          const el = reviewsListRef.current;
+                          if (el) el.scrollBy({ left: 200, behavior: 'smooth' });
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </section>

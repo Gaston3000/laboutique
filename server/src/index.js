@@ -1,6 +1,8 @@
+import compression from "compression";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import helmet from "helmet";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrapDatabase } from "./bootstrap.js";
@@ -27,6 +29,19 @@ dotenv.config({ path: path.join(__dirname, "../.env") });
 const app = express();
 const port = process.env.PORT || 4000;
 
+// Gzip/deflate compression – reduces response size ~60-80%
+app.use(compression());
+
+// Security headers (HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
+app.use(
+  helmet({
+    // Allow cross-origin requests for images/fonts loaded by the SPA
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    // Disable CSP for now – the SPA injects inline scripts (JSON-LD, analytics)
+    contentSecurityPolicy: false
+  })
+);
+
 app.use(
   cors({
     credentials: true,
@@ -52,7 +67,15 @@ app.use(
   })
 );
 app.use(express.json());
-app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
+// Static uploads with long-term cache (images rarely change, URL includes unique name)
+app.use(
+  "/uploads",
+  express.static(path.resolve(process.cwd(), "uploads"), {
+    maxAge: "30d",
+    immutable: true,
+    etag: true
+  })
+);
 
 app.get("/", (_req, res) => {
   res.json({
@@ -89,6 +112,11 @@ function getPublicSiteBaseUrl() {
 
   return "http://localhost:5173";
 }
+
+// Google Search Console verification file
+app.get("/googlee7e466e36a84516f.html", (_req, res) => {
+  res.type("text/html").send("google-site-verification: googlee7e466e36a84516f.html");
+});
 
 app.get("/robots.txt", (_req, res) => {
   const siteBaseUrl = getPublicSiteBaseUrl();
