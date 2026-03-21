@@ -66,6 +66,7 @@ const LoginModal = lazy(() => import("./components/LoginModal"));
 const SmartOrderPanel = lazy(() => import("./components/SmartOrderPanel"));
 const WelcomeDiscountModal = lazy(() => import("./components/WelcomeDiscountModal"));
 
+import AddressSelector from "./components/AddressSelector";
 import BrandsCarousel from "./components/BrandsCarousel";
 import HomeBanners from "./components/HomeBanners";
 import PromoStrip from "./components/PromoStrip";
@@ -4692,20 +4693,11 @@ function App() {
 
       <nav className={`nav-bar${showHeader ? "" : " nav-bar-hidden"}`}>
         <div className="container nav-inner">
-          <button
-            type="button"
-            className="shipping-cta-btn"
-            aria-label="Elegí tu zona de envío"
-            onClick={handleOpenMyAddress}
-          >
-            <span className="shipping-cta-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z" />
-                <circle cx="12" cy="10" r="2.6" />
-              </svg>
-            </span>
-            <span>{shippingButtonLabel}</span>
-          </button>
+          <AddressSelector
+            shippingAddressLabel={shippingAddressLabel}
+            user={auth.user}
+            onOpenMyAddress={handleOpenMyAddress}
+          />
 
           <ul className="primary-nav nav-shortcuts" aria-label="Accesos rápidos">
             {isAdmin ? (
