@@ -300,6 +300,7 @@ function getBrandLogoPath(brandName) {
   const specialCases = {
     "pato purific": "pato",
     "mr muscle": "mrmuscle",
+    "mr musculo": "mrmuscle",
     "media naranja": "medianaranja",
   };
   

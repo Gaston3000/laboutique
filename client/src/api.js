@@ -717,14 +717,17 @@ export async function fetchSalesByBrand(token) {
   return data;
 }
 
-export async function fetchAdminAnalytics(token, period = "30d") {
+export async function fetchAdminAnalytics(token, periodOrRange = "30d") {
   const params = new URLSearchParams();
 
-  if (typeof period === "number" && Number.isFinite(period)) {
-    const safeDays = Math.max(1, Math.min(180, Number(period)));
+  if (periodOrRange && typeof periodOrRange === "object" && periodOrRange.from && periodOrRange.to) {
+    params.set("from", new Date(periodOrRange.from).toISOString());
+    params.set("to", new Date(periodOrRange.to).toISOString());
+  } else if (typeof periodOrRange === "number" && Number.isFinite(periodOrRange)) {
+    const safeDays = Math.max(1, Math.min(180, Number(periodOrRange)));
     params.set("days", String(safeDays));
   } else {
-    const normalizedPeriod = String(period || "30d").trim().toLowerCase();
+    const normalizedPeriod = String(periodOrRange || "30d").trim().toLowerCase();
     params.set("period", normalizedPeriod || "30d");
   }
 

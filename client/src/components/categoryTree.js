@@ -111,6 +111,7 @@ export const categoryTree = [
       "Lysoform",
       "Magistral",
       "Make",
+      "Mr Músculo",
       "OFF!",
       "Pato Purific",
       "Poett",

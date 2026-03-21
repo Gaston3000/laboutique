@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { categoryTree } from "./categoryTree";
 import TicketsPanel from "./TicketsPanel";
+import AnalyticsDatePicker from "./AnalyticsDatePicker";
 
 function flattenCategoryNames(nodes, output = []) {
   for (const node of nodes) {
@@ -1458,6 +1459,7 @@ export default function AdminPanel({
   const [selectedCategoryProductIds, setSelectedCategoryProductIds] = useState([]);
   const [isSavingCategoryProducts, setIsSavingCategoryProducts] = useState(false);
   const [analyticsPeriod, setAnalyticsPeriod] = useState("30d");
+  const [analyticsDateRange, setAnalyticsDateRange] = useState(null);
   const [isReloadingAnalytics, setIsReloadingAnalytics] = useState(false);
   const [removingCategoryProductId, setRemovingCategoryProductId] = useState(null);
   const [categoryRemovalUndo, setCategoryRemovalUndo] = useState(null);
@@ -1468,8 +1470,13 @@ export default function AdminPanel({
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [productVisibilityFilter, setProductVisibilityFilter] = useState("all");
   const [inventoryDraftById, setInventoryDraftById] = useState({});
+  const [inventoryPriceDraftById, setInventoryPriceDraftById] = useState({});
   const [inventorySavingById, setInventorySavingById] = useState({});
   const [inventoryErrorsById, setInventoryErrorsById] = useState({});
+  const [inventorySelectedIds, setInventorySelectedIds] = useState(new Set());
+  const [inventoryBulkSaving, setInventoryBulkSaving] = useState(false);
+  const [bulkPriceValue, setBulkPriceValue] = useState("");
+  const [bulkStockValue, setBulkStockValue] = useState("");
   const [isInventoryFiltersOpen, setIsInventoryFiltersOpen] = useState(false);
   const [inventoryStockFilter, setInventoryStockFilter] = useState("all");
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState("all");
@@ -3344,13 +3351,34 @@ export default function AdminPanel({
     });
   }
 
-  function buildInventoryPayload(product, nextStock) {
+  function handleInventoryPriceDraftChange(productId, value) {
+    if (!/^\d*\.?\d{0,2}$/.test(value)) {
+      return;
+    }
+
+    setInventoryPriceDraftById((current) => ({
+      ...current,
+      [productId]: value
+    }));
+
+    setInventoryErrorsById((current) => {
+      if (!current[productId]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[productId];
+      return next;
+    });
+  }
+
+  function buildInventoryPayload(product, nextStock, nextPrice) {
     return {
       name: product.name || "",
       shortDescription: product.shortDescription || "",
       longDescription: product.longDescription || "",
       brand: product.brand || "",
-      price: Number(product.price ?? 0),
+      price: nextPrice,
       stock: nextStock,
       lowStockThreshold: Number(product.lowStockThreshold ?? 10),
       isVisible: product.isVisible !== false,
@@ -3402,7 +3430,25 @@ export default function AdminPanel({
       return;
     }
 
-    if (nextStock === Number(product.stock ?? 0)) {
+    const priceDraftValue = inventoryPriceDraftById[product.id];
+    const normalizedPriceDraft = typeof priceDraftValue === "string" && priceDraftValue !== ""
+      ? priceDraftValue
+      : String(product.price ?? 0);
+
+    const nextPrice = Number(normalizedPriceDraft);
+
+    if (!Number.isFinite(nextPrice) || nextPrice < 0) {
+      setInventoryErrorsById((current) => ({
+        ...current,
+        [product.id]: "Ingresá un precio válido (mayor o igual a 0)."
+      }));
+      return;
+    }
+
+    const stockChanged = nextStock !== Number(product.stock ?? 0);
+    const priceChanged = nextPrice !== Number(product.price ?? 0);
+
+    if (!stockChanged && !priceChanged) {
       return;
     }
 
@@ -3418,10 +3464,14 @@ export default function AdminPanel({
     });
 
     try {
-      await onUpdate(product.id, buildInventoryPayload(product, nextStock));
+      await onUpdate(product.id, buildInventoryPayload(product, nextStock, nextPrice));
       setInventoryDraftById((current) => ({
         ...current,
         [product.id]: String(nextStock)
+      }));
+      setInventoryPriceDraftById((current) => ({
+        ...current,
+        [product.id]: String(nextPrice)
       }));
     } catch (error) {
       setInventoryErrorsById((current) => ({
@@ -3435,6 +3485,67 @@ export default function AdminPanel({
         return next;
       });
     }
+  }
+
+  function handleInventoryToggleSelect(productId) {
+    setInventorySelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  }
+
+  function handleInventoryToggleAll() {
+    setInventorySelectedIds((current) => {
+      if (current.size === filteredInventoryProducts.length && filteredInventoryProducts.length > 0) {
+        return new Set();
+      }
+      return new Set(filteredInventoryProducts.map((p) => p.id));
+    });
+  }
+
+  async function handleInventoryBulkSave() {
+    const bulkPrice = bulkPriceValue.trim();
+    const bulkStock = bulkStockValue.trim();
+
+    if (bulkPrice && /^\d+\.?\d{0,2}$/.test(bulkPrice) && Number.isFinite(Number(bulkPrice)) && Number(bulkPrice) >= 0) {
+      setInventoryPriceDraftById((current) => {
+        const next = { ...current };
+        for (const productId of inventorySelectedIds) {
+          next[productId] = bulkPrice;
+        }
+        return next;
+      });
+    }
+
+    if (bulkStock && /^\d+$/.test(bulkStock) && Number.isInteger(Number(bulkStock)) && Number(bulkStock) >= 0) {
+      setInventoryDraftById((current) => {
+        const next = { ...current };
+        for (const productId of inventorySelectedIds) {
+          next[productId] = bulkStock;
+        }
+        return next;
+      });
+    }
+
+    await new Promise((r) => setTimeout(r, 0));
+
+    const selectedProducts = filteredInventoryProducts.filter((p) => inventorySelectedIds.has(p.id));
+
+    setInventoryBulkSaving(true);
+
+    for (const product of selectedProducts) {
+      await handleInventorySave(product);
+    }
+
+    setInventoryBulkSaving(false);
+    setInventorySelectedIds(new Set());
+    setBulkPriceValue("");
+    setBulkStockValue("");
   }
 
   function getProductPrimaryImage(product) {
@@ -3854,14 +3965,18 @@ export default function AdminPanel({
     return map;
   }, [analyticsWeekdayHeatmap]);
 
-  async function handleAnalyticsReload(period = analyticsPeriod) {
+  async function handleAnalyticsReload(periodOrRange = analyticsPeriod) {
     if (!onReloadAnalytics) {
       return;
     }
 
     setIsReloadingAnalytics(true);
     try {
-      await onReloadAnalytics(period);
+      if (periodOrRange && typeof periodOrRange === "object" && periodOrRange.from) {
+        await onReloadAnalytics({ from: periodOrRange.from, to: periodOrRange.to });
+      } else {
+        await onReloadAnalytics(periodOrRange);
+      }
     } finally {
       setIsReloadingAnalytics(false);
     }
@@ -4700,12 +4815,113 @@ export default function AdminPanel({
               )}
             </div>
 
+            {inventorySelectedIds.size > 0 && (
+              <div className="admin-inventory-bulk-bar">
+                <div className="admin-inventory-bulk-header">
+                  <div className="admin-inventory-bulk-badge">
+                    <span className="admin-inventory-bulk-badge-count">{inventorySelectedIds.size}</span>
+                    <span>producto{inventorySelectedIds.size !== 1 ? "s" : ""} seleccionado{inventorySelectedIds.size !== 1 ? "s" : ""}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="admin-inventory-bulk-dismiss"
+                    onClick={() => { setInventorySelectedIds(new Set()); setBulkPriceValue(""); setBulkStockValue(""); }}
+                    disabled={inventoryBulkSaving}
+                    aria-label="Cancelar selecci\u00f3n"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+
+                <div className="admin-inventory-bulk-actions">
+                  <div className="admin-inventory-bulk-card">
+                    <div className="admin-inventory-bulk-card-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <div className="admin-inventory-bulk-card-body">
+                      <span className="admin-inventory-bulk-card-label">Cambiar precio a</span>
+                      <div className="admin-inventory-bulk-input-group">
+                        <span className="admin-inventory-bulk-prefix">$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="admin-inventory-bulk-input"
+                          placeholder="1500"
+                          value={bulkPriceValue}
+                          onChange={(e) => { if (/^\d*\.?\d{0,2}$/.test(e.target.value)) setBulkPriceValue(e.target.value); }}
+                          disabled={inventoryBulkSaving}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="admin-inventory-bulk-card">
+                    <div className="admin-inventory-bulk-card-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                    </div>
+                    <div className="admin-inventory-bulk-card-body">
+                      <span className="admin-inventory-bulk-card-label">Cambiar inventario a</span>
+                      <div className="admin-inventory-bulk-input-group">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className="admin-inventory-bulk-input admin-inventory-bulk-input-solo"
+                          placeholder="20"
+                          value={bulkStockValue}
+                          onChange={(e) => { if (/^\d*$/.test(e.target.value)) setBulkStockValue(e.target.value); }}
+                          disabled={inventoryBulkSaving}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="admin-inventory-bulk-footer">
+                  <button
+                    type="button"
+                    className="admin-inventory-bulk-save-btn"
+                    disabled={inventoryBulkSaving}
+                    onClick={handleInventoryBulkSave}
+                  >
+                    {inventoryBulkSaving ? (
+                      <>
+                        <svg className="admin-inventory-bulk-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4m0 12v4m-7.07-15.07 2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/></svg>
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        Guardar seleccionados
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-inventory-bulk-cancel-btn"
+                    onClick={() => { setInventorySelectedIds(new Set()); setBulkPriceValue(""); setBulkStockValue(""); }}
+                    disabled={inventoryBulkSaving}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="admin-table-wrap admin-products-table-wrap">
               <table className="admin-table admin-products-table admin-inventory-table">
                 <thead>
                   <tr>
+                    <th className="admin-inventory-checkbox-col">
+                      <input
+                        type="checkbox"
+                        checked={filteredInventoryProducts.length > 0 && inventorySelectedIds.size === filteredInventoryProducts.length}
+                        onChange={handleInventoryToggleAll}
+                        aria-label="Seleccionar todos"
+                      />
+                    </th>
                     <th>Producto</th>
                     <th>Marca</th>
+                    <th>Precio</th>
                     <th>Inventario</th>
                     <th>Guardar</th>
                   </tr>
@@ -4716,7 +4932,15 @@ export default function AdminPanel({
                     const rowError = inventoryErrorsById[product.id];
 
                     return (
-                      <tr key={`inventory-${product.id}`}>
+                      <tr key={`inventory-${product.id}`} className={inventorySelectedIds.has(product.id) ? "admin-inventory-row-selected" : ""}>
+                        <td className="admin-inventory-checkbox-col">
+                          <input
+                            type="checkbox"
+                            checked={inventorySelectedIds.has(product.id)}
+                            onChange={() => handleInventoryToggleSelect(product.id)}
+                            aria-label={`Seleccionar ${product.name}`}
+                          />
+                        </td>
                         <td>
                           <div className="admin-product-cell">
                             <img
@@ -4729,6 +4953,27 @@ export default function AdminPanel({
                           </div>
                         </td>
                         <td>{product.brand || "-"}</td>
+                        <td>
+                          <div className="admin-inventory-stock-control admin-inventory-price-control">
+                            <span className="admin-inventory-price-prefix">$</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              min="0"
+                              className="admin-inventory-stock-input admin-inventory-price-input"
+                              value={inventoryPriceDraftById[product.id] ?? String(product.price ?? 0)}
+                              onChange={(event) => handleInventoryPriceDraftChange(product.id, event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  handleInventorySave(product);
+                                }
+                              }}
+                              disabled={isSaving}
+                              aria-label={`Precio de ${product.name}`}
+                            />
+                          </div>
+                        </td>
                         <td>
                           <div className="admin-inventory-stock-control">
                             <input
@@ -4765,7 +5010,7 @@ export default function AdminPanel({
                   })}
                   {!filteredInventoryProducts.length && (
                     <tr>
-                      <td colSpan={4}>No hay productos que coincidan con la búsqueda o filtros.</td>
+                      <td colSpan={6}>No hay productos que coincidan con la búsqueda o filtros.</td>
                     </tr>
                   )}
                 </tbody>
@@ -6145,29 +6390,33 @@ export default function AdminPanel({
             <div className="admin-analytics-toolbar">
               <label className="admin-analytics-toolbar-field">
                 <span>Rango</span>
-                <select
+                <AnalyticsDatePicker
                   value={analyticsPeriod}
-                  onChange={async (event) => {
-                    const nextPeriod = String(event.target.value || "30d");
-                    setAnalyticsPeriod(nextPeriod);
-                    await handleAnalyticsReload(nextPeriod);
-                  }}
                   disabled={isAnalyticsLoading || isReloadingAnalytics}
-                >
-                  <option value="today">Hoy</option>
-                  <option value="yesterday">Ayer</option>
-                  <option value="7d">Últimos 7 días</option>
-                  <option value="14d">Últimos 14 días</option>
-                  <option value="30d">Últimos 30 días</option>
-                  <option value="60d">Últimos 60 días</option>
-                  <option value="90d">Últimos 90 días</option>
-                </select>
+                  onChange={async (selection) => {
+                    if (selection.preset) {
+                      setAnalyticsPeriod(selection.preset);
+                      setAnalyticsDateRange(null);
+                      await handleAnalyticsReload(selection.preset);
+                    } else {
+                      setAnalyticsPeriod(null);
+                      setAnalyticsDateRange({ from: selection.from, to: selection.to });
+                      await handleAnalyticsReload({ from: selection.from, to: selection.to });
+                    }
+                  }}
+                />
               </label>
 
               <button
                 type="button"
                 className="admin-inventory-filter-btn"
-                onClick={() => handleAnalyticsReload(analyticsPeriod)}
+                onClick={() => {
+                  if (analyticsDateRange) {
+                    handleAnalyticsReload(analyticsDateRange);
+                  } else {
+                    handleAnalyticsReload(analyticsPeriod);
+                  }
+                }}
                 disabled={isAnalyticsLoading || isReloadingAnalytics}
               >
                 {isAnalyticsLoading || isReloadingAnalytics ? "Actualizando..." : "Actualizar métricas"}
@@ -6424,6 +6673,16 @@ export default function AdminPanel({
                 <section className="admin-analytics-card">
                   <h3>Mapa semanal (día/hora)</h3>
                   <div className="admin-analytics-heatmap">
+                    <div className="admin-analytics-heatmap-row admin-analytics-heatmap-header">
+                      <span className="admin-analytics-heatmap-day" />
+                      <div className="admin-analytics-heatmap-hours">
+                        {Array.from({ length: 24 }, (_, h) => (
+                          <span key={`h-label-${h}`} className="admin-analytics-heatmap-hour-label">
+                            {h}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                     {Array.from({ length: 7 }, (_, index) => index + 1).map((weekday) => (
                       <div key={`weekday-${weekday}`} className="admin-analytics-heatmap-row">
                         <span className="admin-analytics-heatmap-day">{weekdayLabel(weekday)}</span>

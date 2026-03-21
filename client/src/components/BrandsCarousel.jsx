@@ -10,7 +10,7 @@ const BRANDS = [
   { name: "Harpic", logo: "harpic.webp", category: "Harpic" },
   { name: "Lysoform", logo: "lysoform.webp", category: "Lysoform" },
   { name: "Magistral", logo: "magistral.webp", category: "Magistral" },
-  { name: "Mr Muscle", logo: "mrmuscle.webp", category: "Mr Muscle" },
+  { name: "Mr Músculo", logo: "mrmuscle.webp", category: "Mr Músculo" },
   { name: "OFF!", logo: "off.webp", category: "OFF!" },
   { name: "Poett", logo: "poett.webp", category: "Poett" },
   { name: "Raid", logo: "raid.webp", category: "Raid" },

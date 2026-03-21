@@ -6332,7 +6332,21 @@ html {
 
 .admin-analytics-heatmap {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.admin-analytics-heatmap-hour-label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: rgba(45, 45, 45, 0.38);
+  text-align: center;
+  line-height: 1;
+}
+
+.admin-analytics-heatmap-header {
+  align-items: end;
+  margin-bottom: 2px;
 }
 
 .admin-analytics-heatmap-row {
@@ -7692,6 +7706,295 @@ html {
   margin: 0;
   color: #dc2626;
   font-size: 0.82rem;
+}
+
+.admin-inventory-checkbox-col {
+  width: 40px;
+  text-align: center;
+}
+
+.admin-inventory-checkbox-col input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  accent-color: var(--blue);
+}
+
+.admin-inventory-row-selected {
+  background: rgba(24, 119, 242, 0.06);
+}
+
+.admin-inventory-bulk-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, rgba(24, 119, 242, 0.06) 0%, rgba(99, 102, 241, 0.06) 100%);
+  border: 1px solid rgba(24, 119, 242, 0.18);
+  border-radius: 14px;
+  margin-bottom: 14px;
+  font-size: 0.92rem;
+  box-shadow: 0 2px 12px rgba(24, 119, 242, 0.06);
+  animation: bulkBarSlideIn 0.25s ease-out;
+}
+
+@keyframes bulkBarSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-inventory-bulk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-inventory-bulk-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--dark);
+}
+
+.admin-inventory-bulk-badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 8px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.admin-inventory-bulk-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.admin-inventory-bulk-dismiss:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--dark);
+}
+
+.admin-inventory-bulk-dismiss:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+
+.admin-inventory-bulk-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-inventory-bulk-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--white);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 14px 16px;
+  flex: 1;
+  min-width: 240px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.admin-inventory-bulk-card:hover {
+  border-color: rgba(24, 119, 242, 0.22);
+  box-shadow: 0 2px 8px rgba(24, 119, 242, 0.08);
+}
+
+.admin-inventory-bulk-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(24, 119, 242, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+  color: var(--blue);
+  flex-shrink: 0;
+}
+
+.admin-inventory-bulk-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.admin-inventory-bulk-card-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-inventory-bulk-input-group {
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.admin-inventory-bulk-input-group:focus-within {
+  border-color: rgba(24, 119, 242, 0.5);
+  box-shadow: 0 0 0 3px rgba(24, 119, 242, 0.1);
+}
+
+.admin-inventory-bulk-prefix {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 10px;
+  background: #f5f6f8;
+  font-weight: 700;
+  color: #888;
+  user-select: none;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.admin-inventory-bulk-input {
+  min-height: 40px;
+  border: none;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 500;
+  width: 100px;
+  flex: 1;
+  background: transparent;
+  border-radius: 0 10px 10px 0;
+}
+
+.admin-inventory-bulk-input:focus {
+  outline: none;
+}
+
+.admin-inventory-bulk-input-solo {
+  border-radius: 10px;
+}
+
+.admin-inventory-bulk-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.admin-inventory-bulk-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: var(--blue);
+  color: var(--white);
+  transition: background 0.15s, transform 0.1s;
+  box-shadow: 0 2px 8px rgba(24, 119, 242, 0.2);
+}
+
+.admin-inventory-bulk-save-btn:hover:not(:disabled) {
+  background: #1565d8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(24, 119, 242, 0.28);
+}
+
+.admin-inventory-bulk-save-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.admin-inventory-bulk-save-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@keyframes bulkSpinner {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.admin-inventory-bulk-spinner {
+  animation: bulkSpinner 0.8s linear infinite;
+}
+
+.admin-inventory-bulk-cancel-btn {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: var(--white);
+  color: #555;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.admin-inventory-bulk-cancel-btn:hover:not(:disabled) {
+  background: #f5f6f8;
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+.admin-inventory-bulk-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.admin-inventory-price-control {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  max-width: 180px;
+}
+
+.admin-inventory-price-prefix {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 10px;
+  background: var(--surface-gray);
+  border: 1px solid rgba(45, 45, 45, 0.2);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  font-weight: 600;
+  color: #555;
+  user-select: none;
+}
+
+.admin-inventory-price-input {
+  border-radius: 0 8px 8px 0 !important;
 }
 
 .admin-product-cell {
@@ -11481,9 +11784,7 @@ main h1 {
 }
 
 .card-favorite-btn::after {
-  top: calc(100% + 8px);
-  bottom: auto;
-  right: 0;
+  display: none;
 }
 
 .detail-favorite-btn {

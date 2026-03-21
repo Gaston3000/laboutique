@@ -114,8 +114,33 @@ function addDays(dateValue, amount) {
   return date;
 }
 
-function resolveAnalyticsRange(periodInput, daysInput) {
+function resolveAnalyticsRange(periodInput, daysInput, fromInput, toInput) {
   const now = new Date();
+
+  if (fromInput && toInput) {
+    const parsedFrom = new Date(fromInput);
+    const parsedTo = new Date(toInput);
+
+    if (!Number.isNaN(parsedFrom.getTime()) && !Number.isNaN(parsedTo.getTime())) {
+      const from = parsedFrom < parsedTo ? parsedFrom : parsedTo;
+      const to = parsedFrom < parsedTo ? parsedTo : parsedFrom;
+      const maxAllowed = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const safeTo = to > maxAllowed ? maxAllowed : to;
+      const diffMs = safeTo.getTime() - from.getTime();
+      const days = Math.max(1, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+      const previousFrom = new Date(from.getTime() - diffMs);
+
+      return {
+        period: "custom",
+        days,
+        from,
+        to: safeTo,
+        previousFrom,
+        previousTo: from
+      };
+    }
+  }
+
   const period = String(periodInput || "").trim().toLowerCase();
 
   if (period === "today" || period === "hoy") {
@@ -1023,7 +1048,7 @@ adminRouter.get("/reports/sales-by-product", requireAuth, requireAdmin, async (_
 });
 
 adminRouter.get("/analytics", requireAuth, requireAdmin, async (req, res) => {
-  const range = resolveAnalyticsRange(req.query?.period, req.query?.days);
+  const range = resolveAnalyticsRange(req.query?.period, req.query?.days, req.query?.from, req.query?.to);
   const {
     period,
     days,

@@ -6753,12 +6753,23 @@ function App() {
                     <h3>¡Comprá Mejor con Estos Beneficios!</h3>
                     <ul>
                       <li>✔ Envío gratis en CABA y Gran Buenos Aires a partir de $50.000 ARS</li>
-                      <li>✔ Entrega rápida: recibí tu pedido dentro de los 3 días hábiles</li>
+                      <li>✔ Comprá hoy y recibilo mañana*</li>
                       <li>✔ Promociones semanales exclusivas para miembros</li>
                     </ul>
-                    <p>
-                      🏷️ Hacete miembro de La Boutique de la Limpieza - <a href="#">Clic aquí</a>
+                    <p style={{ fontSize: "0.78rem", color: "rgba(45,45,45,0.55)", margin: "0" }}>
+                      * Válido para compras realizadas de lunes a viernes. Entregas en CABA y Gran Buenos Aires.
                     </p>
+                    {!auth.user && (
+                      <p>
+                        🏷️ Hacete miembro de La Boutique de la Limpieza -{" "}
+                        <a
+                          href="#"
+                          onClick={(e) => { e.preventDefault(); openLoginModal("register"); }}
+                        >
+                          Clic aquí
+                        </a>
+                      </p>
+                    )}
                   </div>
 
                   <div className="product-info-accordion">
