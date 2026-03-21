@@ -27,6 +27,7 @@ const STATUS_EVENT_MAP = {
 // Status → admin notification message
 const ADMIN_MESSAGES = {
   ORDER_CREATED: (o) => `Nuevo pedido #${o.id} de ${o.customer_name} por $${Number(o.total_ars).toLocaleString("es-AR")}`,
+  CASH_ORDER_RECEIVED: (o) => `Pedido #${o.id} contra entrega de ${o.customer_name} por $${Number(o.total_ars).toLocaleString("es-AR")}`,
   PAYMENT_APPROVED: (o) => `Pago aprobado para pedido #${o.id} — ${o.customer_name}`,
   ORDER_CONFIRMED: (o) => `Pedido #${o.id} confirmado — ${o.customer_name}`,
   ORDER_PROCESSING: (o) => `Preparando pedido #${o.id} — ${o.customer_name}`,
@@ -38,7 +39,8 @@ const ADMIN_MESSAGES = {
 
 // Status → user email template builder
 const USER_EMAIL_MAP = {
-  ORDER_CREATED: tpl.orderCreated,
+  // ORDER_CREATED: no customer email for MP orders (they get it on PAYMENT_APPROVED)
+  CASH_ORDER_RECEIVED: tpl.cashOrderReceived,
   PAYMENT_APPROVED: tpl.paymentApproved,
   ORDER_CONFIRMED: tpl.orderConfirmed,
   ORDER_PROCESSING: tpl.orderProcessing,
@@ -49,7 +51,7 @@ const USER_EMAIL_MAP = {
 };
 
 // Events that also send an email to admins
-const ADMIN_EMAIL_EVENTS = new Set(["ORDER_CREATED"]);
+const ADMIN_EMAIL_EVENTS = new Set(["ORDER_CREATED", "CASH_ORDER_RECEIVED"]);
 
 /**
  * Load full order details needed for emails.
@@ -59,6 +61,7 @@ async function loadOrderDetails(orderId) {
     `SELECT o.id, o.customer_name, o.customer_phone, o.customer_address,
             o.contact_email, o.total_ars, o.shipping_cost_ars, o.discount_ars,
             o.promo_code, o.shipping_zone, o.shipping_method, o.status,
+            o.payment_status, o.payment_method,
             o.tracking_number, o.fulfillment_service
      FROM orders o
      WHERE o.id = $1`,
@@ -99,6 +102,8 @@ async function loadOrderDetails(orderId) {
     shippingMethod: order.shipping_method || "shipping",
     trackingNumber: order.tracking_number,
     carrier: order.fulfillment_service,
+    paymentStatus: order.payment_status,
+    paymentMethod: order.payment_method,
     items,
     _raw: order,
   };
@@ -146,11 +151,12 @@ async function createAdminNotification(orderId, eventType, message) {
  * @param {object}  [opts]     – optional overrides
  * @param {boolean} [opts.skipDbUpdate]   – true when the DB was already updated (e.g. webhook)
  * @param {boolean} [opts.skipEmail]      – true to suppress email sending
+ * @param {boolean} [opts.isCashOrder]    – true for cash-on-delivery orders
  * @param {string}  [opts.trackingNumber] – include tracking number for shipped status
  * @returns {Promise<{order: object, event: string}>}
  */
 export async function handleOrderStatusChange(orderId, newStatus, opts = {}) {
-  const { skipDbUpdate = false, skipEmail = false, trackingNumber } = opts;
+  const { skipDbUpdate = false, skipEmail = false, isCashOrder = false, trackingNumber } = opts;
 
   // 1. Update DB if not already done
   if (!skipDbUpdate) {
@@ -173,8 +179,14 @@ export async function handleOrderStatusChange(orderId, newStatus, opts = {}) {
   }
 
   // 2. Determine event type
-  const eventType = STATUS_EVENT_MAP[newStatus];
+  //    For cash-on-delivery orders created with status "nuevo" → CASH_ORDER_RECEIVED
+  //    For MP orders created with status "nuevo" → ORDER_CREATED (admin only, no customer email)
+  let eventType = STATUS_EVENT_MAP[newStatus];
   if (!eventType) return { order: null, event: null };
+
+  if (eventType === "ORDER_CREATED" && isCashOrder) {
+    eventType = "CASH_ORDER_RECEIVED";
+  }
 
   // 3. Load full order details
   const details = await loadOrderDetails(orderId);
@@ -195,6 +207,7 @@ export async function handleOrderStatusChange(orderId, newStatus, opts = {}) {
   }
 
   // 5. Send user email (if not already sent and not skipped)
+  //    ORDER_CREATED has no user template → customer only gets emailed on PAYMENT_APPROVED or CASH_ORDER_RECEIVED
   if (!skipEmail && details.contactEmail) {
     const templateBuilder = USER_EMAIL_MAP[eventType];
     if (templateBuilder) {

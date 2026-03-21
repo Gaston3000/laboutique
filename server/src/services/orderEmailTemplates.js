@@ -132,20 +132,57 @@ export function orderCreated(d) {
   };
 }
 
-/** PAYMENT_APPROVED — "Pago confirmado" (to user) */
+/** PAYMENT_APPROVED — "Tu pedido fue recibido" (to user, delivery-type aware) */
 export function paymentApproved(d) {
+  const isPickup = (d.shippingMethod || "").toLowerCase() === "pickup" || (d.shippingZone || "").toLowerCase() === "pickup";
+  const deliveryMsg = isPickup
+    ? "Recibimos tu pedido y tu pago fue confirmado. <strong>Te avisaremos cuando esté listo para retirar.</strong>"
+    : "Recibimos tu pedido y tu pago fue confirmado. <strong>Te avisaremos cuando sea despachado.</strong>";
+  const deliveryBadge = isPickup
+    ? `<div style="background:#f5f3ff;border:2px solid #8b5cf6;border-radius:8px;padding:16px;margin:20px 0;text-align:center;">
+        <p style="margin:0;font-weight:600;color:#5b21b6;">🏪 Retiro en tienda</p>
+        <p style="margin:6px 0 0;color:#6b7280;font-size:14px;">Te avisaremos cuando tu pedido esté listo. Presentá tu DNI y número de pedido <strong>#${d.orderId}</strong>.</p>
+      </div>`
+    : (d.deliveryAddress ? `<div style="background:#eff6ff;border:2px solid #93c5fd;border-radius:8px;padding:16px;margin:20px 0;">
+        <p style="margin:0;font-weight:600;color:#1e40af;">🚚 Envío a domicilio</p>
+        <p style="margin:6px 0 0;color:#374151;font-size:14px;">${escapeHtml(d.deliveryAddress)}</p>
+      </div>` : "");
   const body = `
-    ${headerBlock("✅", "¡Pago Confirmado!", `Pedido #${d.orderId}`, "linear-gradient(135deg, #059669 0%, #10b981 100%)")}
+    ${headerBlock("✅", "¡Tu Pedido Fue Recibido!", `Pedido #${d.orderId}`, "linear-gradient(135deg, #059669 0%, #10b981 100%)")}
     <tr><td style="padding:40px 30px;">
       <p style="font-size:16px;color:#333;">Hola <strong>${escapeHtml(d.customerName)}</strong>,</p>
-      <p style="color:#666;line-height:1.6;">Tu pago por el pedido <strong>#${d.orderId}</strong> fue aprobado exitosamente. Estamos procesando tu pedido.</p>
+      <p style="color:#666;line-height:1.6;">${deliveryMsg}</p>
+      ${deliveryBadge}
       ${itemsTable(d.items)}
       ${orderSummaryBlock(d)}
       ${ctaButton("Ver mi pedido", `${CLIENT_URL}/?checkout=success&order=${d.orderId}`)}
     </td></tr>
     ${footerBlock()}`;
   return {
-    subject: `✅ Pago confirmado - Pedido #${d.orderId} - La Boutique`,
+    subject: `✅ Tu pedido #${d.orderId} fue recibido - La Boutique`,
+    html: wrapLayout(body),
+  };
+}
+
+/** CASH_ORDER_RECEIVED — "Pedido recibido - Pago pendiente" (pago contra entrega) */
+export function cashOrderReceived(d) {
+  const body = `
+    ${headerBlock("🛒", "Pedido Recibido - Pago Pendiente", `Pedido #${d.orderId}`, "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)")}
+    <tr><td style="padding:40px 30px;">
+      <p style="font-size:16px;color:#333;">Hola <strong>${escapeHtml(d.customerName)}</strong>,</p>
+      <p style="color:#666;line-height:1.6;">Recibimos tu pedido <strong>#${d.orderId}</strong>. El pago se realizará contra entrega.</p>
+      <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:8px;padding:16px;margin:20px 0;text-align:center;">
+        <p style="margin:0;font-weight:600;color:#92400e;">💰 Pago contra entrega</p>
+        <p style="margin:6px 0 0;color:#78350f;font-size:14px;">Abonarás <strong>${fmtMoney(d.totalArs)} ARS</strong> al momento de recibir tu pedido.</p>
+      </div>
+      ${d.deliveryAddress ? `<h2 style="margin:30px 0 15px 0;font-size:18px;border-bottom:2px solid #e5e7eb;padding-bottom:10px;">📍 Dirección de Entrega</h2><p style="padding:15px;background:#f9fafb;border-radius:6px;color:#374151;line-height:1.6;">${escapeHtml(d.deliveryAddress)}</p>` : ""}
+      ${itemsTable(d.items)}
+      ${orderSummaryBlock(d)}
+      ${ctaButton("Ver mi pedido", `${CLIENT_URL}/?checkout=success&order=${d.orderId}`)}
+    </td></tr>
+    ${footerBlock()}`;
+  return {
+    subject: `🛒 Pedido #${d.orderId} recibido - Pago pendiente - La Boutique`,
     html: wrapLayout(body),
   };
 }

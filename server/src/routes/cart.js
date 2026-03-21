@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { db, query } from "../db.js";
 import { handleOrderStatusChange } from "../services/notificationService.js";
@@ -582,6 +583,9 @@ cartRouter.post("/checkout", async (req, res) => {
   const customerNote = normalizeText(req.body?.customerNote) || null;
   const shippingZone = normalizeText(req.body?.shippingZone).toLowerCase() || null;
   const promoCode = normalizeText(req.body?.promoCode).toUpperCase() || null;
+  const rawPaymentMethod = normalizeText(req.body?.paymentMethod).toLowerCase() || "mercadopago";
+  const paymentMethod = ["mercadopago", "cash"].includes(rawPaymentMethod) ? rawPaymentMethod : "mercadopago";
+  const isCashOrder = paymentMethod === "cash";
   const authUser = await resolveOptionalAuthUser(req);
   const contactEmail = normalizeText(authUser?.email || req.body?.contactEmail).toLowerCase() || null;
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
@@ -768,6 +772,8 @@ cartRouter.post("/checkout", async (req, res) => {
     const shippingCost = shippingData?.shippingCost ?? 0;
     const total = toMoneyAmount(subtotal + shippingCost - discountAmount);
 
+    const shippingMethod = shippingZone === "pickup" ? "pickup" : "shipping";
+
     const orderResult = await client.query(
       `INSERT INTO orders (
         customer_name,
@@ -776,6 +782,7 @@ cartRouter.post("/checkout", async (req, res) => {
         contact_email,
         customer_note,
         shipping_zone,
+        shipping_method,
         shipping_city,
         shipping_state,
         shipping_postal_code,
@@ -783,10 +790,12 @@ cartRouter.post("/checkout", async (req, res) => {
         discount_ars,
         promo_code,
         total_ars,
+        payment_method,
+        payment_status,
         status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'nuevo')
-      RETURNING id, customer_name, customer_phone, customer_address, shipping_zone, shipping_cost_ars, total_ars, status, created_at`,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'nuevo')
+      RETURNING id, customer_name, customer_phone, customer_address, shipping_zone, shipping_method, shipping_cost_ars, total_ars, status, created_at`,
       [
         customerName,
         customerPhone,
@@ -794,13 +803,16 @@ cartRouter.post("/checkout", async (req, res) => {
         contactEmail,
         customerNote,
         shippingData?.zone ?? null,
+        shippingMethod,
         shippingCity,
         shippingState,
         shippingPostalCode,
         shippingCost,
         discountAmount,
         promotionResult.code,
-        total
+        total,
+        paymentMethod,
+        isCashOrder ? "pending_cash" : "pending"
       ]
     );
 
@@ -848,40 +860,48 @@ cartRouter.post("/checkout", async (req, res) => {
 
     let mercadoPago = null;
 
-    try {
-      mercadoPago = await createMercadoPagoPreference(req, {
-        orderId: order.id,
-        customerName,
-        orderLines,
-        shippingCost,
-        discount: discountAmount,
-        total
+    // Cash-on-delivery: skip MercadoPago, fire CASH_ORDER_RECEIVED notification
+    // MercadoPago: create preference, fire ORDER_CREATED (admin-only, no customer email)
+    if (isCashOrder) {
+      handleOrderStatusChange(order.id, "nuevo", { skipDbUpdate: true, isCashOrder: true }).catch((err) => {
+        console.error(`⚠️ Error en notificación CASH_ORDER_RECEIVED para pedido #${order.id}:`, err.message);
       });
-    } catch (paymentError) {
-      await query(
-        `UPDATE orders
-         SET purchase_extra_data = $1,
-             raw_payload = COALESCE(raw_payload, '{}'::jsonb) || $2::jsonb
-         WHERE id = $3`,
-        [
-          "mercadopago_preference_error",
-          JSON.stringify({
-            mercadopago_error: {
-              message: paymentError.message,
-              created_at: new Date().toISOString()
-            }
-          }),
-          order.id
-        ]
-      );
+    } else {
+      try {
+        mercadoPago = await createMercadoPagoPreference(req, {
+          orderId: order.id,
+          customerName,
+          orderLines,
+          shippingCost,
+          discount: discountAmount,
+          total
+        });
+      } catch (paymentError) {
+        await query(
+          `UPDATE orders
+           SET purchase_extra_data = $1,
+               raw_payload = COALESCE(raw_payload, '{}'::jsonb) || $2::jsonb
+           WHERE id = $3`,
+          [
+            "mercadopago_preference_error",
+            JSON.stringify({
+              mercadopago_error: {
+                message: paymentError.message,
+                created_at: new Date().toISOString()
+              }
+            }),
+            order.id
+          ]
+        );
 
-      throw paymentError;
+        throw paymentError;
+      }
+
+      // Fire ORDER_CREATED notification — admin only, no customer email
+      handleOrderStatusChange(order.id, "nuevo", { skipDbUpdate: true }).catch((err) => {
+        console.error(`⚠️ Error en notificación ORDER_CREATED para pedido #${order.id}:`, err.message);
+      });
     }
-
-    // Fire ORDER_CREATED notification (non-blocking)
-    handleOrderStatusChange(order.id, "nuevo", { skipDbUpdate: true }).catch((err) => {
-      console.error(`⚠️ Error en notificación ORDER_CREATED para pedido #${order.id}:`, err.message);
-    });
 
     return res.status(201).json({
       item: {
@@ -890,10 +910,12 @@ cartRouter.post("/checkout", async (req, res) => {
         customerPhone: order.customer_phone,
         customerAddress: order.customer_address,
         shippingZone: order.shipping_zone,
+        shippingMethod: order.shipping_method,
         shippingCost: Number(order.shipping_cost_ars),
         subtotal: Number(subtotal.toFixed(2)),
         discount: discountAmount,
         total: Number(order.total_ars),
+        paymentMethod: paymentMethod,
         status: order.status,
         createdAt: order.created_at,
         lines: orderLines.map((line) => ({
@@ -917,7 +939,47 @@ cartRouter.post("/checkout", async (req, res) => {
   }
 });
 
+/**
+ * Validate MercadoPago webhook signature (HMAC-SHA256).
+ * Returns true if valid or if no secret is configured (graceful degradation).
+ */
+function validateMercadoPagoSignature(req) {
+  const mpWebhookSecret = String(process.env.MERCADOPAGO_WEBHOOK_SECRET || "").trim();
+  if (!mpWebhookSecret) {
+    // No secret configured — log warning but allow (for dev/sandbox)
+    console.warn("⚠️ MERCADOPAGO_WEBHOOK_SECRET no configurado — webhook sin validación de firma");
+    return true;
+  }
+
+  const xSignature = req.headers["x-signature"];
+  const xRequestId = req.headers["x-request-id"];
+  if (!xSignature || !xRequestId) return false;
+
+  // Parse x-signature: "ts=...,v1=..."
+  const parts = {};
+  for (const part of xSignature.split(",")) {
+    const [key, value] = part.split("=", 2);
+    if (key && value) parts[key.trim()] = value.trim();
+  }
+
+  const ts = parts.ts;
+  const v1 = parts.v1;
+  if (!ts || !v1) return false;
+
+  const dataId = String(req.query?.["data.id"] || req.body?.data?.id || "");
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+  const hmac = crypto.createHmac("sha256", mpWebhookSecret).update(manifest).digest("hex");
+
+  return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(v1));
+}
+
 cartRouter.post("/mercadopago/webhook", async (req, res) => {
+  // Validate webhook signature
+  if (!validateMercadoPagoSignature(req)) {
+    console.warn("⚠️ Webhook MercadoPago con firma inválida rechazado");
+    return res.status(401).json({ error: "Invalid signature" });
+  }
+
   const type = String(req.body?.type || req.query?.type || "").trim().toLowerCase();
   const action = String(req.body?.action || "").trim().toLowerCase();
   const dataId = Number(req.body?.data?.id || req.query?.["data.id"] || req.query?.id);
@@ -983,7 +1045,8 @@ cartRouter.post("/mercadopago/webhook", async (req, res) => {
     }
 
     return res.status(200).json({ ok: true, orderStatus: mappedOrderStatus });
-  } catch {
+  } catch (err) {
+    console.error(`⚠️ Error procesando webhook MercadoPago (payment ${dataId}):`, err.message);
     return res.status(200).json({ ok: true, ignored: true });
   }
 });
