@@ -207,6 +207,11 @@ export default function SiteHeader({
     onMyAccountClick?.();
   }
 
+  function handleOrdersClick() {
+    setIsAccountMenuOpen(false);
+    onOrdersClick?.();
+  }
+
   function handleSearchChange(event) {
     const nextValue = event.target.value;
     onSearchInputChange(nextValue);
@@ -434,6 +439,20 @@ export default function SiteHeader({
                     </svg>
                   </span>
                   <span>Mi cuenta</span>
+                </button>
+                <button
+                  className="account-dropdown-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={handleOrdersClick}
+                >
+                  <span className="account-dropdown-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="4" y="2" width="16" height="20" rx="2" />
+                      <path d="M8 7h8M8 11h8M8 15h5" />
+                    </svg>
+                  </span>
+                  <span>Mis pedidos</span>
                 </button>
                 <button
                   className="account-dropdown-item is-danger"

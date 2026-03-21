@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import TicketsPanel from "./TicketsPanel";
+import { forgotPassword, resetPassword } from "../api";
 
 const ACCOUNT_TABS = [
   { key: "cuenta", label: "Mi cuenta" },
   { key: "pedidos", label: "Mis pedidos" },
   { key: "direccion", label: "Mi dirección" },
-  { key: "billetera", label: "Billetera" },
-  { key: "favoritos", label: "Productos favoritos" },
-  { key: "suscripciones", label: "Mis suscripciones" },
-  { key: "tickets", label: "Tickets" }
+  { key: "favoritos", label: "Productos favoritos", mobileOnly: true }
 ];
 
 const SHIPPING_ZONES = [
@@ -217,6 +215,28 @@ function getProfileInitials({ firstName, lastName, displayName, email }) {
   return `${first}${second}`.toUpperCase() || "MC";
 }
 
+const ORDER_STATUS_LABELS = {
+  nuevo: "Nuevo",
+  pago: "Pagado",
+  confirmado: "Confirmado",
+  preparado: "Preparado",
+  listo_retiro: "Listo para retiro",
+  enviado: "Enviado",
+  entregado: "Entregado",
+  cancelado: "Cancelado"
+};
+
+const ORDER_STATUS_TONE = {
+  nuevo: "pending",
+  pago: "success",
+  confirmado: "success",
+  preparado: "info",
+  listo_retiro: "info",
+  enviado: "info",
+  entregado: "done",
+  cancelado: "danger"
+};
+
 export default function AccountPanel({
   user,
   initialTab = "cuenta",
@@ -224,6 +244,8 @@ export default function AccountPanel({
   totalItems,
   cartSubtotal,
   orders,
+  myOrders = [],
+  isMyOrdersLoading = false,
   tickets = [],
   ticketMetrics = { open: 0, inProgress: 0, testing: 0, closed: 0 },
   isTicketsLoading = false,
@@ -235,7 +257,8 @@ export default function AccountPanel({
   onAddTicketComment,
   onReloadTickets,
   onSaveProfile,
-  onSaveAddress
+  onSaveAddress,
+  onRepeatOrder
 }) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [saveMessage, setSaveMessage] = useState("");
@@ -245,6 +268,18 @@ export default function AccountPanel({
   const [addressError, setAddressError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+
+  // ── Password change flow ──
+  const [pwStep, setPwStep] = useState("idle"); // idle | sent | done
+  const [pwCode, setPwCode] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwSuccess, setPwSuccess] = useState("");
+  const [showPwNew, setShowPwNew] = useState(false);
+  const [showPwConfirm, setShowPwConfirm] = useState(false);
+
   const nameParts = useMemo(() => splitName(user?.name), [user?.name]);
 
   const [form, setForm] = useState(() => createProfileForm(user));
@@ -317,10 +352,15 @@ export default function AccountPanel({
     setProfileError("");
 
     try {
+      const capitalize = (str) => {
+        const s = String(str || "").trim();
+        return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+      };
+
       const payload = {
         displayName: String(form.displayName || "").trim(),
-        firstName: String(form.firstName || "").trim(),
-        lastName: String(form.lastName || "").trim(),
+        firstName: capitalize(form.firstName),
+        lastName: capitalize(form.lastName),
         profileTitle: String(form.profileTitle || "").trim(),
         phone: String(form.phone || "").trim(),
         avatarUrl: String(form.avatarUrl || "").trim()
@@ -495,6 +535,53 @@ export default function AccountPanel({
     }
   }
 
+  async function handleRequestPasswordChange() {
+    setPwError("");
+    setPwLoading(true);
+    try {
+      await forgotPassword(user.email);
+      setPwStep("sent");
+    } catch (err) {
+      setPwError(err.message || "No se pudo enviar el código.");
+    } finally {
+      setPwLoading(false);
+    }
+  }
+
+  async function handleConfirmPasswordChange() {
+    setPwError("");
+    const code = pwCode.trim();
+    const newPw = pwNew.trim();
+    const confirmPw = pwConfirm.trim();
+
+    if (!code) { setPwError("Ingresá el código que recibiste."); return; }
+    if (newPw.length < 6) { setPwError("La contraseña debe tener al menos 6 caracteres."); return; }
+    if (newPw !== confirmPw) { setPwError("Las contraseñas no coinciden."); return; }
+
+    setPwLoading(true);
+    try {
+      await resetPassword(user.email, code, newPw);
+      setPwStep("done");
+      setPwSuccess("Contraseña actualizada correctamente.");
+      setPwCode("");
+      setPwNew("");
+      setPwConfirm("");
+    } catch (err) {
+      setPwError(err.message || "No se pudo actualizar la contraseña.");
+    } finally {
+      setPwLoading(false);
+    }
+  }
+
+  function handleCancelPasswordChange() {
+    setPwStep("idle");
+    setPwCode("");
+    setPwNew("");
+    setPwConfirm("");
+    setPwError("");
+    setPwSuccess("");
+  }
+
   const avatarSource = String(form.avatarUrl || user?.avatarUrl || "").trim();
   const avatarInitials = getProfileInitials({
     firstName: form.firstName,
@@ -594,7 +681,7 @@ export default function AccountPanel({
           <button
             key={tab.key}
             type="button"
-            className={`account-tab ${activeTab === tab.key ? "is-active" : ""}`}
+            className={`account-tab ${activeTab === tab.key ? "is-active" : ""} ${tab.mobileOnly ? "account-tab-mobile-only" : ""}`}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
@@ -602,18 +689,7 @@ export default function AccountPanel({
         ))}
       </nav>
 
-      {activeTab === "tickets" ? (
-        <TicketsPanel
-          mode="client"
-          tickets={tickets}
-          metrics={ticketMetrics}
-          currentUser={user}
-          onCreateTicket={onCreateTicket}
-          onAddComment={onAddTicketComment}
-          onReloadTickets={onReloadTickets}
-          isLoading={isTicketsLoading}
-        />
-      ) : activeTab === "direccion" ? (
+      {activeTab === "direccion" ? (
         <article className="account-card account-address-card">
           <h2>Mi dirección</h2>
           <p>Completá tus datos de entrega. Solo realizamos envíos en zonas habilitadas de Buenos Aires y CABA.</p>
@@ -775,6 +851,86 @@ export default function AccountPanel({
             Cobertura habilitada en 39 zonas: CABA, GBA norte/oeste/sur, La Plata y alrededores, y corredores seleccionados.
           </p>
         </article>
+      ) : activeTab === "pedidos" ? (
+        <article className="account-card account-orders-card">
+          <div className="account-orders-header">
+            <h2>Mis pedidos</h2>
+            {isMyOrdersLoading && <span className="account-orders-loading">Cargando…</span>}
+          </div>
+
+          {!isMyOrdersLoading && myOrders.length === 0 && (
+            <div className="account-empty-state">
+              <span className="account-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 48 48" fill="none">
+                  <rect x="10" y="6" width="28" height="36" rx="4" stroke="currentColor" strokeWidth="2.2"/>
+                  <path d="M18 16h12M18 23h12M18 30h7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </span>
+              <p>Todavía no realizaste pedidos.</p>
+              <button type="button" onClick={onGoHome}>Ver productos</button>
+            </div>
+          )}
+
+          {!isMyOrdersLoading && myOrders.length > 0 && (
+            <ul className="account-orders-list">
+              {myOrders.map((order) => {
+                const statusLabel = ORDER_STATUS_LABELS[order.status] || order.status;
+                const statusTone = ORDER_STATUS_TONE[order.status] || "pending";
+                const dateStr = order.createdAt
+                  ? new Date(order.createdAt).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })
+                  : "";
+                const canRepeat = order.lines.some((l) => l.productId);
+
+                return (
+                  <li key={order.id} className="account-order-item">
+                    <div className="account-order-top">
+                      <div className="account-order-meta">
+                        <span className="account-order-number">Pedido #{order.wixOrderNumber || order.id}</span>
+                        <span className="account-order-date">{dateStr}</span>
+                      </div>
+                      <span className={`account-order-badge tone-${statusTone}`}>{statusLabel}</span>
+                    </div>
+
+                    <ul className="account-order-lines">
+                      {order.lines.map((line, idx) => (
+                        <li key={idx} className="account-order-line">
+                          <span className="account-order-line-name">
+                            {line.productName}
+                            {line.variant ? <em> · {line.variant}</em> : null}
+                          </span>
+                          <span className="account-order-line-qty">×{line.quantity}</span>
+                          <span className="account-order-line-price">${Number(line.unitPrice).toLocaleString("es-AR")} c/u</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="account-order-bottom">
+                      <span className="account-order-total">
+                        Total: <strong>${Number(order.total).toLocaleString("es-AR")} ARS</strong>
+                      </span>
+                      {canRepeat && (
+                        <button
+                          type="button"
+                          className="account-order-repeat-btn"
+                          onClick={() => onRepeatOrder?.(order)}
+                          title="Agregar estos productos al carrito"
+                        >
+                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 4h9a3 3 0 0 1 3 3v.5" />
+                            <path d="M14 10.5l2-2 2 2" />
+                            <path d="M16 16H7a3 3 0 0 1-3-3v-.5" />
+                            <path d="M6 9.5l-2 2-2-2" />
+                          </svg>
+                          Repetir pedido
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </article>
       ) : activeTab !== "cuenta" ? (
         <article className="account-card">
           <h2>{ACCOUNT_TABS.find((tab) => tab.key === activeTab)?.label}</h2>
@@ -842,27 +998,6 @@ export default function AccountPanel({
               </div>
 
               <div className="account-input-group">
-                <label htmlFor="account-profile-title">Título</label>
-                <input
-                  id="account-profile-title"
-                  type="text"
-                  value={form.profileTitle}
-                  onChange={(event) => handleFieldChange("profileTitle", event.target.value)}
-                />
-              </div>
-
-              <div className="account-input-group">
-                <label htmlFor="account-avatar-url">URL de imagen</label>
-                <input
-                  id="account-avatar-url"
-                  type="url"
-                  placeholder="https://..."
-                  value={form.avatarUrl}
-                  onChange={(event) => handleFieldChange("avatarUrl", event.target.value)}
-                />
-              </div>
-
-              <div className="account-input-group">
                 <label htmlFor="account-first-name">Nombre</label>
                 <input
                   id="account-first-name"
@@ -912,57 +1047,100 @@ export default function AccountPanel({
                 <span>Email de inicio de sesión</span>
                 <strong>{user.email || "Sin email"}</strong>
               </div>
-              <div>
-                <span>Contraseña</span>
-                <strong>{maskedPassword}</strong>
+
+              <div className="account-password-row">
+                <div className="account-password-info">
+                  <span>Contraseña</span>
+                  <strong>{maskedPassword}</strong>
+                </div>
+
+                {pwStep === "idle" && (
+                  <button
+                    type="button"
+                    className="account-pw-trigger-btn"
+                    onClick={handleRequestPasswordChange}
+                    disabled={pwLoading}
+                  >
+                    {pwLoading ? "Enviando..." : "Cambiar contraseña"}
+                  </button>
+                )}
               </div>
+
+              {pwStep === "sent" && (
+                <div className="account-pw-form">
+                  <p className="account-pw-hint">
+                    Te enviamos un código a <strong>{user.email}</strong>. Ingresalo abajo junto con tu nueva contraseña.
+                  </p>
+                  <div className="account-pw-fields">
+                    <div className="account-input-group">
+                      <label htmlFor="pw-code">Código de verificación</label>
+                      <input
+                        id="pw-code"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="Ej: 483920"
+                        value={pwCode}
+                        onChange={(e) => { setPwError(""); setPwCode(e.target.value); }}
+                        autoComplete="one-time-code"
+                      />
+                    </div>
+                    <div className="account-input-group">
+                      <label htmlFor="pw-new">Nueva contraseña</label>
+                      <div className="pw-input-wrap">
+                        <input
+                          id="pw-new"
+                          type={showPwNew ? "text" : "password"}
+                          placeholder="Mínimo 6 caracteres"
+                          value={pwNew}
+                          onChange={(e) => { setPwError(""); setPwNew(e.target.value); }}
+                          autoComplete="new-password"
+                        />
+                        <button type="button" className="pw-eye-btn" onClick={() => setShowPwNew(v => !v)} tabIndex={-1} aria-label={showPwNew ? "Ocultar contraseña" : "Mostrar contraseña"}>
+                          {showPwNew ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="account-input-group">
+                      <label htmlFor="pw-confirm">Repetir contraseña</label>
+                      <div className="pw-input-wrap">
+                        <input
+                          id="pw-confirm"
+                          type={showPwConfirm ? "text" : "password"}
+                          placeholder="Repetí la nueva contraseña"
+                          value={pwConfirm}
+                          onChange={(e) => { setPwError(""); setPwConfirm(e.target.value); }}
+                          autoComplete="new-password"
+                        />
+                        <button type="button" className="pw-eye-btn" onClick={() => setShowPwConfirm(v => !v)} tabIndex={-1} aria-label={showPwConfirm ? "Ocultar contraseña" : "Mostrar contraseña"}>
+                          {showPwConfirm ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  {pwError && <p className="form-error">{pwError}</p>}
+                  <div className="account-pw-actions">
+                    <button type="button" className="ghost-btn" onClick={handleCancelPasswordChange} disabled={pwLoading}>
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={handleConfirmPasswordChange} disabled={pwLoading}>
+                      {pwLoading ? "Guardando..." : "Confirmar nueva contraseña"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {pwStep === "done" && pwSuccess && (
+                <p className="account-save-message">{pwSuccess}</p>
+              )}
             </div>
-          </article>
-
-          <article className="account-card">
-            <h3>Visibilidad y privacidad</h3>
-            <p>Configurá cómo se muestra tu perfil.</p>
-
-            <div className="account-input-group">
-              <label htmlFor="account-visibility">Privacidad del perfil</label>
-              <select
-                id="account-visibility"
-                value={form.profileVisibility}
-                onChange={(event) => handleFieldChange("profileVisibility", event.target.value)}
-              >
-                <option value="visible">Perfil visible para miembros</option>
-                <option value="limited">Visible solo nombre y foto</option>
-                <option value="hidden">Perfil privado</option>
-              </select>
-            </div>
-
-            <button
-              type="button"
-              className="account-collapse"
-              onClick={() => setIsPrivacyOpen((current) => !current)}
-              aria-expanded={isPrivacyOpen}
-            >
-              <span>Privacidad del perfil</span>
-              <span>{isPrivacyOpen ? "−" : "+"}</span>
-            </button>
-            {isPrivacyOpen && (
-              <p className="account-collapse-content">
-                Definí si tus datos de perfil se muestran completos, parcialmente o no se muestran.
-              </p>
-            )}
-
-            <button
-              type="button"
-              className="account-collapse"
-              onClick={() => setIsBlockedOpen((current) => !current)}
-              aria-expanded={isBlockedOpen}
-            >
-              <span>Miembros bloqueados</span>
-              <span>{isBlockedOpen ? "−" : "+"}</span>
-            </button>
-            {isBlockedOpen && (
-              <p className="account-collapse-content">Aún no tenés miembros bloqueados.</p>
-            )}
           </article>
         </>
       )}

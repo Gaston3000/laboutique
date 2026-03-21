@@ -870,8 +870,14 @@ export async function sendPasswordResetEmail(userEmail, { userName, resetCode })
             <h2 style="margin:0 0 16px 0;color:#1f2937;font-size:22px;">Recuperar contraseña</h2>
             <p style="margin:0 0 24px 0;color:#374151;font-size:15px;">Hola <strong>${userName}</strong>, recibimos una solicitud para restablecer tu contraseña.</p>
             <p style="margin:0 0 12px 0;color:#374151;font-size:15px;">Tu código de recuperación es:</p>
-            <div style="background-color:#f3f4f6;border-radius:8px;padding:24px;text-align:center;margin:0 0 24px 0;">
-              <span style="font-size:40px;font-weight:bold;letter-spacing:12px;color:#2563eb;">${resetCode}</span>
+            <div style="background-color:#f3f4f6;border-radius:12px;padding:28px 24px 20px;text-align:center;margin:0 0 16px 0;">
+              <div style="display:inline-flex;align-items:center;gap:10px;background:#ffffff;border:2px solid #2563eb;border-radius:12px;padding:14px 24px;margin-bottom:14px;" title="Clic para seleccionar el código">
+                <span style="-webkit-user-select:all;-moz-user-select:all;user-select:all;font-size:38px;font-weight:900;font-family:'Courier New',Courier,monospace;color:#2563eb;letter-spacing:10px;line-height:1;">${resetCode}</span>
+                <span style="flex-shrink:0;opacity:0.55;">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="13" height="13" rx="2" stroke="#2563eb" stroke-width="2" fill="none"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="#2563eb" stroke-width="2" stroke-linecap="round"/></svg>
+                </span>
+              </div>
+              <p style="margin:0;font-size:12px;color:#9ca3af;">👆 <strong>Un clic</strong> sobre el código lo selecciona · luego <strong>Ctrl+C</strong> para copiar</p>
             </div>
             <div style="background-color:#fef3c7;border-left:4px solid #f59e0b;padding:15px;border-radius:4px;">
               <p style="margin:0 0 8px 0;font-weight:bold;color:#92400e;font-size:15px;">⏱️ Información importante:</p>

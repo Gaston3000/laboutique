@@ -12644,6 +12644,10 @@ main h1 {
   justify-content: flex-start;
 }
 
+.account-tab-mobile-only {
+  display: none;
+}
+
 .account-tabs {
   display: flex;
   align-items: center;
@@ -12741,10 +12745,11 @@ main h1 {
 }
 
 .account-card {
-  border: 1px solid rgba(45, 45, 45, 0.14);
-  border-radius: 12px;
+  border: 1px solid rgba(45, 45, 45, 0.11);
+  border-radius: 14px;
   background: var(--white);
   padding: 18px 18px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 
 .account-card h2,
@@ -12785,10 +12790,10 @@ main h1 {
 
 .account-input-group input,
 .account-input-group select {
-  min-height: 42px;
-  border: 1px solid rgba(45, 45, 45, 0.25);
-  border-radius: 0;
-  padding: 0 10px;
+  min-height: 44px;
+  border: 1px solid rgba(45, 45, 45, 0.22);
+  border-radius: 10px;
+  padding: 0 12px;
   font-size: 0.95rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -12876,6 +12881,153 @@ main h1 {
 .account-login-info strong {
   display: block;
   margin-top: 2px;
+}
+
+/* ── Password change inline ── */
+.account-password-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.account-password-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-pw-trigger-btn {
+  border: 1.5px solid rgba(24, 119, 242, 0.45);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--blue);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  min-height: 38px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.account-pw-trigger-btn:hover {
+  background: rgba(24, 119, 242, 0.08);
+}
+
+.account-pw-trigger-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.account-pw-form {
+  padding-top: 14px;
+  border-top: 1px solid rgba(45, 45, 45, 0.1);
+  display: grid;
+  gap: 12px;
+}
+
+.account-pw-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(45, 45, 45, 0.75);
+}
+
+.account-pw-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.pw-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pw-input-wrap input {
+  width: 100%;
+  padding-right: 44px !important;
+}
+
+.pw-eye-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  padding: 4px;
+  cursor: pointer;
+  color: rgba(45, 45, 45, 0.45);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.18s ease;
+  border-radius: 6px;
+  min-height: unset !important;
+}
+
+.pw-eye-btn:hover {
+  color: var(--blue);
+  background: transparent !important;
+}
+
+.pw-eye-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.account-pw-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.account-pw-actions button {
+  border: 0;
+  border-radius: 10px;
+  min-height: 42px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 0.92rem;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.account-pw-actions button:hover {
+  background: #0f63ce;
+}
+
+.account-pw-actions button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (max-width: 640px) {
+  .account-password-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .account-pw-trigger-btn {
+    width: 100%;
+    min-height: 46px;
+    border-radius: 12px;
+  }
+
+  .account-pw-actions {
+    flex-direction: column;
+  }
+
+  .account-pw-actions button {
+    width: 100%;
+    min-height: 48px;
+    border-radius: 12px;
+  }
 }
 
 .account-actions-inline {
@@ -15910,4 +16062,467 @@ main h1 {
   color: var(--blue);
   box-shadow: inset 0 0 0 1px var(--blue);
   filter: none;
+}
+
+/* ─── Mis pedidos (client orders tab) ─── */
+
+.account-orders-card {
+  padding: 20px 20px 16px;
+}
+
+.account-orders-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.account-orders-header h2 {
+  margin: 0;
+}
+
+.account-orders-loading {
+  font-size: 0.85rem;
+  color: rgba(45, 45, 45, 0.55);
+  font-style: italic;
+}
+
+.account-orders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.account-order-item {
+  border: 1px solid rgba(45, 45, 45, 0.13);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(248, 250, 253, 0.7);
+  transition: box-shadow 0.18s ease;
+}
+
+.account-order-item:hover {
+  box-shadow: 0 2px 12px rgba(24, 119, 242, 0.08);
+}
+
+.account-order-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.account-order-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-order-number {
+  font-weight: 600;
+  font-size: 0.97rem;
+  color: rgba(45, 45, 45, 0.92);
+}
+
+.account-order-date {
+  font-size: 0.82rem;
+  color: rgba(45, 45, 45, 0.55);
+}
+
+/* Status badges */
+.account-order-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.account-order-badge.tone-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.account-order-badge.tone-success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.account-order-badge.tone-info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.account-order-badge.tone-done {
+  background: #f0fdf4;
+  color: #14532d;
+  border: 1px solid #bbf7d0;
+}
+
+.account-order-badge.tone-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Line items */
+.account-order-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid rgba(45, 45, 45, 0.08);
+  padding-top: 8px;
+}
+
+.account-order-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: rgba(45, 45, 45, 0.82);
+}
+
+.account-order-line-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-order-line-name em {
+  font-style: normal;
+  color: rgba(45, 45, 45, 0.55);
+}
+
+.account-order-line-qty {
+  white-space: nowrap;
+  color: rgba(45, 45, 45, 0.6);
+  font-size: 0.82rem;
+}
+
+.account-order-line-price {
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: rgba(45, 45, 45, 0.6);
+}
+
+/* Bottom row: total + repeat button */
+.account-order-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid rgba(45, 45, 45, 0.08);
+}
+
+.account-order-total {
+  font-size: 0.9rem;
+  color: rgba(45, 45, 45, 0.78);
+}
+
+.account-order-total strong {
+  color: rgba(45, 45, 45, 0.92);
+  font-weight: 700;
+}
+
+/* ─── Botón "Repetir pedido" ─── */
+.account-order-repeat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--blue);
+  background: transparent;
+  color: var(--blue);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  white-space: nowrap;
+}
+
+.account-order-repeat-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.account-order-repeat-btn:hover {
+  background: var(--blue);
+  color: var(--white);
+  box-shadow: 0 2px 8px rgba(24, 119, 242, 0.25);
+}
+
+.account-order-repeat-btn:active {
+  transform: scale(0.97);
+}
+
+/* ─── Account Panel — Premium Mobile ──────────────────────────────────── */
+@media (max-width: 640px) {
+
+  .account-tab-mobile-only {
+    display: inline-flex;
+  }
+
+  /* Layout */
+  .account-view {
+    gap: 14px;
+  }
+
+  /* Header */
+  .account-view-header h1 {
+    font-size: 1.65rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .account-top-actions {
+    gap: 8px;
+  }
+
+  .account-top-actions .secondary-btn {
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  /* ── Tabs: pill-chip scroll bar ── */
+  .account-tabs {
+    gap: 6px;
+    padding: 4px 0 12px;
+    border-bottom: 2px solid rgba(45, 45, 45, 0.08);
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .account-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .account-tab {
+    scroll-snap-align: start;
+    font-size: 0.84rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-bottom: none;
+    border-radius: 999px;
+    border: 1.5px solid rgba(45, 45, 45, 0.18);
+    background: transparent;
+    color: rgba(45, 45, 45, 0.75);
+    white-space: nowrap;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  }
+
+  .account-tab.is-active {
+    background: var(--blue);
+    color: #fff;
+    border-color: var(--blue);
+  }
+
+  .account-tab:hover:not(.is-active) {
+    background: rgba(24, 119, 242, 0.08);
+    border-color: rgba(24, 119, 242, 0.35);
+    color: var(--blue);
+  }
+
+  /* ── Cards ── */
+  .account-card {
+    padding: 16px 14px;
+    border-radius: 16px;
+    box-shadow: 0 3px 16px rgba(0, 0, 0, 0.07);
+  }
+
+  .account-card h2 {
+    font-size: 1.25rem;
+  }
+
+  .account-card h3 {
+    font-size: 1.05rem;
+  }
+
+  /* ── Section headline ── */
+  .account-section-headline h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+
+  /* ── Inputs & selects ── */
+  .account-input-group input,
+  .account-input-group select {
+    min-height: 50px;
+    border-radius: 12px;
+    font-size: 1rem;
+    padding: 0 14px;
+  }
+
+  /* ── Avatar card — row layout ── */
+  .account-avatar-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding: 14px;
+  }
+
+  /* ── Action buttons ── */
+  .account-actions-bar button,
+  .account-actions-inline button,
+  .account-empty-state button {
+    min-height: 50px;
+    border-radius: 14px;
+    font-size: 0.96rem;
+  }
+
+  .ghost-btn {
+    min-height: 50px;
+    border-radius: 14px !important;
+  }
+
+  /* ── Collapse rows ── */
+  .account-collapse {
+    min-height: 54px;
+    font-size: 0.95rem;
+  }
+
+  /* ── Login info ── */
+  .account-login-info {
+    gap: 10px;
+  }
+
+  .account-login-info > div {
+    background: rgba(45, 45, 45, 0.03);
+    border: 1px solid rgba(45, 45, 45, 0.1);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+
+  .account-login-info strong {
+    font-size: 0.98rem;
+    margin-top: 3px;
+  }
+
+  /* ── Admin hero ── */
+  .account-admin-hero {
+    padding: 16px 14px;
+    border-radius: 14px;
+  }
+
+  .account-admin-stat {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .account-admin-stat strong {
+    font-size: 1.55rem;
+  }
+
+  /* ── Orders ── */
+  .account-orders-card {
+    padding: 16px 14px 12px;
+  }
+
+  .account-orders-header {
+    margin-bottom: 14px;
+  }
+
+  .account-orders-header h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+  }
+
+  .account-order-item {
+    padding: 14px;
+    border-radius: 14px;
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.07);
+  }
+
+  .account-order-number {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .account-order-date {
+    font-size: 0.84rem;
+  }
+
+  .account-order-line {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .account-order-line-name {
+    white-space: normal;
+    flex-basis: 100%;
+  }
+
+  .account-order-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .account-order-total {
+    font-size: 0.96rem;
+  }
+
+  .account-order-total strong {
+    font-size: 1rem;
+  }
+
+  .account-order-repeat-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  /* ── Address items ── */
+  .account-address-item {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .account-address-item > button {
+    min-height: 46px;
+    border-radius: 12px;
+    width: 100%;
+  }
+
+  /* ── Empty state ── */
+  .account-empty-state {
+    padding: 28px 16px;
+    justify-items: center;
+    text-align: center;
+    border-radius: 16px;
+  }
+
+  .account-empty-icon svg {
+    width: 52px;
+    height: 52px;
+    color: rgba(45, 45, 45, 0.3);
+  }
+
+  .account-empty-state p {
+    font-size: 1rem;
+  }
 }

@@ -26,6 +26,7 @@ import {
   fetchMembers,
   fetchLowStockAlerts,
   fetchOrders,
+  fetchMyOrders,
   fetchTicketMetrics,
   fetchTickets,
   fetchProductVariants,
@@ -922,6 +923,8 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
   const [orders, setOrders] = useState([]);
+  const [myOrders, setMyOrders] = useState([]);
+  const [isMyOrdersLoading, setIsMyOrdersLoading] = useState(false);
   const [serverNotifications, setServerNotifications] = useState([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [shippingRules, setShippingRules] = useState([]);
@@ -1078,6 +1081,18 @@ function App() {
   async function refreshOrders(token) {
     const data = await fetchOrders(token);
     setOrders(data.items || []);
+  }
+
+  async function refreshMyOrders(token) {
+    setIsMyOrdersLoading(true);
+    try {
+      const data = await fetchMyOrders(token);
+      setMyOrders(data.items || []);
+    } catch {
+      setMyOrders([]);
+    } finally {
+      setIsMyOrdersLoading(false);
+    }
   }
 
   async function refreshServerNotifications(token) {
@@ -1419,6 +1434,7 @@ function App() {
       return;
     }
 
+    const isAccountSection = activeSection === "account";
     refreshTicketsData(auth.token, auth.user.role).catch((error) => {
       setTickets([]);
       setTicketMetrics({ open: 0, inProgress: 0, testing: 0, closed: 0 });
@@ -1430,6 +1446,10 @@ function App() {
         setAuthError("Tu sesión venció o es inválida. Volvé a iniciar sesión.");
       }
     });
+
+    if (isAccountSection) {
+      refreshMyOrders(auth.token).catch(() => {});
+    }
   }, [auth.token, auth.user?.id, auth.user?.role, activeSection]);
 
   useEffect(() => {
@@ -3702,6 +3722,38 @@ function App() {
       setAdminMessage("Producto eliminado correctamente");
     } catch (error) {
       setAdminMessage(error.message);
+    }
+  }
+
+  async function handleRepeatOrder(order) {
+    if (!order?.lines?.length) return;
+    const repeatableLines = order.lines.filter((l) => l.productId);
+    if (!repeatableLines.length) return;
+
+    const productMap = new Map((products || []).map((p) => [p.id, p]));
+    let addedCount = 0;
+
+    for (const line of repeatableLines) {
+      const product = productMap.get(line.productId);
+      if (!product) continue;
+      const qty = Number(line.quantity) || 1;
+      if (line.variantId) {
+        const variants = variantsByProduct[product.id];
+        const variant = Array.isArray(variants) ? variants.find((v) => v.id === line.variantId) : null;
+        if (variant) {
+          addVariantToCart(product, variant, qty);
+        } else {
+          addToCart(product, qty);
+        }
+      } else {
+        addToCart(product, qty);
+      }
+      addedCount++;
+    }
+
+    if (addedCount > 0) {
+      setActiveSection("cart");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
@@ -6601,6 +6653,8 @@ function App() {
               totalItems={totalItems}
               cartSubtotal={cartSubtotal}
               orders={orders}
+              myOrders={myOrders}
+              isMyOrdersLoading={isMyOrdersLoading}
               tickets={tickets}
               ticketMetrics={ticketMetrics}
               isTicketsLoading={isTicketsLoading}
@@ -6613,6 +6667,7 @@ function App() {
               onReloadTickets={handleReloadTickets}
               onSaveProfile={handleSaveProfile}
               onSaveAddress={handleSaveAddress}
+              onRepeatOrder={handleRepeatOrder}
             />
           ) : activeSection === "product" && selectedProduct ? (
             <section className="product-detail-view" aria-label="Detalle de producto">

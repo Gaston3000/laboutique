@@ -340,6 +340,20 @@ export async function fetchOrders(token) {
   return data;
 }
 
+export async function fetchMyOrders(token) {
+  const response = await fetch(`${API_URL}/orders/my-orders`, {
+    headers: getAuthHeaders(token)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar tus pedidos");
+  }
+
+  return data;
+}
+
 export async function updateOrderStatus(token, orderId, status, opts = {}) {
   const body = { status };
   if (opts.trackingNumber) body.trackingNumber = opts.trackingNumber;

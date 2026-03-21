@@ -15,6 +15,66 @@ const allowedStatuses = [
   "cancelado"
 ];
 
+ordersRouter.get("/my-orders", requireAuth, async (req, res) => {
+  try {
+    const email = req.user.email;
+
+    const ordersResult = await query(
+      `SELECT o.id, o.wix_order_number, o.customer_name, o.contact_email,
+          total_ars, status, shipping_method, delivery_time,
+          shipping_city, shipping_method, o.created_at
+       FROM orders o
+       WHERE LOWER(o.contact_email) = LOWER($1)
+       ORDER BY o.created_at DESC, o.id DESC
+       LIMIT 50`,
+      [email]
+    );
+
+    const orderIds = ordersResult.rows.map((r) => r.id);
+    let itemsByOrderId = {};
+
+    if (orderIds.length > 0) {
+      const itemsResult = await query(
+        `SELECT order_id, product_id, variant_id, product_name, quantity, unit_price_ars, wix_variant
+         FROM order_items
+         WHERE order_id = ANY($1)
+         ORDER BY order_id ASC, id ASC`,
+        [orderIds]
+      );
+
+      itemsByOrderId = itemsResult.rows.reduce((acc, row) => {
+        if (!acc[row.order_id]) acc[row.order_id] = [];
+        acc[row.order_id].push({
+          productId: row.product_id ? Number(row.product_id) : null,
+          variantId: row.variant_id ? Number(row.variant_id) : null,
+          productName: row.product_name,
+          quantity: Number(row.quantity),
+          unitPrice: Number(row.unit_price_ars),
+          variant: row.wix_variant || null
+        });
+        return acc;
+      }, {});
+    }
+
+    const items = ordersResult.rows.map((row) => ({
+      id: row.id,
+      wixOrderNumber: row.wix_order_number,
+      customerName: row.customer_name,
+      total: Number(row.total_ars),
+      status: row.status,
+      shippingMethod: row.shipping_method,
+      deliveryTime: row.delivery_time,
+      shippingCity: row.shipping_city,
+      createdAt: row.created_at,
+      lines: itemsByOrderId[row.id] || []
+    }));
+
+    return res.json({ items });
+  } catch {
+    return res.status(500).json({ error: "No se pudieron cargar tus pedidos" });
+  }
+});
+
 ordersRouter.get("/", requireAuth, requireAdmin, async (_req, res) => {
   try {
     const ordersResult = await query(
