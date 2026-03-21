@@ -1,4 +1,4 @@
-﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   addTicketComment,
   applyPromotion,
@@ -974,7 +974,8 @@ function App() {
     needsFacturaA: false,
     saveAddress: false,
     shippingMethod: "",
-    shippingZone: "caba"
+    shippingZone: "caba",
+    paymentMethod: "mercadopago"
   });
   const [addressValidationErrors, setAddressValidationErrors] = useState([]);
   const [checkoutMessage, setCheckoutMessage] = useState("");
@@ -1782,6 +1783,38 @@ function App() {
     const shuffled = [...visible].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, 6);
   }, [cart.length, products]);
+
+  const cartViewRecommendations = useMemo(() => {
+    if (!products.length) return { featured: [], byCategory: [], topBrands: [] };
+    const visible = products.filter((p) => p.is_visible !== false && p.stock > 0);
+
+    const shuffled = [...visible].sort(() => Math.random() - 0.5);
+    const featured = shuffled.slice(0, 8);
+
+    const categoryMap = {};
+    visible.forEach((p) => {
+      const cats = Array.isArray(p.categories) ? p.categories : [];
+      const cat = cats[0] || "Otros";
+      if (!categoryMap[cat]) categoryMap[cat] = [];
+      if (categoryMap[cat].length < 4) categoryMap[cat].push(p);
+    });
+    const byCategory = Object.entries(categoryMap)
+      .filter(([, items]) => items.length >= 2)
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, 3)
+      .map(([name, items]) => ({ name, items }));
+
+    const brandCount = {};
+    visible.forEach((p) => {
+      if (p.brand) brandCount[p.brand] = (brandCount[p.brand] || 0) + 1;
+    });
+    const topBrands = Object.entries(brandCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name]) => name);
+
+    return { featured, byCategory, topBrands };
+  }, [products]);
 
   useEffect(() => {
     setAppliedCartPromotion(null);
@@ -3076,6 +3109,10 @@ function App() {
     setRecentSearches((current) => current.filter((item) => normalizeSearchText(item) !== normalizedToRemove));
   }
 
+  function handleClearRecentSearches() {
+    setRecentSearches([]);
+  }
+
   function updateCatalogQuantity(productId, delta, maxQuantity = 99) {
     setCatalogQuantities((current) => {
       const currentValue = Number(current[productId] ?? 1);
@@ -3241,6 +3278,7 @@ function App() {
         customerNote: checkoutForm.notes.trim() || null,
         shippingMethod: checkoutForm.shippingMethod,
         shippingZone,
+        paymentMethod: checkoutForm.shippingMethod === "pickup" ? checkoutForm.paymentMethod : "mercadopago",
         promoCode: appliedCartPromotion?.code || null,
         items: cart.map((item) => ({
           productId: item.id,
@@ -3250,14 +3288,23 @@ function App() {
       };
 
       const result = await checkoutCart(payload, auth.token);
-      const checkoutUrl = String(result?.payment?.checkoutUrl || "").trim();
 
-      if (!checkoutUrl) {
-        throw new Error("No se pudo generar el link de pago con Mercado Pago");
+      if (payload.paymentMethod === "cash") {
+        // Cash on delivery — no MP redirect, show success
+        clearCart();
+        setCheckoutMessage(`¡Pedido #${result?.item?.id} confirmado! Te enviamos un email con los detalles. Abonarás al retirar en el local.`);
+        setActiveSection("home");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        const checkoutUrl = String(result?.payment?.checkoutUrl || "").trim();
+
+        if (!checkoutUrl) {
+          throw new Error("No se pudo generar el link de pago con Mercado Pago");
+        }
+
+        setCheckoutMessage("Redirigiendo a Mercado Pago...");
+        window.location.assign(checkoutUrl);
       }
-
-      setCheckoutMessage("Redirigiendo a Mercado Pago...");
-      window.location.assign(checkoutUrl);
     } catch (error) {
       setCheckoutMessage(error.message);
     } finally {
@@ -4613,12 +4660,15 @@ function App() {
       <PromoStrip />
       <SiteHeader
         totalItems={totalItems}
+        products={products}
         searchValue={searchInput}
         searchSuggestions={searchSuggestions}
         recentSearches={recentSearches}
         onRemoveRecentSearch={handleRemoveRecentSearch}
+        onClearRecentSearches={handleClearRecentSearches}
         onSearchInputChange={setSearchInput}
         onSearchSubmit={handleSearchSubmit}
+        onSelectProduct={openProductPreview}
         user={auth.user}
         onAccountClick={() => openLoginModal("register")}
         onLoginClick={() => openLoginModal("login")}
@@ -5992,7 +6042,181 @@ function App() {
               </div>
 
               {!cart.length ? (
-                <p className="empty-results">Tu carrito está vacío.</p>
+                <div className="cart-view-empty">
+                  {/* Hero empty state */}
+                  <div className="cart-view-empty-hero">
+                    <span className="cart-view-empty-icon" aria-hidden="true">
+                      <svg viewBox="0 0 80 80" width="80" height="80">
+                        <circle cx="40" cy="40" r="38" fill="#eff6ff" stroke="#1877f2" strokeWidth="1.5" opacity=".6"/>
+                        <path fill="#1877f2" opacity=".25" d="M52 50H26c-.4 0-.8-.3-1-.6s-.3-.8-.2-1.1l2.9-7.3L24.8 16H16v-3h10.5c.7 0 1.3.5 1.5 1.3l3 28.5c0 .3 0 .5-.2.7L28.6 48H54z"/>
+                        <path fill="#1877f2" d="M30 57a4 4 0 1 1 0 8 4 4 0 0 1 0-8m0 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m20-2.5a4 4 0 1 1 0 8 4 4 0 0 1 0-8m0 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3"/>
+                        <path fill="none" stroke="#1877f2" strokeWidth="2" strokeLinecap="round" d="M36 30h8m-4-4v8"/>
+                      </svg>
+                    </span>
+                    <h2 className="cart-view-empty-title">Tu carrito está vacío</h2>
+                    <p className="cart-view-empty-sub">Descubrí nuestros productos y armá tu pedido ideal</p>
+
+                    <div className="cart-view-empty-actions">
+                      <button type="button" className="cart-view-empty-cta" onClick={() => setActiveSection("home")}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                        Explorar productos
+                      </button>
+                      <button type="button" className="cart-view-empty-secondary" onClick={() => { setIsSmartOrderOpen(true); }}>
+                        <img src="/fotos/iconos%20general/lineicons--open-ai.svg" alt="" width="18" height="18" />
+                        Pedido Inteligente
+                      </button>
+                      {auth.user && myOrders.length > 0 && (
+                        <button type="button" className="cart-view-empty-secondary cart-view-empty-repeat" onClick={() => { setAccountInitialTab("pedidos"); setActiveSection("account"); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                          <img src="/fotos/iconos%20general/uim--repeat.svg" alt="" width="18" height="18" />
+                          Repetir pedido
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Top brands quick access */}
+                  {cartViewRecommendations.topBrands.length > 0 && (
+                    <section className="cart-view-empty-brands" aria-label="Marcas populares">
+                      <h3 className="cart-view-empty-section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        Marcas populares
+                      </h3>
+                      <div className="cart-view-empty-brand-chips">
+                        {cartViewRecommendations.topBrands.map((brand) => (
+                          <button key={brand} type="button" className="cart-view-empty-brand-chip" onClick={() => { setSearchInput(brand); setSearchTerm(brand); setActiveSection("home"); scrollToPageTop(); }}>
+                            {brand}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Featured products */}
+                  {cartViewRecommendations.featured.length > 0 && (
+                    <section className="cart-view-empty-featured" aria-label="Productos recomendados">
+                      <h3 className="cart-view-empty-section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        Productos recomendados para vos
+                      </h3>
+                      <div className="cart-view-empty-products-grid">
+                        {cartViewRecommendations.featured.map((product) => {
+                          const qty = getCatalogQuantity(product.id);
+                          const stockLimit = getStockLimit(product.stock);
+                          const isQtyAtLimit = stockLimit !== null && qty >= stockLimit;
+                          const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
+                          return (
+                            <article key={product.id} className="product-card" role="button" tabIndex={0} onClick={() => openProductPreview(product)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProductPreview(product); } }}>
+                              <button type="button" className={`favorite-btn card-favorite-btn ${isProductFavorite(product.id) ? "is-active" : ""}`} onClick={(e) => handleToggleFavorite(product, e)} aria-label={isProductFavorite(product.id) ? `Quitar ${product.name} de favoritos` : `Agregar ${product.name} a favoritos`}>
+                                <span aria-hidden="true">★</span>
+                              </button>
+                              <figure className={`product-image-stack${secondaryImageUrl ? " has-hover-image" : ""}`}>
+                                <img className="product-image product-image-primary" src={primaryImageUrl} alt={primaryImageAlt} loading="lazy" />
+                                {secondaryImageUrl && <img className="product-image product-image-secondary" src={secondaryImageUrl} alt={secondaryImageAlt} loading="lazy" />}
+                              </figure>
+                              <div className="product-card-content">
+                                {product.brand && <p className="product-brand">{product.brand}</p>}
+                                <h2 className="product-title">{product.name}</h2>
+                                <p className="product-price">${Number(product.price).toLocaleString("es-AR")} ARS</p>
+                                <div className="product-qty" aria-label={`Cantidad para ${product.name}`}>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, -1); }}>-</button>
+                                  <span>{qty}</span>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, 1, stockLimit ?? 99); }} disabled={isQtyAtLimit}>+</button>
+                                </div>
+                                <button type="button" className="product-add-btn" onClick={(e) => { e.stopPropagation(); addToCart(product, qty); }}>
+                                  <span className="product-add-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                      <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                      <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                                    </svg>
+                                  </span>
+                                  <span>Agregar al carrito</span>
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Products by category */}
+                  {cartViewRecommendations.byCategory.map((group) => (
+                    <section key={group.name} className="cart-view-empty-category-section" aria-label={group.name}>
+                      <div className="cart-view-empty-category-header">
+                        <h3 className="cart-view-empty-section-title">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                          {group.name}
+                        </h3>
+                        <button type="button" className="cart-view-empty-see-all" onClick={() => { handleSelectCategory(group.name); }}>
+                          Ver todos ›
+                        </button>
+                      </div>
+                      <div className="cart-view-empty-products-grid">
+                        {group.items.map((product) => {
+                          const qty = getCatalogQuantity(product.id);
+                          const stockLimit = getStockLimit(product.stock);
+                          const isQtyAtLimit = stockLimit !== null && qty >= stockLimit;
+                          const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
+                          return (
+                            <article key={product.id} className="product-card" role="button" tabIndex={0} onClick={() => openProductPreview(product)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProductPreview(product); } }}>
+                              <button type="button" className={`favorite-btn card-favorite-btn ${isProductFavorite(product.id) ? "is-active" : ""}`} onClick={(e) => handleToggleFavorite(product, e)} aria-label={isProductFavorite(product.id) ? `Quitar ${product.name} de favoritos` : `Agregar ${product.name} a favoritos`}>
+                                <span aria-hidden="true">★</span>
+                              </button>
+                              <figure className={`product-image-stack${secondaryImageUrl ? " has-hover-image" : ""}`}>
+                                <img className="product-image product-image-primary" src={primaryImageUrl} alt={primaryImageAlt} loading="lazy" />
+                                {secondaryImageUrl && <img className="product-image product-image-secondary" src={secondaryImageUrl} alt={secondaryImageAlt} loading="lazy" />}
+                              </figure>
+                              <div className="product-card-content">
+                                {product.brand && <p className="product-brand">{product.brand}</p>}
+                                <h2 className="product-title">{product.name}</h2>
+                                <p className="product-price">${Number(product.price).toLocaleString("es-AR")} ARS</p>
+                                <div className="product-qty" aria-label={`Cantidad para ${product.name}`}>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, -1); }}>-</button>
+                                  <span>{qty}</span>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, 1, stockLimit ?? 99); }} disabled={isQtyAtLimit}>+</button>
+                                </div>
+                                <button type="button" className="product-add-btn" onClick={(e) => { e.stopPropagation(); addToCart(product, qty); }}>
+                                  <span className="product-add-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                      <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                      <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                                    </svg>
+                                  </span>
+                                  <span>Agregar al carrito</span>
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+
+                  {/* Shipping & Trust badges */}
+                  <section className="cart-view-empty-trust" aria-label="Beneficios">
+                    <div className="cart-view-empty-trust-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                      <div>
+                        <strong>Envío gratis</strong>
+                        <span>En compras superiores a $50.000</span>
+                      </div>
+                    </div>
+                    <div className="cart-view-empty-trust-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                      <div>
+                        <strong>Compra segura</strong>
+                        <span>Pagos protegidos con MercadoPago</span>
+                      </div>
+                    </div>
+                    <div className="cart-view-empty-trust-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      <div>
+                        <strong>Retiro en el local</strong>
+                        <span>Sin costo adicional</span>
+                      </div>
+                    </div>
+                  </section>
+                </div>
               ) : (
                 <div className="cart-checkout-layout">
                   <div className="cart-products-panel">
@@ -6086,7 +6310,7 @@ function App() {
                         className="cart-extra-link"
                         onClick={() => setIsCartPromoOpen((current) => !current)}
                       >
-                        <span className="cart-extra-icon" aria-hidden="true">🏷️</span>
+                        <span className="cart-extra-icon" aria-hidden="true"><img src="/fotos/iconos%20general/clarity--tag-solid.svg" alt="" width="18" height="18" /></span>
                         <span>Ingresar código promocional</span>
                       </button>
                       {isCartPromoOpen && (
@@ -6118,7 +6342,7 @@ function App() {
                         className="cart-extra-link"
                         onClick={() => setIsCartNoteOpen((current) => !current)}
                       >
-                        <span className="cart-extra-icon" aria-hidden="true">📝</span>
+                        <span className="cart-extra-icon" aria-hidden="true"><img src="/fotos/iconos%20general/clarity--note-solid.svg" alt="" width="18" height="18" /></span>
                         <span>Agregar una nota</span>
                       </button>
                       {isCartNoteOpen && (
@@ -6203,6 +6427,7 @@ function App() {
                                 ...current,
                                 shippingMethod: selected === "pickup" ? "pickup" : isDelivery ? "delivery" : "",
                                 shippingZone: selected === "delivery-gba" ? "gba" : selected === "delivery-caba" ? "caba" : "",
+                                paymentMethod: selected === "pickup" ? current.paymentMethod : "mercadopago",
                                 street: "",
                                 number: "",
                                 floor: "",
@@ -6265,6 +6490,152 @@ function App() {
                         </p>
                       </aside>
                     </form>
+                  </section>
+                </div>
+              )}
+
+              {/* Recommendations — always visible */}
+              {cartViewRecommendations.featured.length > 0 && (
+                <div className="cart-view-recs-always">
+                  {/* Top brands */}
+                  {cartViewRecommendations.topBrands.length > 0 && (
+                    <section className="cart-view-empty-brands" aria-label="Marcas populares">
+                      <h3 className="cart-view-empty-section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        Marcas populares
+                      </h3>
+                      <div className="cart-view-empty-brand-chips">
+                        {cartViewRecommendations.topBrands.map((brand) => (
+                          <button key={brand} type="button" className="cart-view-empty-brand-chip" onClick={() => { setSearchInput(brand); setSearchTerm(brand); setActiveSection("home"); scrollToPageTop(); }}>
+                            {brand}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Featured products */}
+                  <section className="cart-view-empty-featured" aria-label="Productos recomendados">
+                    <h3 className="cart-view-empty-section-title">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                      {cart.length ? "Completá tu pedido" : "Productos recomendados para vos"}
+                    </h3>
+                    <div className="cart-view-empty-products-grid">
+                      {cartViewRecommendations.featured.map((product) => {
+                        const qty = getCatalogQuantity(product.id);
+                        const stockLimit = getStockLimit(product.stock);
+                        const isQtyAtLimit = stockLimit !== null && qty >= stockLimit;
+                        const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
+                        return (
+                          <article key={product.id} className="product-card" role="button" tabIndex={0} onClick={() => openProductPreview(product)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProductPreview(product); } }}>
+                            <button type="button" className={`favorite-btn card-favorite-btn ${isProductFavorite(product.id) ? "is-active" : ""}`} onClick={(e) => handleToggleFavorite(product, e)} aria-label={isProductFavorite(product.id) ? `Quitar ${product.name} de favoritos` : `Agregar ${product.name} a favoritos`}>
+                              <span aria-hidden="true">★</span>
+                            </button>
+                            <figure className={`product-image-stack${secondaryImageUrl ? " has-hover-image" : ""}`}>
+                              <img className="product-image product-image-primary" src={primaryImageUrl} alt={primaryImageAlt} loading="lazy" />
+                              {secondaryImageUrl && <img className="product-image product-image-secondary" src={secondaryImageUrl} alt={secondaryImageAlt} loading="lazy" />}
+                            </figure>
+                            <div className="product-card-content">
+                              {product.brand && <p className="product-brand">{product.brand}</p>}
+                              <h2 className="product-title">{product.name}</h2>
+                              <p className="product-price">${Number(product.price).toLocaleString("es-AR")} ARS</p>
+                              <div className="product-qty" aria-label={`Cantidad para ${product.name}`}>
+                                <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, -1); }}>-</button>
+                                <span>{qty}</span>
+                                <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, 1, stockLimit ?? 99); }} disabled={isQtyAtLimit}>+</button>
+                              </div>
+                              <button type="button" className="product-add-btn" onClick={(e) => { e.stopPropagation(); addToCart(product, qty); }}>
+                                <span className="product-add-icon" aria-hidden="true">
+                                  <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                    <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                    <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                                  </svg>
+                                </span>
+                                <span>Agregar al carrito</span>
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  {/* By category */}
+                  {cartViewRecommendations.byCategory.map((group) => (
+                    <section key={group.name} className="cart-view-empty-category-section" aria-label={group.name}>
+                      <div className="cart-view-empty-category-header">
+                        <h3 className="cart-view-empty-section-title">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                          {group.name}
+                        </h3>
+                        <button type="button" className="cart-view-empty-see-all" onClick={() => { handleSelectCategory(group.name); }}>
+                          Ver todos ›
+                        </button>
+                      </div>
+                      <div className="cart-view-empty-products-grid">
+                        {group.items.map((product) => {
+                          const qty = getCatalogQuantity(product.id);
+                          const stockLimit = getStockLimit(product.stock);
+                          const isQtyAtLimit = stockLimit !== null && qty >= stockLimit;
+                          const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
+                          return (
+                            <article key={product.id} className="product-card" role="button" tabIndex={0} onClick={() => openProductPreview(product)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProductPreview(product); } }}>
+                              <button type="button" className={`favorite-btn card-favorite-btn ${isProductFavorite(product.id) ? "is-active" : ""}`} onClick={(e) => handleToggleFavorite(product, e)} aria-label={isProductFavorite(product.id) ? `Quitar ${product.name} de favoritos` : `Agregar ${product.name} a favoritos`}>
+                                <span aria-hidden="true">★</span>
+                              </button>
+                              <figure className={`product-image-stack${secondaryImageUrl ? " has-hover-image" : ""}`}>
+                                <img className="product-image product-image-primary" src={primaryImageUrl} alt={primaryImageAlt} loading="lazy" />
+                                {secondaryImageUrl && <img className="product-image product-image-secondary" src={secondaryImageUrl} alt={secondaryImageAlt} loading="lazy" />}
+                              </figure>
+                              <div className="product-card-content">
+                                {product.brand && <p className="product-brand">{product.brand}</p>}
+                                <h2 className="product-title">{product.name}</h2>
+                                <p className="product-price">${Number(product.price).toLocaleString("es-AR")} ARS</p>
+                                <div className="product-qty" aria-label={`Cantidad para ${product.name}`}>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, -1); }}>-</button>
+                                  <span>{qty}</span>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, 1, stockLimit ?? 99); }} disabled={isQtyAtLimit}>+</button>
+                                </div>
+                                <button type="button" className="product-add-btn" onClick={(e) => { e.stopPropagation(); addToCart(product, qty); }}>
+                                  <span className="product-add-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
+                                      <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                                      <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                                    </svg>
+                                  </span>
+                                  <span>Agregar al carrito</span>
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+
+                  {/* Trust badges */}
+                  <section className="cart-view-empty-trust" aria-label="Beneficios">
+                    <div className="cart-view-empty-trust-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                      <div>
+                        <strong>Envío gratis</strong>
+                        <span>En compras superiores a $50.000</span>
+                      </div>
+                    </div>
+                    <div className="cart-view-empty-trust-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                      <div>
+                        <strong>Compra segura</strong>
+                        <span>Pagos protegidos con MercadoPago</span>
+                      </div>
+                    </div>
+                    <div className="cart-view-empty-trust-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      <div>
+                        <strong>Retiro en el local</strong>
+                        <span>Sin costo adicional</span>
+                      </div>
+                    </div>
                   </section>
                 </div>
               )}
@@ -6551,6 +6922,38 @@ function App() {
                         No
                       </label>
                     </fieldset>
+
+                    {checkoutForm.shippingMethod === "pickup" && (
+                      <fieldset className="checkout-radio-group checkout-payment-method-group">
+                        <legend>Método de pago *</legend>
+                        <label className={`checkout-payment-option${checkoutForm.paymentMethod === "mercadopago" ? " is-selected" : ""}`}>
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value="mercadopago"
+                            checked={checkoutForm.paymentMethod === "mercadopago"}
+                            onChange={() => setCheckoutForm((current) => ({ ...current, paymentMethod: "mercadopago" }))}
+                          />
+                          <span className="checkout-payment-option-content">
+                            <strong>Pagar con Mercado Pago</strong>
+                            <span>Tarjeta, transferencia o efectivo en punto de pago</span>
+                          </span>
+                        </label>
+                        <label className={`checkout-payment-option${checkoutForm.paymentMethod === "cash" ? " is-selected" : ""}`}>
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value="cash"
+                            checked={checkoutForm.paymentMethod === "cash"}
+                            onChange={() => setCheckoutForm((current) => ({ ...current, paymentMethod: "cash" }))}
+                          />
+                          <span className="checkout-payment-option-content">
+                            <strong>Pagar al retirar</strong>
+                            <span>Aboná cuando retires tu pedido en el local</span>
+                          </span>
+                        </label>
+                      </fieldset>
+                    )}
 
                     {checkoutForm.shippingMethod === "delivery" && (
                       <label className="checkout-checkbox-row">

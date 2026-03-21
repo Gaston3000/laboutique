@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import CategoriesMenu from "./CategoriesMenu";
+import SearchDropdown from "./SearchDropdown";
+import useAdvancedSearch from "./useAdvancedSearch";
+import "../styles/SearchDropdown.css";
 
 export default function SiteHeader({
   totalItems,
+  products,
   searchValue,
   searchSuggestions,
   recentSearches,
   onRemoveRecentSearch,
+  onClearRecentSearches,
   onSearchInputChange,
   onSearchSubmit,
+  onSelectProduct,
   user,
   onAccountClick,
   onLoginClick,
@@ -35,6 +41,12 @@ export default function SiteHeader({
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const accountMenuRef = useRef(null);
   const searchRef = useRef(null);
+
+  const advancedSearch = useAdvancedSearch({
+    products: products || [],
+    searchInput: searchValue,
+    recentSearches
+  });
 
   const normalizedInput = String(searchValue || "").trim();
   const filteredRecentSearches = useMemo(() => {
@@ -81,7 +93,14 @@ export default function SiteHeader({
   const isShowingRecentSearches = !normalizedInput;
   const activeSuggestions = normalizedInput ? filteredSuggestions : filteredRecentSearches;
   const suggestionsAriaLabel = normalizedInput ? "Sugerencias de búsqueda" : "Últimas búsquedas";
-  const shouldShowSuggestions = isSuggestionsOpen && activeSuggestions.length > 0;
+  // Show dropdown when focused: always show if we have recommendations, recent searches, or results
+  const shouldShowSuggestions = isSuggestionsOpen && (
+    advancedSearch.searchResults.length > 0
+    || advancedSearch.recommendations.length > 0
+    || advancedSearch.suggestedSearches.length > 0
+    || (recentSearches && recentSearches.length > 0)
+    || normalizedInput
+  );
 
   useEffect(() => {
     setIsAccountMenuOpen(false);
@@ -229,13 +248,29 @@ export default function SiteHeader({
   function handleSearchKeyDown(event) {
     if (event.key === "Enter") {
       event.preventDefault();
-      handleSearchSubmit();
+      const activeItem = advancedSearch.getActiveItem();
+      if (activeItem) {
+        if (activeItem.type === "result" || activeItem.type === "recommendation") {
+          onSelectProduct?.(activeItem.data.product);
+          setIsSuggestionsOpen(false);
+        } else if (activeItem.type === "suggestion") {
+          handleSearchSubmit(activeItem.data);
+        }
+        advancedSearch.resetActiveIndex();
+      } else {
+        handleSearchSubmit();
+      }
       return;
     }
 
     if (event.key === "Escape") {
       setIsSuggestionsOpen(false);
+      advancedSearch.resetActiveIndex();
+      return;
     }
+
+    // Arrow key navigation for the advanced dropdown
+    advancedSearch.handleKeyDown(event);
   }
 
   function handleSearchFocus() {
@@ -332,47 +367,27 @@ export default function SiteHeader({
           </div>
 
           {shouldShowSuggestions && (
-            <ul className="search-suggestions" role="listbox" aria-label={suggestionsAriaLabel}>
-              {activeSuggestions.map((suggestion) => (
-                <li key={suggestion}>
-                  <div className="search-suggestion-item">
-                    <button
-                      type="button"
-                      className="search-suggestion-select"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => handleSuggestionSelect(suggestion)}
-                    >
-                      <span className="search-suggestion-icon" aria-hidden="true">
-                        {isShowingRecentSearches ? (
-                          <svg viewBox="0 0 24 24">
-                            <path d="M12 2a10 10 0 1 0 9.95 11h-2.02A8 8 0 1 1 12 4a7.9 7.9 0 0 1 5.66 2.34L14 10h8V2l-2.92 2.92A9.93 9.93 0 0 0 12 2Zm-1 5v6.42l4.32 2.49 1-1.73L13 12.25V7h-2Z" />
-                          </svg>
-                        ) : (
-                          <svg viewBox="0 0 24 24">
-                            <path d="M10.5 3a7.5 7.5 0 0 1 5.95 12.08l4.24 4.24a1 1 0 0 1-1.42 1.42l-4.24-4.24A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
-                          </svg>
-                        )}
-                      </span>
-                      <span>{suggestion}</span>
-                    </button>
-                    {isShowingRecentSearches ? (
-                      <button
-                        type="button"
-                        className="search-suggestion-remove"
-                        aria-label={`Quitar ${suggestion} del historial`}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onRemoveRecentSearch?.(suggestion);
-                        }}
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <SearchDropdown
+              isOpen={true}
+              query={advancedSearch.debouncedQuery}
+              searchResults={advancedSearch.searchResults}
+              recommendations={advancedSearch.recommendations}
+              suggestedSearches={advancedSearch.suggestedSearches}
+              recentSearches={recentSearches}
+              activeIndex={advancedSearch.activeIndex}
+              flatItems={advancedSearch.flatItems}
+              onSelectProduct={(product) => {
+                onSelectProduct?.(product);
+                setIsSuggestionsOpen(false);
+                advancedSearch.resetActiveIndex();
+              }}
+              onSelectSearch={(term) => {
+                handleSuggestionSelect(term);
+                advancedSearch.resetActiveIndex();
+              }}
+              onRemoveRecentSearch={onRemoveRecentSearch}
+              onClearRecentSearches={onClearRecentSearches}
+            />
           )}
         </div>
 
