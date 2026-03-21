@@ -4,7 +4,16 @@ import { query } from "../db.js";
 
 const aiRouter = Router();
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openai = null;
+function getOpenAI() {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      return null;
+    }
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openai;
+}
 
 function buildProductCatalog(products) {
   return products.map((p) => `[${p.id}] ${p.name} — ${p.brand || "Sin marca"} — $${Number(p.price_ars).toLocaleString("es-AR")} — Cat: ${(p.categories || []).join(", ") || "General"} — Stock: ${p.stock}`).join("\n");
@@ -63,7 +72,7 @@ aiRouter.post("/smart-order", async (req, res) => {
 
     const catalog = buildProductCatalog(productsResult.rows);
 
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.3,
       max_tokens: 800,

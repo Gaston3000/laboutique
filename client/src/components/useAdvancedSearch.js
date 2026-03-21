@@ -113,14 +113,22 @@ export default function useAdvancedSearch({ products, searchInput, recentSearche
     [products]
   );
 
-  /* ── Search results (max 5 products with images) ────── */
-  const searchResults = useMemo(() => {
+  /* ── Visible count for search results (load more) ─────── */
+  const [visibleCount, setVisibleCount] = useState(10);
+
+  // Reset visible count when query changes
+  useEffect(() => {
+    setVisibleCount(10);
+  }, [debouncedQuery]);
+
+  /* ── Search results (paginated, 8 per page) ────────────── */
+  const allSearchResults = useMemo(() => {
     if (!debouncedQuery) return [];
     return visibleProducts
       .map((p) => ({ product: p, score: scoreProduct(p, debouncedQuery) }))
       .filter((item) => item.score < Infinity)
       .sort((a, b) => a.score - b.score || String(a.product.name).localeCompare(String(b.product.name), "es"))
-      .slice(0, 5)
+      .slice(0, 80)
       .map((item) => ({
         id: item.product.id,
         name: String(item.product.name || ""),
@@ -131,6 +139,14 @@ export default function useAdvancedSearch({ products, searchInput, recentSearche
         product: item.product
       }));
   }, [visibleProducts, debouncedQuery]);
+
+  const searchResults = useMemo(
+    () => allSearchResults.slice(0, visibleCount),
+    [allSearchResults, visibleCount]
+  );
+
+  const hasMoreResults = allSearchResults.length > visibleCount;
+  const loadMoreResults = useCallback(() => setVisibleCount((prev) => prev + 10), []);
 
   /* ── Recommendations (popular / random visible picks) ── */
   const recommendations = useMemo(() => {
@@ -225,6 +241,8 @@ export default function useAdvancedSearch({ products, searchInput, recentSearche
   return {
     debouncedQuery,
     searchResults,
+    hasMoreResults,
+    loadMoreResults,
     recommendations,
     suggestedSearches,
     flatItems,

@@ -285,8 +285,8 @@ export default function SiteHeader({
 
   function handleClearSearch() {
     onSearchInputChange("");
-    onSearchSubmit("");
-    setIsSuggestionsOpen(false);
+    setIsSuggestionsOpen(true);
+    searchInputRef.current?.focus();
   }
 
   function handleLogoClick(event) {
@@ -371,6 +371,8 @@ export default function SiteHeader({
               isOpen={true}
               query={advancedSearch.debouncedQuery}
               searchResults={advancedSearch.searchResults}
+              hasMoreResults={advancedSearch.hasMoreResults}
+              loadMoreResults={advancedSearch.loadMoreResults}
               recommendations={advancedSearch.recommendations}
               suggestedSearches={advancedSearch.suggestedSearches}
               recentSearches={recentSearches}

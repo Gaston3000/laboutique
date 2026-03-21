@@ -25,7 +25,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load .env from server directory
-dotenv.config({ path: path.join(__dirname, "../.env") });
+const envPath = path.join(__dirname, "../.env");
+console.log("[ENV] Cargando desde:", envPath);
+dotenv.config({ path: envPath, override: true });
+console.log("[ENV] OPENAI key cargada:", process.env.OPENAI_API_KEY?.slice(0, 15) + "..."); // v2
 
 const app = express();
 const port = process.env.PORT || 4000;

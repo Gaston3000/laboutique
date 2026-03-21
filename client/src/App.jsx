@@ -66,6 +66,7 @@ const LoginModal = lazy(() => import("./components/LoginModal"));
 const SmartOrderPanel = lazy(() => import("./components/SmartOrderPanel"));
 const WelcomeDiscountModal = lazy(() => import("./components/WelcomeDiscountModal"));
 
+import { categoryDescendantsMap } from "./components/categoryTree";
 import AddressSelector from "./components/AddressSelector";
 import BrandsCarousel from "./components/BrandsCarousel";
 import HomeBanners from "./components/HomeBanners";
@@ -76,6 +77,7 @@ import WelcomePromoSpotlight from "./components/WelcomePromoSpotlight";
 import WelcomeDiscountTimer from "./components/WelcomeDiscountTimer";
 
 const CATEGORY_PAGE_SIZE = 8;
+const SEARCH_PAGE_SIZE = 10;
 const RESULTS_SORT_OPTIONS = [
   { key: "recent", label: "Mas reciente", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
   { key: "price-desc", label: "Precios mas alto", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="4"/><polyline points="6 10 12 4 18 10"/></svg> },
@@ -457,6 +459,11 @@ function isFuzzySearchMatch(query, rawText) {
     return true;
   }
 
+  // Skip fuzzy matching for very short queries to avoid false positives
+  if (normalizedQuery.length < 3) {
+    return false;
+  }
+
   return (
     hasApproximateWordMatch(normalizedQuery, normalizedText)
     || hasApproximateWordMatch(normalizedOrthographicQuery, normalizedOrthographicText)
@@ -489,6 +496,14 @@ const CATEGORY_BRAND_CONSTRAINT = {
   aerosoles: "saphirus"
 };
 
+// Map from normalized parent category name → normalized descendant names (all levels)
+const CATEGORY_PARENT_EXPANSIONS = Object.fromEntries(
+  Array.from(categoryDescendantsMap.entries()).map(([key, values]) => [
+    normalizeSearchText(key),
+    values.map(normalizeSearchText)
+  ])
+);
+
 function matchesSelectedCategory(productCategories, normalizedSelectedCategory) {
   if (!normalizedSelectedCategory) {
     return true;
@@ -498,6 +513,14 @@ function matchesSelectedCategory(productCategories, normalizedSelectedCategory) 
 
   if (Array.isArray(aliasTerms) && aliasTerms.length) {
     return productCategories.some((category) => aliasTerms.includes(category));
+  }
+
+  const expansionTerms = CATEGORY_PARENT_EXPANSIONS[normalizedSelectedCategory];
+
+  if (Array.isArray(expansionTerms) && expansionTerms.length) {
+    return productCategories.some((category) =>
+      expansionTerms.some((term) => category.includes(term))
+    );
   }
 
   return productCategories.some((category) => category.includes(normalizedSelectedCategory));
@@ -914,6 +937,7 @@ function App() {
   });
   const [selectedCategory, setSelectedCategory] = useState("Todos los productos");
   const [categoryVisibleCount, setCategoryVisibleCount] = useState(CATEGORY_PAGE_SIZE);
+  const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_PAGE_SIZE);
   const [resultsSortKey, setResultsSortKey] = useState("recent");
   const [isResultsFilterOpen, setIsResultsFilterOpen] = useState(false);
   const [auth, setAuth] = useState(() => {
@@ -2140,6 +2164,7 @@ function App() {
 
   useEffect(() => {
     setCategoryVisibleCount(CATEGORY_PAGE_SIZE);
+    setSearchVisibleCount(SEARCH_PAGE_SIZE);
   }, [selectedCategory, searchTerm]);
 
   useEffect(() => {
@@ -4111,8 +4136,14 @@ function App() {
   const visibleCategoryProducts = isSpecificCategorySelected
     ? sortedFilteredProducts.slice(0, categoryVisibleCount)
     : sortedFilteredProducts;
-  const visibleGridProducts = isSpecificCategorySelected ? visibleCategoryProducts : sortedFilteredProducts;
-  const canLoadMoreCategoryProducts = isSpecificCategorySelected && sortedFilteredProducts.length > categoryVisibleCount;
+  const visibleSearchProducts = isSearchActive
+    ? sortedFilteredProducts.slice(0, searchVisibleCount)
+    : sortedFilteredProducts;
+  const visibleGridProducts = isSearchActive
+    ? visibleSearchProducts
+    : (isSpecificCategorySelected ? visibleCategoryProducts : sortedFilteredProducts);
+  const canLoadMoreCategoryProducts = isSpecificCategorySelected && !isSearchActive && sortedFilteredProducts.length > categoryVisibleCount;
+  const canLoadMoreSearchProducts = isSearchActive && sortedFilteredProducts.length > searchVisibleCount;
   const hasCatalogProductsToRender = shouldRenderGridProducts
     ? filteredProducts.length > 0
     : productsForCarousel.length > 0;
@@ -7777,6 +7808,17 @@ function App() {
                           type="button"
                           className="category-load-more-btn"
                           onClick={() => setCategoryVisibleCount((current) => current + CATEGORY_PAGE_SIZE)}
+                        >
+                          Cargar más
+                        </button>
+                      </div>
+                    )}
+                    {canLoadMoreSearchProducts && (
+                      <div className="category-load-more-wrap">
+                        <button
+                          type="button"
+                          className="category-load-more-btn"
+                          onClick={() => setSearchVisibleCount((current) => current + SEARCH_PAGE_SIZE)}
                         >
                           Cargar más
                         </button>

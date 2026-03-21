@@ -47,6 +47,8 @@ export default function SearchDropdown({
   isOpen,
   query,
   searchResults,
+  hasMoreResults,
+  loadMoreResults,
   recommendations,
   suggestedSearches,
   recentSearches,
@@ -141,6 +143,20 @@ export default function SearchDropdown({
               );
             })}
           </div>
+          {/* "Cargar más" button */}
+          {hasMoreResults && (
+            <button
+              type="button"
+              className="sd-load-more"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={loadMoreResults}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="sd-load-more-icon">
+                <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+              </svg>
+              Cargar más resultados
+            </button>
+          )}
           {/* "Ver todos" link */}
           <button
             type="button"
@@ -171,42 +187,7 @@ export default function SearchDropdown({
         </div>
       )}
 
-      {/* ── B) Recommendations ─────────────────────────── */}
-      {hasRecommendations && (
-        <div className="sd-section sd-section-recs">
-          <SectionHeader icon={icons.star} title={hasQuery ? "Te puede interesar" : "Productos destacados"} />
-          <div className="sd-recs-grid">
-            {recommendations.slice(0, hasQuery ? 3 : 6).map((item) => {
-              const idx = getGlobalIndex();
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`sd-rec-card${activeIndex === idx ? " sd-active" : ""}`}
-                  data-search-index={idx}
-                  role="option"
-                  aria-selected={activeIndex === idx}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => onSelectProduct(item.product)}
-                >
-                  <div className="sd-rec-image">
-                    <img src={item.image} alt={item.name} loading="lazy" />
-                    <span className={`sd-rec-badge sd-badge-${item.badge === "Popular" ? "popular" : "recommended"}`}>
-                      {item.badge}
-                    </span>
-                  </div>
-                  <div className="sd-rec-info">
-                    <span className="sd-rec-name">{item.name}</span>
-                    {item.price > 0 && (
-                      <span className="sd-rec-price">${item.price.toLocaleString("es-AR")}</span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+
 
       {/* ── C) Recent Searches (when idle) ─────────────── */}
       {!hasQuery && hasRecent && (

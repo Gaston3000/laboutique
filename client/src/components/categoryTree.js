@@ -122,3 +122,26 @@ export const categoryTree = [
     ]
   }
 ];
+
+function _collectDescendantNames(node) {
+  if (typeof node === "string") return [node];
+  const names = [node.name];
+  for (const child of (node.children || [])) {
+    names.push(..._collectDescendantNames(child));
+  }
+  return names;
+}
+
+export const categoryDescendantsMap = new Map();
+
+(function _buildDescendantsMap(nodes) {
+  for (const node of nodes) {
+    const n = typeof node === "string" ? { name: node, children: [] } : node;
+    if (n.name) {
+      categoryDescendantsMap.set(n.name, _collectDescendantNames(n));
+    }
+    if (Array.isArray(n.children) && n.children.length > 0) {
+      _buildDescendantsMap(n.children);
+    }
+  }
+})(categoryTree);
