@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   addTicketComment,
   applyPromotion,
@@ -58,18 +58,21 @@ import {
   markNotificationRead,
   markAllNotificationsRead
 } from "./api";
-import AdminPanel from "./components/AdminPanel";
-import AccountPanel from "./components/AccountPanel";
+
+// Lazy-loaded heavy components (code splitting)
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const AccountPanel = lazy(() => import("./components/AccountPanel"));
+const LoginModal = lazy(() => import("./components/LoginModal"));
+const SmartOrderPanel = lazy(() => import("./components/SmartOrderPanel"));
+const WelcomeDiscountModal = lazy(() => import("./components/WelcomeDiscountModal"));
+
 import BrandsCarousel from "./components/BrandsCarousel";
 import HomeBanners from "./components/HomeBanners";
-import LoginModal from "./components/LoginModal";
 import PromoStrip from "./components/PromoStrip";
 import SiteHeader from "./components/SiteHeader";
 import DeliveryCoverageSection from "./components/DeliveryCoverageSection";
 import WelcomePromoSpotlight from "./components/WelcomePromoSpotlight";
-import WelcomeDiscountModal from "./components/WelcomeDiscountModal";
 import WelcomeDiscountTimer from "./components/WelcomeDiscountTimer";
-import SmartOrderPanel from "./components/SmartOrderPanel";
 
 const CATEGORY_PAGE_SIZE = 8;
 const RESULTS_SORT_OPTIONS = [
@@ -85,6 +88,14 @@ const ADDRESS_BOOK_STORAGE_PREFIX = "address-book";
 const MAX_ACCOUNT_ADDRESSES = 5;
 const WELCOME_PROMO_CODE = "PRIMERACOMPRA10";
 const ADMIN_NOTIFICATIONS_SEEN_STORAGE_KEY = "admin:notifications:seen:v1";
+
+function LazyFallback() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 200, width: "100%" }}>
+      <div className="lazy-spinner" />
+    </div>
+  );
+}
 const FREE_SHIPPING_TARGET_ARS = 50000;
 const GUEST_CART_STORAGE_KEY = "cart:guest";
 const CART_STORAGE_KEY = "cart:local";
@@ -5031,7 +5042,7 @@ function App() {
                     handleActivateWelcomePromo();
                   }}
                 >
-                  <span>🎁</span>
+                  <img src="/fotos/iconos%20general/fluent--gift-card-16-filled.svg" alt="" width="18" height="18" />
                   <span>{auth.user ? "Activar 10% OFF en esta compra" : "Registrate y activá 10% OFF"}</span>
                 </button>
               )}
@@ -5166,6 +5177,7 @@ function App() {
         </div>
       )}
 
+      <Suspense fallback={null}>
       <LoginModal
         isOpen={isLoginOpen}
         onClose={() => {
@@ -5185,7 +5197,9 @@ function App() {
         inviteMessage={loginInviteMessage}
         verificationEmail={verificationEmail}
       />
+      </Suspense>
 
+      <Suspense fallback={null}>
       <WelcomeDiscountModal
         isOpen={isWelcomeDiscountModalOpen}
         onClose={() => setIsWelcomeDiscountModalOpen(false)}
@@ -5193,10 +5207,12 @@ function App() {
         isDiscountActive={auth.user?.welcomeDiscountActive || false}
         onActivate={handleActivateWelcomePromo}
       />
+      </Suspense>
 
       <div className="container">
 
         <main className={isInicioActive ? "main-home" : ""}>
+         <Suspense fallback={<LazyFallback />}>
           {activeSection === "admin" && isAdmin ? (
             <AdminPanel
               products={products}
@@ -7912,6 +7928,7 @@ function App() {
               )}
             </>
           )}
+         </Suspense>
         </main>
       </div>
 
@@ -8106,6 +8123,7 @@ function App() {
           </div>
       </footer>
 
+      <Suspense fallback={null}>
       <SmartOrderPanel
         isOpen={isSmartOrderOpen}
         onClose={() => setIsSmartOrderOpen(false)}
@@ -8113,6 +8131,7 @@ function App() {
         onAddToCart={addToCart}
         onOpenCart={openCartDrawer}
       />
+      </Suspense>
     </div>
   );
 }

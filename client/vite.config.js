@@ -6,5 +6,14 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true
-  }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+        },
+      },
+    },
+  },
 });
