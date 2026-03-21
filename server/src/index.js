@@ -18,6 +18,7 @@ import productsRouter from "./routes/products.js";
 import ticketsRouter from "./routes/tickets.js";
 import emailsRouter from "./routes/emails.js";
 import notificationsRouter from "./routes/notifications.js";
+import aiRouter from "./routes/ai.js";
 
 // Get current file directory
 const __filename = fileURLToPath(import.meta.url);
@@ -185,6 +186,7 @@ app.use("/api/cart", cartRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api/emails", emailsRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/ai", aiRouter);
 
 async function startServer() {
   try {

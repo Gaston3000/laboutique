@@ -69,6 +69,7 @@ import DeliveryCoverageSection from "./components/DeliveryCoverageSection";
 import WelcomePromoSpotlight from "./components/WelcomePromoSpotlight";
 import WelcomeDiscountModal from "./components/WelcomeDiscountModal";
 import WelcomeDiscountTimer from "./components/WelcomeDiscountTimer";
+import SmartOrderPanel from "./components/SmartOrderPanel";
 
 const CATEGORY_PAGE_SIZE = 8;
 const RESULTS_SORT_OPTIONS = [
@@ -968,6 +969,7 @@ function App() {
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [isSmartOrderOpen, setIsSmartOrderOpen] = useState(false);
   const [isCartDrawerClosing, setIsCartDrawerClosing] = useState(false);
   const [isAddPopupOpen, setIsAddPopupOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -1447,9 +1449,7 @@ function App() {
       }
     });
 
-    if (isAccountSection) {
-      refreshMyOrders(auth.token).catch(() => {});
-    }
+    refreshMyOrders(auth.token).catch(() => {});
   }, [auth.token, auth.user?.id, auth.user?.role, activeSection]);
 
   useEffect(() => {
@@ -1715,11 +1715,12 @@ function App() {
     }
 
     if (checkoutForm.shippingMethod === "delivery") {
+      if (hasReachedFreeShipping) return 0;
       return checkoutForm.shippingZone === "caba" ? 5000 : 7000;
     }
 
     return 0;
-  }, [checkoutForm.shippingMethod, checkoutForm.shippingZone]);
+  }, [checkoutForm.shippingMethod, checkoutForm.shippingZone, hasReachedFreeShipping]);
 
   const welcomeDiscountAmount = useMemo(() => {
     if (!auth.user?.welcomeDiscountActive || auth.user?.welcomeDiscountUsed) {
@@ -1749,13 +1750,12 @@ function App() {
     }
 
     if (checkoutForm.shippingMethod === "delivery") {
-      return checkoutShippingCost === 0
-        ? "$0 ARS"
-        : `$${checkoutShippingCost.toLocaleString("es-AR")} ARS`;
+      if (hasReachedFreeShipping) return "Gratis";
+      return `$${checkoutShippingCost.toLocaleString("es-AR")} ARS`;
     }
 
     return "Elegí un método";
-  }, [checkoutForm.shippingMethod, checkoutShippingCost]);
+  }, [checkoutForm.shippingMethod, checkoutShippingCost, hasReachedFreeShipping]);
 
   const checkoutShippingOptionValue = useMemo(() => {
     if (checkoutForm.shippingMethod === "pickup") return "pickup";
@@ -1764,6 +1764,13 @@ function App() {
     }
     return "";
   }, [checkoutForm.shippingMethod, checkoutForm.shippingZone]);
+
+  const emptyCartRecommendations = useMemo(() => {
+    if (cart.length || !products.length) return [];
+    const visible = products.filter((p) => p.is_visible !== false && p.stock > 0);
+    const shuffled = [...visible].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 6);
+  }, [cart.length, products]);
 
   useEffect(() => {
     setAppliedCartPromotion(null);
@@ -3752,8 +3759,7 @@ function App() {
     }
 
     if (addedCount > 0) {
-      setActiveSection("cart");
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      openCartDrawer();
     }
   }
 
@@ -4618,6 +4624,9 @@ function App() {
         onGoAbout={handleGoAboutSection}
         onGoAdmin={handleGoAdminSection}
         showHeader={showHeader}
+        onRepeatOrder={() => { setAccountInitialTab("pedidos"); setActiveSection("account"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+        hasOrders={myOrders.length > 0}
+        onSmartOrder={() => setIsSmartOrderOpen(true)}
       />
 
       <nav className={`nav-bar${showHeader ? "" : " nav-bar-hidden"}`}>
@@ -4719,6 +4728,21 @@ function App() {
                 Inicio
               </button>
             </li>
+            {auth.user && myOrders.length > 0 && (
+              <li>
+                <button
+                  type="button"
+                  className="admin-nav-button nav-shortcut-btn nav-repeat-order-btn"
+                  onClick={() => { setAccountInitialTab("pedidos"); setActiveSection("account"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  title="Repetir pedido"
+                >
+                  <span className="nav-link-icon" aria-hidden="true">
+                    <img src="/fotos/iconos%20general/uim--repeat.svg" alt="" width="20" height="20" />
+                  </span>
+                  Repetir pedido
+                </button>
+              </li>
+            )}
             <li>
               <button
                 type="button"
@@ -4748,6 +4772,18 @@ function App() {
                   </svg>
                 </span>
                 Sobre Nosotros
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className="admin-nav-button nav-shortcut-btn nav-smart-order-btn"
+                onClick={() => setIsSmartOrderOpen(true)}
+              >
+                <span className="nav-link-icon" aria-hidden="true">
+                  <img src="/fotos/iconos%20general/lineicons--open-ai.svg" alt="" width="20" height="20" />
+                </span>
+                Pedido Inteligente
               </button>
             </li>
           </ul>
@@ -4841,7 +4877,53 @@ function App() {
             <div className="cart-drawer-content-grid">
               <div className="cart-drawer-body">
                 {!cart.length ? (
-                  <p className="empty-results">Tu carrito está vacío.</p>
+                  <div className="cart-empty-state">
+                    <div className="cart-empty-message">
+                      <span className="cart-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 50 50" width="48" height="48">
+                          <path fill="#1877f2" opacity=".18" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
+                          <path fill="#1877f2" opacity=".18" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
+                        </svg>
+                      </span>
+                      <p>Tu carrito está vacío</p>
+                      <span className="cart-empty-sub">¡Agregá productos para empezar!</span>
+                    </div>
+
+                    <div className="cart-empty-actions">
+                      <button type="button" className="cart-empty-action-btn cart-empty-smart-btn" onClick={() => { closeCartDrawer(); setTimeout(() => setIsSmartOrderOpen(true), 300); }}>
+                        <img src="/fotos/iconos%20general/lineicons--open-ai.svg" alt="" width="18" height="18" />
+                        Pedido Inteligente
+                      </button>
+                      {auth.user && myOrders.length > 0 && (
+                        <button type="button" className="cart-empty-action-btn cart-empty-repeat-btn" onClick={() => { closeCartDrawer(); setTimeout(() => { setAccountInitialTab("pedidos"); setActiveSection("account"); window.scrollTo({ top: 0, behavior: "smooth" }); }, 300); }}>
+                          <img src="/fotos/iconos%20general/uim--repeat.svg" alt="" width="18" height="18" />
+                          Repetir pedido
+                        </button>
+                      )}
+                    </div>
+
+                    {emptyCartRecommendations.length > 0 && (
+                      <div className="cart-empty-recs">
+                        <h3 className="cart-empty-recs-title">Te puede interesar</h3>
+                        <ul className="cart-empty-recs-list">
+                          {emptyCartRecommendations.map((product) => (
+                            <li key={product.id} className="cart-empty-rec-card">
+                              <div className="cart-empty-rec-img-wrap">
+                                <img src={getProductImageUrl(product)} alt={product.name} loading="lazy" />
+                              </div>
+                              <div className="cart-empty-rec-info">
+                                <span className="cart-empty-rec-name">{product.name}</span>
+                                <span className="cart-empty-rec-price">${Number(product.price_ars || product.price).toLocaleString("es-AR")} ARS</span>
+                              </div>
+                              <button type="button" className="cart-empty-rec-add" onClick={() => addToCart(product, 1)} aria-label={`Agregar ${product.name}`}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <>
                     <ul className="cart-drawer-list">
@@ -6048,6 +6130,28 @@ function App() {
                   </div>
 
                   <section className="checkout-box" aria-label="Finalizar compra">
+                    <section className={`cart-free-shipping ${hasReachedFreeShipping ? "is-complete" : ""}`} aria-live="polite">
+                      <p className="cart-free-shipping-message">
+                        {hasReachedFreeShipping
+                          ? "Ya desbloqueaste el envio gratis en este pedido."
+                          : `Te faltan $${freeShippingRemaining.toLocaleString("es-AR")} ARS para tener envio gratis.`}
+                      </p>
+                      <div
+                        className="cart-free-shipping-track"
+                        role="progressbar"
+                        aria-label="Progreso para envio gratis"
+                        aria-valuemin={0}
+                        aria-valuemax={FREE_SHIPPING_TARGET_ARS}
+                        aria-valuenow={Math.round(Math.min(cartSubtotal, FREE_SHIPPING_TARGET_ARS))}
+                      >
+                        <span
+                          className="cart-free-shipping-fill"
+                          style={{ width: `${freeShippingProgressPercent.toFixed(2)}%` }}
+                        />
+                      </div>
+                      <p className="cart-free-shipping-caption">Envio gratis a partir de $50.000 ARS</p>
+                    </section>
+
                     <form className="checkout-form" onSubmit={handleCheckoutSubmit}>
                       <aside className="checkout-summary-card" aria-label="Resumen del pedido">
                         <h3>Resumen del pedido</h3>
@@ -6097,8 +6201,8 @@ function App() {
                           >
                             <option value="">Elegí una opción</option>
                             <option value="pickup">Retiro en el local (Gratis)</option>
-                            <option value="delivery-caba">Envío a CABA ($5.000)</option>
-                            <option value="delivery-gba">Envío a GBA ($7.000)</option>
+                            <option value="delivery-caba">{hasReachedFreeShipping ? "Envío a CABA (Gratis)" : "Envío a CABA ($5.000)"}</option>
+                            <option value="delivery-gba">{hasReachedFreeShipping ? "Envío a GBA (Gratis)" : "Envío a GBA ($7.000)"}</option>
                           </select>
                         </label>
 
@@ -6225,8 +6329,8 @@ function App() {
                       >
                         <option value="">Elegí una opción</option>
                         <option value="pickup">Retiro en el local (Gratis)</option>
-                        <option value="delivery-caba">Envío a CABA ($5.000)</option>
-                        <option value="delivery-gba">Envío a GBA ($7.000)</option>
+                        <option value="delivery-caba">{hasReachedFreeShipping ? "Envío a CABA (Gratis)" : "Envío a CABA ($5.000)"}</option>
+                        <option value="delivery-gba">{hasReachedFreeShipping ? "Envío a GBA (Gratis)" : "Envío a GBA ($7.000)"}</option>
                       </select>
                     </label>
 
@@ -6382,7 +6486,10 @@ function App() {
                           <span>
                             Zona de envío: <strong>{checkoutForm.shippingZone === "caba" ? "CABA" : "GBA"}</strong>
                             {" — "}
-                            <strong>${(checkoutForm.shippingZone === "caba" ? 5000 : 7000).toLocaleString("es-AR")} ARS</strong>
+                            {hasReachedFreeShipping
+                              ? <strong style={{ color: '#059669' }}>Envío gratis</strong>
+                              : <strong>${(checkoutForm.shippingZone === "caba" ? 5000 : 7000).toLocaleString("es-AR")} ARS</strong>
+                            }
                           </span>
                         </div>
 
@@ -6525,7 +6632,7 @@ function App() {
                         <strong style={{ color: '#059669' }}>-{welcomeDiscountAmount.toLocaleString("es-AR")} ARS</strong>
                       </p>
                     )}
-                    <p><span>Entrega/envío</span><strong>{checkoutShippingCost.toLocaleString("es-AR")},00 ARS</strong></p>
+                    <p><span>Entrega/envío</span><strong style={hasReachedFreeShipping ? { color: '#059669' } : {}}>{hasReachedFreeShipping ? 'Gratis' : `${checkoutShippingCost.toLocaleString("es-AR")},00 ARS`}</strong></p>
                     <p className="is-total"><span>Total</span><strong>{checkoutTotal.toLocaleString("es-AR")},00 ARS</strong></p>
                   </div>
                 </aside>
@@ -7998,6 +8105,14 @@ function App() {
             </div>
           </div>
       </footer>
+
+      <SmartOrderPanel
+        isOpen={isSmartOrderOpen}
+        onClose={() => setIsSmartOrderOpen(false)}
+        products={products}
+        onAddToCart={addToCart}
+        onOpenCart={openCartDrawer}
+      />
     </div>
   );
 }

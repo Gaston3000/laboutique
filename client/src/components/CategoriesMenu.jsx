@@ -407,7 +407,10 @@ export default function CategoriesMenu({
   onMyAccountClick,
   onOrdersClick,
   onLogout,
-  onFavoritesClick
+  onFavoritesClick,
+  onRepeatOrder,
+  onSmartOrder,
+  hasOrders
 }) {
   const menuRef = useRef(null);
   const previousHeaderZIndexRef = useRef(null);
@@ -679,6 +682,26 @@ export default function CategoriesMenu({
       isVisible: true,
       isActive: activeSection === "home",
       onClick: () => handleShortcutClick(onGoHome)
+    },
+    {
+      id: "repeat-order",
+      label: "Repetir pedido",
+      icon: (
+        <img src="/fotos/iconos%20general/uim--repeat.svg" alt="" width="20" height="20" aria-hidden="true" />
+      ),
+      isVisible: Boolean(user && hasOrders),
+      isActive: false,
+      onClick: () => handleShortcutClick(onRepeatOrder)
+    },
+    {
+      id: "smart-order",
+      label: "Pedido Inteligente",
+      icon: (
+        <img src="/fotos/iconos%20general/lineicons--open-ai.svg" alt="" width="20" height="20" aria-hidden="true" />
+      ),
+      isVisible: true,
+      isActive: false,
+      onClick: () => handleShortcutClick(onSmartOrder)
     },
     {
       id: "promotions",

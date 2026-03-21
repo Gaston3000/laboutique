@@ -25,7 +25,10 @@ export default function SiteHeader({
   onGoPromotions,
   onGoAbout,
   onGoAdmin,
-  showHeader
+  showHeader,
+  onRepeatOrder,
+  hasOrders,
+  onSmartOrder
 }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
@@ -293,6 +296,9 @@ export default function SiteHeader({
             onOrdersClick={onOrdersClick}
             onLogout={onLogout}
             onFavoritesClick={onFavoritesClick}
+            onRepeatOrder={onRepeatOrder}
+            onSmartOrder={onSmartOrder}
+            hasOrders={hasOrders}
           />
         </div>
 

@@ -818,6 +818,19 @@ export async function fetchUserCart(token) {
   return data;
 }
 
+export async function sendSmartOrder(message) {
+  const response = await fetch(`${API_URL}/ai/smart-order`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message })
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo procesar el pedido inteligente");
+  }
+  return data;
+}
+
 export async function saveUserCart(token, items = []) {
   const response = await fetch(`${API_URL}/cart`, {
     method: "PUT",
