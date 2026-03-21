@@ -124,7 +124,8 @@ Write-Host ""
 Write-Host "🚀 Importando backup..." -ForegroundColor Cyan
 
 # Decodificar la contraseña (remover %24 = $)
-$decodedPassword = $dbPassword -replace '%24', '$'
+$dollarSign = [char]36
+$decodedPassword = $dbPassword -replace '%24', $dollarSign
 
 # Configurar variable de entorno para la contraseña
 $env:PGPASSWORD = $decodedPassword
