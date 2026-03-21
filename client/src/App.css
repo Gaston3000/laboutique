@@ -12723,6 +12723,188 @@ main h1 {
   gap: 0;
 }
 
+/* ── Premium shipping cards ─────────────────────────────── */
+
+.shipping-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.shipping-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1.5px solid #e4e4e7;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  color: #1a1a1a;
+  transition: border-color 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
+  position: relative;
+}
+
+.shipping-card:first-child {
+  border-radius: 14px 14px 0 0;
+}
+
+.shipping-card:last-child {
+  border-radius: 0 0 14px 14px;
+}
+
+.shipping-card:not(:first-child) {
+  margin-top: -1.5px;
+}
+
+.shipping-card:hover {
+  background: #f8f9ff;
+  border-color: #c5cae9;
+  z-index: 1;
+}
+
+.shipping-card--active {
+  border-color: var(--blue, #1877f2);
+  background: linear-gradient(135deg, #f0f5ff 0%, #e8efff 100%);
+  box-shadow: 0 0 0 1px var(--blue, #1877f2);
+  z-index: 2;
+}
+
+.shipping-card--active:hover {
+  background: linear-gradient(135deg, #e8efff 0%, #dde6ff 100%);
+  border-color: var(--blue, #1877f2);
+}
+
+.shipping-card-icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #f4f4f5;
+  color: #888;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.shipping-card--active .shipping-card-icon {
+  background: rgba(24, 119, 242, 0.12);
+  color: var(--blue, #1877f2);
+}
+
+.shipping-card-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.shipping-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shipping-card-label {
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: #1a1a1a;
+}
+
+.shipping-card-sub {
+  font-size: 0.76rem;
+  color: #888;
+  font-weight: 400;
+}
+
+.shipping-card-price {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.shipping-card-free {
+  color: #16a34a;
+}
+
+.shipping-card-radio {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid #d0d0d0;
+  background: #fff;
+  position: relative;
+  transition: border-color 200ms ease;
+}
+
+.shipping-card--active .shipping-card-radio {
+  border-color: var(--blue, #1877f2);
+}
+
+.shipping-card--active .shipping-card-radio::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--blue, #1877f2);
+  animation: shipping-radio-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes shipping-radio-in {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+.shipping-cards--form {
+  margin-bottom: 4px;
+}
+
+.checkout-field-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 480px) {
+  .shipping-card {
+    padding: 14px 14px;
+    gap: 10px;
+  }
+
+  .shipping-card-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .shipping-card-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .shipping-card-label {
+    font-size: 0.85rem;
+  }
+
+  .shipping-card-price {
+    font-size: 0.82rem;
+  }
+}
+
 .checkout-total-row {
   border-top: 1px solid var(--surface-gray);
   padding-top: 14px;
@@ -12745,7 +12927,7 @@ main h1 {
   outline: none;
 }
 
-.checkout-form button {
+.checkout-form button:not(.shipping-card) {
   border: 0;
   border-radius: 9px;
   min-height: 46px;
@@ -12767,16 +12949,16 @@ main h1 {
   text-align: center;
 }
 
-.checkout-form button:hover:not(:disabled) {
+.checkout-form button:not(.shipping-card):hover:not(:disabled) {
   background: #0f63ce;
 }
 
-.checkout-form button:disabled {
+.checkout-form button:not(.shipping-card):disabled {
   opacity: 0.7;
   cursor: wait;
 }
 
-.checkout-form button:active:not(:disabled) {
+.checkout-form button:not(.shipping-card):active:not(:disabled) {
   transform: translateY(1px);
 }
 

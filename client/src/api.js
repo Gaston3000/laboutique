@@ -253,6 +253,16 @@ export async function updateMyProfile(token, profile) {
   return data;
 }
 
+export async function syncDeliveryZone(token, zoneData) {
+  const response = await fetch(`${API_URL}/auth/me/delivery-zone`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(zoneData || {})
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
 export async function createProduct(token, product) {
   const response = await fetch(`${API_URL}/products`, {
     method: "POST",

@@ -202,7 +202,7 @@ export default function DeliveryCoverageSection() {
   );
 
   return (
-    <section className="delivery-coverage" aria-label="Localidades con entrega disponible">
+    <section id="cobertura-envios" className="delivery-coverage" aria-label="Localidades con entrega disponible">
       <header className="delivery-coverage-header">
         <h2>Localidades con entrega disponible</h2>
         <p>Realizamos envíos en toda CABA y en estas 38 localidades de la Provincia de Buenos Aires.</p>

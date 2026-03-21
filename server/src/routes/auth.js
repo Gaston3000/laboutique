@@ -6,7 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { sendVerificationCodeEmail, sendWelcomeEmail, sendPasswordResetEmail } from "../services/emailService.js";
 
 const authRouter = Router();
-const USER_SELECT_FIELDS = "id, name, first_name, last_name, profile_title, phone, avatar_url, email, role, address, email_verified, welcome_discount_active, welcome_discount_expires_at, welcome_discount_used";
+const USER_SELECT_FIELDS = "id, name, first_name, last_name, profile_title, phone, avatar_url, email, role, address, preferred_delivery_zone, email_verified, welcome_discount_active, welcome_discount_expires_at, welcome_discount_used";
 
 // Generate 6-digit verification code
 function generateVerificationCode() {
@@ -42,6 +42,7 @@ function mapUserRow(row) {
     email: row.email,
     role: row.role,
     address: row.address,
+    preferredDeliveryZone: (() => { try { return JSON.parse(row.preferred_delivery_zone); } catch { return null; } })(),
     emailVerified: row.email_verified || false,
     welcomeDiscountActive: row.welcome_discount_active || false,
     welcomeDiscountExpiresAt: row.welcome_discount_expires_at || null,
@@ -278,6 +279,22 @@ authRouter.patch("/me/profile", requireAuth, async (req, res) => {
     return res.json({ token, user: updatedUser });
   } catch {
     return res.status(500).json({ error: "No se pudo actualizar el perfil" });
+  }
+});
+
+// Save preferred delivery zone
+authRouter.patch("/me/delivery-zone", requireAuth, async (req, res) => {
+  const { city, zone, postalCode } = req.body || {};
+  const validZones = ["caba", "gba"];
+  if (!city || !validZones.includes(zone)) {
+    return res.status(400).json({ error: "Zona inválida" });
+  }
+  const payload = JSON.stringify({ city: String(city).slice(0, 100), zone, postalCode: String(postalCode || "").slice(0, 10) });
+  try {
+    await query("UPDATE users SET preferred_delivery_zone = $1 WHERE id = $2", [payload, req.user.id]);
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ error: "No se pudo guardar la zona" });
   }
 });
 

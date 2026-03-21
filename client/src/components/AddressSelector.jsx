@@ -1,41 +1,54 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../styles/AddressSelector.css";
 
-/* ── Argentine zones data ─────────────────────────────── */
+/* ── Zones data: CABA + 38 GBA delivery localities ───── */
+// lat/lng used for geolocation matching (center of each municipality)
 
-const CABA_BARRIOS = [
-  "Palermo", "Recoleta", "Belgrano", "Caballito", "Almagro",
-  "Villa Crespo", "Núñez", "Colegiales", "Villa Urquiza", "Flores",
-  "Balvanera", "San Telmo", "La Boca", "Barracas", "Boedo",
-  "Monserrat", "San Nicolás", "Retiro", "Puerto Madero", "Constitución",
-  "Villa del Parque", "Devoto", "Saavedra", "Coghlan", "Villa Luro",
-  "Liniers", "Mataderos", "Parque Patricios", "Pompeya"
+const ALL_ZONES = [
+  { label: "CABA", zone: "caba", city: "CABA", postalCode: "1001", description: "Ciudad Autónoma de Buenos Aires", lat: -34.6137, lng: -58.3816 },
+  { label: "Vicente López", zone: "gba", city: "Vicente López, GBA", postalCode: "1602", description: "GBA Norte", lat: -34.5268, lng: -58.4726 },
+  { label: "San Isidro", zone: "gba", city: "San Isidro, GBA", postalCode: "1642", description: "GBA Norte", lat: -34.4726, lng: -58.5274 },
+  { label: "San Fernando", zone: "gba", city: "San Fernando, GBA", postalCode: "1646", description: "GBA Norte", lat: -34.4424, lng: -58.5565 },
+  { label: "San Martín", zone: "gba", city: "San Martín, GBA", postalCode: "1650", description: "GBA Oeste", lat: -34.5760, lng: -58.5380 },
+  { label: "Tres de Febrero", zone: "gba", city: "Tres de Febrero, GBA", postalCode: "1657", description: "GBA Oeste", lat: -34.6037, lng: -58.5620 },
+  { label: "Hurlingham", zone: "gba", city: "Hurlingham, GBA", postalCode: "1686", description: "GBA Oeste", lat: -34.5888, lng: -58.6377 },
+  { label: "Ituzaingó", zone: "gba", city: "Ituzaingó, GBA", postalCode: "1714", description: "GBA Oeste", lat: -34.6590, lng: -58.6656 },
+  { label: "Morón", zone: "gba", city: "Morón, GBA", postalCode: "1708", description: "GBA Oeste", lat: -34.6520, lng: -58.6197 },
+  { label: "La Matanza Norte", zone: "gba", city: "La Matanza Norte, GBA", postalCode: "1754", description: "GBA Oeste", lat: -34.6830, lng: -58.5630 },
+  { label: "Lomas de Zamora", zone: "gba", city: "Lomas de Zamora, GBA", postalCode: "1832", description: "GBA Sur", lat: -34.7615, lng: -58.4003 },
+  { label: "Lanús", zone: "gba", city: "Lanús, GBA", postalCode: "1824", description: "GBA Sur", lat: -34.7023, lng: -58.3925 },
+  { label: "Avellaneda", zone: "gba", city: "Avellaneda, GBA", postalCode: "1870", description: "GBA Sur", lat: -34.6627, lng: -58.3654 },
+  { label: "Quilmes", zone: "gba", city: "Quilmes, GBA", postalCode: "1878", description: "GBA Sur", lat: -34.7232, lng: -58.2536 },
+  { label: "Berazategui", zone: "gba", city: "Berazategui, GBA", postalCode: "1884", description: "GBA Sur", lat: -34.7634, lng: -58.2105 },
+  { label: "Florencio Varela", zone: "gba", city: "Florencio Varela, GBA", postalCode: "1888", description: "GBA Sur", lat: -34.8117, lng: -58.2753 },
+  { label: "Almirante Brown", zone: "gba", city: "Almirante Brown, GBA", postalCode: "1852", description: "GBA Sur", lat: -34.8175, lng: -58.3925 },
+  { label: "Esteban Echeverría", zone: "gba", city: "Esteban Echeverría, GBA", postalCode: "1842", description: "GBA Sur", lat: -34.8164, lng: -58.4593 },
+  { label: "Ezeiza", zone: "gba", city: "Ezeiza, GBA", postalCode: "1802", description: "GBA Sur", lat: -34.8539, lng: -58.5226 },
+  { label: "La Matanza Sur", zone: "gba", city: "La Matanza Sur, GBA", postalCode: "1753", description: "GBA Oeste", lat: -34.7700, lng: -58.6250 },
+  { label: "Merlo", zone: "gba", city: "Merlo, GBA", postalCode: "1722", description: "GBA Oeste", lat: -34.6810, lng: -58.7278 },
+  { label: "Moreno", zone: "gba", city: "Moreno, GBA", postalCode: "1744", description: "GBA Oeste", lat: -34.6332, lng: -58.7918 },
+  { label: "San Miguel", zone: "gba", city: "San Miguel, GBA", postalCode: "1663", description: "GBA Norte", lat: -34.5429, lng: -58.7117 },
+  { label: "José C. Paz", zone: "gba", city: "José C. Paz, GBA", postalCode: "1665", description: "GBA Norte", lat: -34.5116, lng: -58.7703 },
+  { label: "Malvinas Argentinas", zone: "gba", city: "Malvinas Argentinas, GBA", postalCode: "1613", description: "GBA Norte", lat: -34.4611, lng: -58.6989 },
+  { label: "Tigre", zone: "gba", city: "Tigre, GBA", postalCode: "1648", description: "GBA Norte", lat: -34.4260, lng: -58.5797 },
+  { label: "Escobar", zone: "gba", city: "Escobar, GBA", postalCode: "1625", description: "GBA Norte", lat: -34.3494, lng: -58.7954 },
+  { label: "Pilar", zone: "gba", city: "Pilar, GBA", postalCode: "1629", description: "GBA Norte", lat: -34.4588, lng: -58.9140 },
+  { label: "Luján", zone: "gba", city: "Luján, GBA", postalCode: "6700", description: "GBA Oeste", lat: -34.5703, lng: -59.1050 },
+  { label: "General Rodríguez", zone: "gba", city: "General Rodríguez, GBA", postalCode: "1748", description: "GBA Oeste", lat: -34.6112, lng: -58.9508 },
+  { label: "Marcos Paz", zone: "gba", city: "Marcos Paz, GBA", postalCode: "1727", description: "GBA Oeste", lat: -34.7833, lng: -58.8382 },
+  { label: "Cañuelas", zone: "gba", city: "Cañuelas, GBA", postalCode: "1814", description: "GBA Sur", lat: -34.9579, lng: -58.7567 },
+  { label: "San Vicente", zone: "gba", city: "San Vicente, GBA", postalCode: "1865", description: "GBA Sur", lat: -34.9941, lng: -58.4293 },
+  { label: "Guernica", zone: "gba", city: "Guernica, GBA", postalCode: "1856", description: "GBA Sur", lat: -34.9225, lng: -58.3850 },
+  { label: "La Plata", zone: "gba", city: "La Plata, GBA", postalCode: "1900", description: "GBA Sur", lat: -34.9205, lng: -57.9536 },
+  { label: "Ensenada", zone: "gba", city: "Ensenada, GBA", postalCode: "1925", description: "GBA Sur", lat: -34.8680, lng: -57.9113 },
+  { label: "Berisso", zone: "gba", city: "Berisso, GBA", postalCode: "1923", description: "GBA Sur", lat: -34.8735, lng: -57.8789 },
+  { label: "Campana", zone: "gba", city: "Campana, GBA", postalCode: "2804", description: "GBA Norte", lat: -34.1689, lng: -58.9585 },
+  { label: "Zárate", zone: "gba", city: "Zárate, GBA", postalCode: "2800", description: "GBA Norte", lat: -34.0981, lng: -59.0284 }
 ];
 
-const GBA_LOCALIDADES = [
-  "Vicente López", "San Isidro", "San Fernando", "Tigre",
-  "Olivos", "Martínez", "Acassuso", "Boulogne", "Beccar",
-  "Florida", "Munro", "Carapachay", "Villa Adelina",
-  "San Martín", "Tres de Febrero", "Caseros", "Hurlingham",
-  "Ituzaingó", "Morón", "Haedo", "Ramos Mejía",
-  "Lomas de Zamora", "Banfield", "Lanús", "Avellaneda",
-  "Quilmes", "Berazategui", "Florencio Varela",
-  "La Plata", "La Matanza", "Ezeiza", "Pilar"
-];
-
-const POPULAR_ZONES = [
-  { label: "CABA", zone: "caba", city: "Buenos Aires", postalCode: "1001", description: "Ciudad Autónoma de Buenos Aires" },
-  { label: "Palermo", zone: "caba", city: "Palermo, CABA", postalCode: "1425", description: "CABA" },
-  { label: "Belgrano", zone: "caba", city: "Belgrano, CABA", postalCode: "1428", description: "CABA" },
-  { label: "Recoleta", zone: "caba", city: "Recoleta, CABA", postalCode: "1425", description: "CABA" },
-  { label: "Caballito", zone: "caba", city: "Caballito, CABA", postalCode: "1406", description: "CABA" },
-  { label: "Vicente López", zone: "gba", city: "Vicente López, GBA", postalCode: "1638", description: "GBA Norte" },
-  { label: "San Isidro", zone: "gba", city: "San Isidro, GBA", postalCode: "1642", description: "GBA Norte" },
-  { label: "Olivos", zone: "gba", city: "Olivos, GBA", postalCode: "1636", description: "GBA Norte" },
-  { label: "Lomas de Zamora", zone: "gba", city: "Lomas de Zamora, GBA", postalCode: "1832", description: "GBA Sur" },
-  { label: "Quilmes", zone: "gba", city: "Quilmes, GBA", postalCode: "1878", description: "GBA Sur" }
-];
+// Max distance (in degrees, ~0.5° ≈ 55km) to accept a geolocation match
+const MAX_GEO_DISTANCE = 0.5;
 
 const STORAGE_KEY = "delivery:selected-zone";
 
@@ -45,15 +58,32 @@ function detectZoneFromPostalCode(pc) {
   const trimmed = String(pc || "").trim().toUpperCase();
   if (!trimmed) return null;
 
+  // CABA: CPA prefix C1xxx or numeric 1000-1499
   if (trimmed.startsWith("C1")) return "caba";
   const num = parseInt(trimmed, 10);
-  if (num >= 1000 && num <= 1499) return "caba";
+  if (!isNaN(num) && num >= 1000 && num <= 1499) return "caba";
 
-  // Common GBA postal codes
-  if (num >= 1600 && num <= 1900) return "gba";
+  // GBA: CPA prefix B1xxx
   if (trimmed.startsWith("B1")) return "gba";
 
+  // GBA numeric ranges covering all 38 delivery localities
+  if (!isNaN(num)) {
+    if (num >= 1600 && num <= 1935) return "gba"; // GBA principal + Ensenada/Berisso
+    if (num >= 2800 && num <= 2810) return "gba"; // Zárate / Campana
+    if (num >= 6700 && num <= 6710) return "gba"; // Luján
+  }
+
   return null;
+}
+
+function findNearestZone(lat, lng) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const z of ALL_ZONES) {
+    const d = Math.sqrt((z.lat - lat) ** 2 + (z.lng - lng) ** 2);
+    if (d < bestDist) { bestDist = d; best = z; }
+  }
+  return bestDist <= MAX_GEO_DISTANCE ? best : null;
 }
 
 function buildLabel(city, postalCode) {
@@ -85,33 +115,35 @@ function writeStoredZone(data) {
 
 /* ── AddressSelector component ────────────────────────── */
 
-export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAddress }) {
+export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAddress, onZoneSelect, token, onSyncZone }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [postalInput, setPostalInput] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [selectedZone, setSelectedZone] = useState(() => readStoredZone());
   const [confirmedMessage, setConfirmedMessage] = useState("");
   const [activeTab, setActiveTab] = useState("popular");
+  const [geoLocating, setGeoLocating] = useState(false);
   const modalRef = useRef(null);
   const inputRef = useRef(null);
   const confirmTimerRef = useRef(null);
+  const selectedItemRef = useRef(null);
 
-  // Derive display from user address or stored zone
+  // Derive display — explicit selection wins, then user address, then fallback
   const displayInfo = (() => {
-    // Priority 1: logged-in user with address
-    if (user && shippingAddressLabel) {
-      return {
-        line1: "Enviar a",
-        line2: shippingAddressLabel,
-        hasAddress: true
-      };
-    }
-
-    // Priority 2: stored zone selection
+    // Priority 1: user explicitly selected a zone/address
     if (selectedZone?.city) {
       return {
         line1: "Enviar a",
         line2: selectedZone.city,
+        hasAddress: true
+      };
+    }
+
+    // Priority 2: logged-in user with primary address
+    if (user && shippingAddressLabel) {
+      return {
+        line1: "Enviar a",
+        line2: shippingAddressLabel,
         hasAddress: true
       };
     }
@@ -123,6 +155,25 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
       hasAddress: false
     };
   })();
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const scrollY = window.scrollY;
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.overflow = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [isModalOpen]);
 
   // Close modal on outside click
   useEffect(() => {
@@ -145,12 +196,34 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
     };
   }, [isModalOpen]);
 
-  // Focus input when modal opens
+  // Focus input + scroll to selected zone when modal opens
   useEffect(() => {
     if (isModalOpen) {
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        // Scroll selected item into view after the list renders
+        setTimeout(() => {
+          selectedItemRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+        }, 80);
+      });
     }
   }, [isModalOpen]);
+
+  // On login, restore zone from backend if available, or push local to backend
+  useEffect(() => {
+    if (!user || !token) return;
+    const backendZone = user.preferredDeliveryZone;
+    const localZone = readStoredZone();
+    if (backendZone?.city && !localZone) {
+      // Backend has zone, local doesn't → restore
+      setSelectedZone(backendZone);
+      writeStoredZone(backendZone);
+    } else if (localZone?.city && !backendZone?.city) {
+      // Local has zone, backend doesn't → push
+      onSyncZone?.(localZone);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, token]);
 
   // Cleanup confirmation timer
   useEffect(() => {
@@ -166,12 +239,12 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
   }
 
   function showConfirmation(label) {
-    setConfirmedMessage(`Enviando a ${label}`);
+    setConfirmedMessage(`✅ ¡Tu ubicación está dentro de nuestra zona de envío! (${label})`);
     clearTimeout(confirmTimerRef.current);
     confirmTimerRef.current = setTimeout(() => {
       setConfirmedMessage("");
       setIsModalOpen(false);
-    }, 1800);
+    }, 2200);
   }
 
   function handleSelectZone(zone) {
@@ -182,7 +255,39 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
     };
     setSelectedZone(data);
     writeStoredZone(data);
+    onZoneSelect?.(data);
+    if (user && token) onSyncZone?.(data);
     showConfirmation(zone.label || zone.city);
+  }
+
+  function handleGeolocate() {
+    if (!navigator.geolocation) {
+      setConfirmedMessage("Tu navegador no soporta geolocalización.");
+      clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = setTimeout(() => setConfirmedMessage(""), 3000);
+      return;
+    }
+    setGeoLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeoLocating(false);
+        const match = findNearestZone(pos.coords.latitude, pos.coords.longitude);
+        if (match) {
+          handleSelectZone(match);
+        } else {
+          setConfirmedMessage("No llegamos hasta tu zona de envío. Consultanos por WhatsApp.");
+          clearTimeout(confirmTimerRef.current);
+          confirmTimerRef.current = setTimeout(() => setConfirmedMessage(""), 3000);
+        }
+      },
+      () => {
+        setGeoLocating(false);
+        setConfirmedMessage("No pudimos obtener tu ubicación. Habilitá la geolocalización.");
+        clearTimeout(confirmTimerRef.current);
+        confirmTimerRef.current = setTimeout(() => setConfirmedMessage(""), 3000);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
   }
 
   function handlePostalSubmit(e) {
@@ -192,17 +297,21 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
 
     const zone = detectZoneFromPostalCode(pc);
     if (!zone) {
-      setConfirmedMessage("No pudimos detectar la zona. Verificá el código postal.");
+      setConfirmedMessage("No llegamos hasta tu zona de envío. Verificá el código postal.");
       clearTimeout(confirmTimerRef.current);
       confirmTimerRef.current = setTimeout(() => setConfirmedMessage(""), 3000);
       return;
     }
 
-    const cityLabel = zone === "caba" ? `CABA ${pc}` : `GBA ${pc}`;
+    // Try to match the CP to a known locality for a better label
+    const matched = ALL_ZONES.find(z => z.postalCode === pc);
+    const cityLabel = matched ? matched.city : (zone === "caba" ? `CABA (CP ${pc})` : `GBA (CP ${pc})`);
     const data = { city: cityLabel, zone, postalCode: pc };
     setSelectedZone(data);
     writeStoredZone(data);
-    showConfirmation(cityLabel);
+    onZoneSelect?.(data);
+    if (user && token) onSyncZone?.(data);
+    showConfirmation(matched ? matched.label : cityLabel);
   }
 
   function handleGoToFullAddress() {
@@ -210,14 +319,15 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
     onOpenMyAddress?.();
   }
 
-  // Filter popular zones by search
-  const filteredZones = searchInput.trim()
-    ? POPULAR_ZONES.filter((z) => {
-      const q = searchInput.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Filter zones by search (memoized for 39 items)
+  const filteredZones = useMemo(() => {
+    const q = searchInput.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (!q) return ALL_ZONES;
+    return ALL_ZONES.filter((z) => {
       const target = `${z.label} ${z.description} ${z.postalCode}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       return target.includes(q);
-    })
-    : POPULAR_ZONES;
+    });
+  }, [searchInput]);
 
   // Address book entries (for logged-in users)
   const addressBookEntries = (() => {
@@ -242,7 +352,7 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
         type="button"
         className={`as-trigger${displayInfo.hasAddress ? " as-has-address" : ""}`}
         onClick={handleOpen}
-        aria-label={displayInfo.hasAddress ? `Enviando a ${displayInfo.line2}` : "Elegí tu zona de envío"}
+        aria-label={displayInfo.hasAddress ? `Zona de envío: ${displayInfo.line2}` : "Elegí tu zona de envío"}
         aria-haspopup="dialog"
       >
         <span className="as-trigger-icon" aria-hidden="true">
@@ -292,8 +402,8 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
 
             {/* Confirmation toast */}
             {confirmedMessage && (
-              <div className={`as-toast${confirmedMessage.startsWith("No") ? " as-toast-error" : ""}`} role="status">
-                {confirmedMessage.startsWith("No") ? (
+              <div className={`as-toast${confirmedMessage.startsWith("No") || confirmedMessage.startsWith("Tu nav") ? " as-toast-error" : ""}`} role="status">
+                {confirmedMessage.startsWith("No") || confirmedMessage.startsWith("Tu nav") ? (
                   <span className="as-toast-icon" aria-hidden="true">⚠</span>
                 ) : (
                   <span className="as-toast-icon" aria-hidden="true">✓</span>
@@ -320,13 +430,28 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
                   className="as-postal-btn"
                   disabled={postalInput.trim().length < 4}
                 >
-                  Aplicar
+                  Verificar
                 </button>
               </div>
               <p className="as-postal-hint">
                 Ejemplo: 1425, 1636, C1425
               </p>
             </form>
+
+            {/* Geolocation button */}
+            <button
+              type="button"
+              className="as-geo-btn"
+              onClick={handleGeolocate}
+              disabled={geoLocating}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+                <circle cx="12" cy="12" r="8" fill="none" />
+              </svg>
+              {geoLocating ? "Detectando..." : "Usar mi ubicación"}
+            </button>
 
             {/* Shipping info badge */}
             <div className="as-shipping-info">
@@ -349,7 +474,7 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
                 aria-selected={activeTab === "popular"}
                 onClick={() => setActiveTab("popular")}
               >
-                Zonas populares
+                Zonas de envío
               </button>
               {hasAddressBook && (
                 <button
@@ -375,20 +500,22 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
                     <input
                       type="text"
                       className="as-search-input"
-                      placeholder="Buscar barrio o localidad..."
+                      placeholder="Buscar localidad..."
                       value={searchInput}
                       onChange={(e) => setSearchInput(e.target.value)}
                     />
                   </div>
                   <ul className="as-zone-list" role="listbox">
                     {filteredZones.length > 0 ? (
-                      filteredZones.map((zone) => (
-                        <li key={zone.label}>
+                      filteredZones.map((zone) => {
+                        const isSelected = selectedZone?.city === zone.city;
+                        return (
+                        <li key={zone.label} ref={isSelected ? selectedItemRef : undefined}>
                           <button
                             type="button"
-                            className={`as-zone-item${selectedZone?.city === zone.city ? " as-zone-selected" : ""}`}
+                            className={`as-zone-item${isSelected ? " as-zone-selected" : ""}`}
                             role="option"
-                            aria-selected={selectedZone?.city === zone.city}
+                            aria-selected={isSelected}
                             onClick={() => handleSelectZone(zone)}
                           >
                             <span className="as-zone-pin" aria-hidden="true">
@@ -404,12 +531,13 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
                             <span className={`as-zone-tag ${zone.zone === "caba" ? "as-tag-caba" : "as-tag-gba"}`}>
                               {zone.zone === "caba" ? "CABA" : "GBA"}
                             </span>
-                            {selectedZone?.city === zone.city && (
+                            {isSelected && (
                               <span className="as-zone-check" aria-hidden="true">✓</span>
                             )}
                           </button>
                         </li>
-                      ))
+                        );
+                      })
                     ) : (
                       <li className="as-zone-empty">
                         No encontramos esa zona. Probá con el código postal.
@@ -457,6 +585,22 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
 
             {/* Footer */}
             <div className="as-modal-footer">
+              <button
+                type="button"
+                className="as-map-link-btn"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  const el = document.getElementById("cobertura-envios");
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+                  <line x1="8" y1="2" x2="8" y2="18" />
+                  <line x1="16" y1="6" x2="16" y2="22" />
+                </svg>
+                Ver mapa de cobertura
+              </button>
               {user ? (
                 <button
                   type="button"

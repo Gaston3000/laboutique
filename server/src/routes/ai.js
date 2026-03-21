@@ -105,7 +105,10 @@ aiRouter.post("/smart-order", async (req, res) => {
       products: suggestedProducts
     });
   } catch (error) {
-    console.error("Smart order error:", error.message);
+    console.error("Smart order error:", error.status, error.message);
+    if (error.status === 429) {
+      return res.status(503).json({ error: "El servicio de IA está temporalmente sin disponibilidad. Intentá más tarde." });
+    }
     return res.status(500).json({ error: "No se pudo procesar tu pedido. Intentá de nuevo." });
   }
 });

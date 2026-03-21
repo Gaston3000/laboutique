@@ -304,6 +304,48 @@
 
 /* ── Shipping info badges ───────────────────────────────── */
 
+/* ── Geolocation button ─────────────────────────────────── */
+
+.as-geo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: calc(100% - 44px);
+  margin: 12px 22px 0;
+  padding: 10px 16px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fafafa;
+  color: #555;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.as-geo-btn:hover:not(:disabled) {
+  background: rgba(24, 119, 242, 0.06);
+  border-color: var(--blue, #1877f2);
+  color: var(--blue, #1877f2);
+}
+
+.as-geo-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.as-geo-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .as-shipping-info {
   display: flex;
   gap: 8px;
@@ -554,6 +596,43 @@
 .as-modal-footer {
   padding: 12px 22px 18px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.as-map-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 12px;
+  background: transparent;
+  color: #555;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.as-map-link-btn:hover {
+  background: rgba(24, 119, 242, 0.06);
+  border-color: var(--blue, #1877f2);
+  color: var(--blue, #1877f2);
+}
+
+.as-map-link-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .as-full-address-btn {

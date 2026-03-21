@@ -56,7 +56,8 @@ import {
   trackAnalyticsEvent,
   fetchNotifications,
   markNotificationRead,
-  markAllNotificationsRead
+  markAllNotificationsRead,
+  syncDeliveryZone
 } from "./api";
 
 // Lazy-loaded heavy components (code splitting)
@@ -76,7 +77,7 @@ import DeliveryCoverageSection from "./components/DeliveryCoverageSection";
 import WelcomePromoSpotlight from "./components/WelcomePromoSpotlight";
 import WelcomeDiscountTimer from "./components/WelcomeDiscountTimer";
 
-const CATEGORY_PAGE_SIZE = 8;
+const CATEGORY_PAGE_SIZE = 10;
 const SEARCH_PAGE_SIZE = 10;
 const RESULTS_SORT_OPTIONS = [
   { key: "recent", label: "Mas reciente", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
@@ -1845,6 +1846,24 @@ function App() {
     setAppliedCartPromotion(null);
     setCartPromoMessage("");
   }, [cart]);
+
+  // Auto-set shipping method from previously selected delivery zone
+  useEffect(() => {
+    if (activeSection !== "cart") return;
+    if (checkoutForm.shippingMethod) return; // already chosen, don't override
+    try {
+      const raw = localStorage.getItem("delivery:selected-zone");
+      if (!raw) return;
+      const stored = JSON.parse(raw);
+      if (stored?.zone === "caba" || stored?.zone === "gba") {
+        setCheckoutForm((current) => ({
+          ...current,
+          shippingMethod: "delivery",
+          shippingZone: stored.zone
+        }));
+      }
+    } catch { /* silent */ }
+  }, [activeSection]);
 
   useEffect(() => {
     if (activeSection !== "checkout-details") {
@@ -4727,7 +4746,18 @@ function App() {
           <AddressSelector
             shippingAddressLabel={shippingAddressLabel}
             user={auth.user}
+            token={auth.token}
             onOpenMyAddress={handleOpenMyAddress}
+            onZoneSelect={(data) => {
+              if (data?.zone) {
+                localStorage.setItem("delivery:selected-zone", JSON.stringify(data));
+              }
+            }}
+            onSyncZone={(data) => {
+              if (auth.token && data?.zone) {
+                syncDeliveryZone(auth.token, data).catch(() => {});
+              }
+            }}
           />
 
           <ul className="primary-nav nav-shortcuts" aria-label="Accesos rápidos">
@@ -6432,43 +6462,67 @@ function App() {
                         )}
 
                         <div className="checkout-summary-row">
-                          <span>Recogida</span>
+                          <span>{checkoutForm.shippingMethod === "pickup" ? "Retiro en el local" : checkoutForm.shippingMethod === "delivery" ? (checkoutForm.shippingZone === "caba" ? "Envío a CABA" : "Envío a GBA") : "Envío"}</span>
                           <strong>{checkoutShippingSummaryLabel}</strong>
                         </div>
 
-                        <a href="#" onClick={(event) => event.preventDefault()} className="checkout-shipping-country">
+                        <div className="checkout-shipping-country">
                           Buenos Aires, Argentina
-                        </a>
+                        </div>
 
-                        <label className="checkout-shipping-picker">
-                          <select
-                            value={checkoutShippingOptionValue}
-                            onChange={(event) => {
-                              const selected = event.target.value;
-                              const isDelivery = selected === "delivery-caba" || selected === "delivery-gba";
-                              setCheckoutForm((current) => ({
-                                ...current,
-                                shippingMethod: selected === "pickup" ? "pickup" : isDelivery ? "delivery" : "",
-                                shippingZone: selected === "delivery-gba" ? "gba" : selected === "delivery-caba" ? "caba" : "",
-                                paymentMethod: selected === "pickup" ? current.paymentMethod : "mercadopago",
-                                street: "",
-                                number: "",
-                                floor: "",
-                                apartment: "",
-                                city: "Buenos Aires",
-                                province: "Buenos Aires",
-                                postalCode: "",
-                                notes: "",
-                              }));
-                            }}
-                            required
+                        <div className="shipping-cards">
+                          <button
+                            type="button"
+                            className={`shipping-card${checkoutShippingOptionValue === "pickup" ? " shipping-card--active" : ""}`}
+                            onClick={() => setCheckoutForm((c) => ({ ...c, shippingMethod: "pickup", shippingZone: "", paymentMethod: c.paymentMethod, street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" }))}
                           >
-                            <option value="">Elegí una opción</option>
-                            <option value="pickup">Retiro en el local (Gratis)</option>
-                            <option value="delivery-caba">{hasReachedFreeShipping ? "Envío a CABA (Gratis)" : "Envío a CABA ($5.000)"}</option>
-                            <option value="delivery-gba">{hasReachedFreeShipping ? "Envío a GBA (Gratis)" : "Envío a GBA ($7.000)"}</option>
-                          </select>
-                        </label>
+                            <span className="shipping-card-icon">
+                              <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+                            </span>
+                            <span className="shipping-card-info">
+                              <span className="shipping-card-label">Retiro en el local</span>
+                              <span className="shipping-card-sub">Villa Crespo · Lun a Vie</span>
+                            </span>
+                            <span className="shipping-card-price shipping-card-free">Gratis</span>
+                            <span className="shipping-card-radio" />
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`shipping-card${checkoutShippingOptionValue === "delivery-caba" ? " shipping-card--active" : ""}`}
+                            onClick={() => setCheckoutForm((c) => ({ ...c, shippingMethod: "delivery", shippingZone: "caba", paymentMethod: "mercadopago", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" }))}
+                          >
+                            <span className="shipping-card-icon">
+                              <svg viewBox="0 0 24 24"><circle cx="5" cy="17" r="2.5"/><circle cx="19" cy="17" r="2.5"/><path d="M5 14.5l3-7h3.5l2.5 5h5.5"/><path d="M8 7.5h3"/></svg>
+                            </span>
+                            <span className="shipping-card-info">
+                              <span className="shipping-card-label">Envío a CABA</span>
+                              <span className="shipping-card-sub">1–2 días hábiles</span>
+                            </span>
+                            <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
+                              {hasReachedFreeShipping ? "Gratis" : "$5.000"}
+                            </span>
+                            <span className="shipping-card-radio" />
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`shipping-card${checkoutShippingOptionValue === "delivery-gba" ? " shipping-card--active" : ""}`}
+                            onClick={() => setCheckoutForm((c) => ({ ...c, shippingMethod: "delivery", shippingZone: "gba", paymentMethod: "mercadopago", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" }))}
+                          >
+                            <span className="shipping-card-icon">
+                              <svg viewBox="0 0 24 24"><path d="M2 4h12v13H2z"/><path d="M14 9h4l3 3v5h-7"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+                            </span>
+                            <span className="shipping-card-info">
+                              <span className="shipping-card-label">Envío a GBA</span>
+                              <span className="shipping-card-sub">1–3 días hábiles</span>
+                            </span>
+                            <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
+                              {hasReachedFreeShipping ? "Gratis" : "$7.000"}
+                            </span>
+                            <span className="shipping-card-radio" />
+                          </button>
+                        </div>
 
                         {welcomeDiscountAmount > 0 && (
                           <div className="checkout-summary-row" style={{ background: '#eff6ff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #1a4ac8' }}>
@@ -6713,36 +6767,60 @@ function App() {
                       />
                     </label>
 
-                    <label>
-                      <span>Método de entrega *</span>
-                      <select
-                        value={checkoutShippingOptionValue}
-                        onChange={(event) => {
-                          const selected = event.target.value;
-                          const isDelivery = selected === "delivery-caba" || selected === "delivery-gba";
-                          setCheckoutForm((current) => ({
-                            ...current,
-                            shippingMethod: selected === "pickup" ? "pickup" : isDelivery ? "delivery" : "",
-                            shippingZone: selected === "delivery-gba" ? "gba" : selected === "delivery-caba" ? "caba" : "",
-                            street: "",
-                            number: "",
-                            floor: "",
-                            apartment: "",
-                            city: "Buenos Aires",
-                            province: "Buenos Aires",
-                            postalCode: "",
-                            notes: "",
-                          }));
-                          setAddressValidationErrors([]);
-                        }}
-                        required
+                    <span className="checkout-field-label">Método de entrega *</span>
+                    <div className="shipping-cards shipping-cards--form">
+                      <button
+                        type="button"
+                        className={`shipping-card${checkoutShippingOptionValue === "pickup" ? " shipping-card--active" : ""}`}
+                        onClick={() => { setCheckoutForm((c) => ({ ...c, shippingMethod: "pickup", shippingZone: "", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" })); setAddressValidationErrors([]); }}
                       >
-                        <option value="">Elegí una opción</option>
-                        <option value="pickup">Retiro en el local (Gratis)</option>
-                        <option value="delivery-caba">{hasReachedFreeShipping ? "Envío a CABA (Gratis)" : "Envío a CABA ($5.000)"}</option>
-                        <option value="delivery-gba">{hasReachedFreeShipping ? "Envío a GBA (Gratis)" : "Envío a GBA ($7.000)"}</option>
-                      </select>
-                    </label>
+                        <span className="shipping-card-icon">
+                          <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+                        </span>
+                        <span className="shipping-card-info">
+                          <span className="shipping-card-label">Retiro en el local</span>
+                          <span className="shipping-card-sub">Villa Crespo · Lun a Vie</span>
+                        </span>
+                        <span className="shipping-card-price shipping-card-free">Gratis</span>
+                        <span className="shipping-card-radio" />
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`shipping-card${checkoutShippingOptionValue === "delivery-caba" ? " shipping-card--active" : ""}`}
+                        onClick={() => { setCheckoutForm((c) => ({ ...c, shippingMethod: "delivery", shippingZone: "caba", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" })); setAddressValidationErrors([]); }}
+                      >
+                        <span className="shipping-card-icon">
+                          <svg viewBox="0 0 24 24"><circle cx="5" cy="17" r="2.5"/><circle cx="19" cy="17" r="2.5"/><path d="M5 14.5l3-7h3.5l2.5 5h5.5"/><path d="M8 7.5h3"/></svg>
+                        </span>
+                        <span className="shipping-card-info">
+                          <span className="shipping-card-label">Envío a CABA</span>
+                          <span className="shipping-card-sub">1–2 días hábiles</span>
+                        </span>
+                        <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
+                          {hasReachedFreeShipping ? "Gratis" : "$5.000"}
+                        </span>
+                        <span className="shipping-card-radio" />
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`shipping-card${checkoutShippingOptionValue === "delivery-gba" ? " shipping-card--active" : ""}`}
+                        onClick={() => { setCheckoutForm((c) => ({ ...c, shippingMethod: "delivery", shippingZone: "gba", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" })); setAddressValidationErrors([]); }}
+                      >
+                        <span className="shipping-card-icon">
+                          <svg viewBox="0 0 24 24"><path d="M2 4h12v13H2z"/><path d="M14 9h4l3 3v5h-7"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+                        </span>
+                        <span className="shipping-card-info">
+                          <span className="shipping-card-label">Envío a GBA</span>
+                          <span className="shipping-card-sub">1–3 días hábiles</span>
+                        </span>
+                        <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
+                          {hasReachedFreeShipping ? "Gratis" : "$7.000"}
+                        </span>
+                        <span className="shipping-card-radio" />
+                      </button>
+                    </div>
 
                     <p className="checkout-details-help">
                       Seleccioná si preferís recibir el pedido a domicilio o retirarlo en nuestra tienda de Villa Crespo.
