@@ -18,6 +18,7 @@ import {
   deleteProductVariant,
   fetchAdminCategories,
   fetchAdminAnalytics,
+  fetchAdminUserSessions,
   fetchAdministrators,
   fetchCustomerActivity,
   fetchCustomerReorderItems,
@@ -2608,6 +2609,7 @@ function App() {
       eventType,
       visitorId: analyticsVisitorId,
       sessionId: analyticsSessionId,
+      userId: auth.user?.id || null,
       path: window.location.pathname,
       url: window.location.href,
       referrer,
@@ -2866,7 +2868,13 @@ function App() {
   function removeFromCart(cartKey) {
     setCartStockMessage("");
     setCartStockMessageCartKey("");
+    const removedItem = cart.find((item) => (item.cartKey || `${item.id}:base`) === cartKey);
     setCart((currentCart) => currentCart.filter((item) => (item.cartKey || `${item.id}:base`) !== cartKey));
+    sendAnalytics("remove_from_cart", {
+      productId: removedItem?.id || null,
+      productName: removedItem?.name || "",
+      cartKey
+    });
   }
 
   function clearCart() {
@@ -2876,6 +2884,7 @@ function App() {
   }
 
   function handleConfirmClearCart() {
+    sendAnalytics("clear_cart", { itemCount: cart.length });
     clearCart();
     setIsClearCartConfirmOpen(false);
   }
@@ -2883,6 +2892,7 @@ function App() {
   function openCartDrawer() {
     setIsAddPopupOpen(false);
     setIsCartDrawerOpen(true);
+    sendAnalytics("open_cart", { itemCount: cart.length });
   }
 
   function closeCartDrawer() {
@@ -3666,6 +3676,14 @@ function App() {
       setAdminMessage(error.message);
       throw error;
     }
+  }
+
+  async function handleFetchUserSessions(period = "30d") {
+    if (!auth.token) {
+      return null;
+    }
+
+    return fetchAdminUserSessions(auth.token, period);
   }
 
   async function handleSaveAddress(addressValue) {
@@ -4748,6 +4766,7 @@ function App() {
             user={auth.user}
             token={auth.token}
             onOpenMyAddress={handleOpenMyAddress}
+            onGoHome={handleGoHomeSection}
             onZoneSelect={(data) => {
               if (data?.zone) {
                 localStorage.setItem("delivery:selected-zone", JSON.stringify(data));
@@ -4842,21 +4861,6 @@ function App() {
                 Inicio
               </button>
             </li>
-            {auth.user && myOrders.length > 0 && (
-              <li>
-                <button
-                  type="button"
-                  className="admin-nav-button nav-shortcut-btn nav-repeat-order-btn"
-                  onClick={() => { setAccountInitialTab("pedidos"); setActiveSection("account"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  title="Repetir pedido"
-                >
-                  <span className="nav-link-icon" aria-hidden="true">
-                    <img src="/fotos/iconos%20general/uim--repeat.svg" alt="" width="20" height="20" />
-                  </span>
-                  Repetir pedido
-                </button>
-              </li>
-            )}
             <li>
               <button
                 type="button"
@@ -5365,6 +5369,7 @@ function App() {
               onDeleteTicket={handleDeleteTicket}
               onReloadTickets={handleReloadTickets}
               onReloadAnalytics={handleReloadAdminAnalytics}
+              onFetchUserSessions={handleFetchUserSessions}
               notifications={serverNotifications}
               unreadNotificationsCount={unreadNotificationsCount}
               onMarkNotificationRead={handleMarkNotificationRead}

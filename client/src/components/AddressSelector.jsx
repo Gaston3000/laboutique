@@ -76,6 +76,15 @@ function detectZoneFromPostalCode(pc) {
   return null;
 }
 
+function detectZoneFromCity(city) {
+  const c = String(city || "").trim().toLowerCase();
+  if (!c) return null;
+  if (c === "caba" || c === "capital federal" || c === "buenos aires"
+      || c.includes("ciudad autónoma") || c.includes("ciudad autonoma")) return "caba";
+  if (c.includes(", gba") || c.includes("gba")) return "gba";
+  return null;
+}
+
 function findNearestZone(lat, lng) {
   let best = null;
   let bestDist = Infinity;
@@ -115,7 +124,7 @@ function writeStoredZone(data) {
 
 /* ── AddressSelector component ────────────────────────── */
 
-export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAddress, onZoneSelect, token, onSyncZone }) {
+export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAddress, onZoneSelect, token, onSyncZone, onGoHome }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [postalInput, setPostalInput] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -295,6 +304,15 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
     const pc = postalInput.trim();
     if (pc.length < 4) return;
 
+    // Validate postal code format: numeric (1234) or CPA (C1234, B1234)
+    const looksLikePostalCode = /^[A-Za-z]?\d{4,}$/.test(pc);
+    if (!looksLikePostalCode) {
+      setConfirmedMessage("Ingresá un código postal válido (ej: 1425, C1425).");
+      clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = setTimeout(() => setConfirmedMessage(""), 3000);
+      return;
+    }
+
     const zone = detectZoneFromPostalCode(pc);
     if (!zone) {
       setConfirmedMessage("No llegamos hasta tu zona de envío. Verificá el código postal.");
@@ -338,7 +356,7 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
         label: [String(entry.street || ""), String(entry.height || "")].filter(Boolean).join(" ") || "Dirección guardada",
         city: String(entry.city || "Buenos Aires"),
         postalCode: String(entry.postalCode || ""),
-        zone: detectZoneFromPostalCode(entry.postalCode) || "gba"
+        zone: detectZoneFromPostalCode(entry.postalCode) || detectZoneFromCity(entry.city) || "gba"
       }))
       .filter((e) => e.label !== "Dirección guardada" || e.postalCode);
   })();
@@ -402,8 +420,8 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
 
             {/* Confirmation toast */}
             {confirmedMessage && (
-              <div className={`as-toast${confirmedMessage.startsWith("No") || confirmedMessage.startsWith("Tu nav") ? " as-toast-error" : ""}`} role="status">
-                {confirmedMessage.startsWith("No") || confirmedMessage.startsWith("Tu nav") ? (
+              <div className={`as-toast${confirmedMessage.startsWith("No") || confirmedMessage.startsWith("Tu nav") || confirmedMessage.startsWith("Ingresá") ? " as-toast-error" : ""}`} role="status">
+                {confirmedMessage.startsWith("No") || confirmedMessage.startsWith("Tu nav") || confirmedMessage.startsWith("Ingresá") ? (
                   <span className="as-toast-icon" aria-hidden="true">⚠</span>
                 ) : (
                   <span className="as-toast-icon" aria-hidden="true">✓</span>
@@ -452,18 +470,6 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
               </svg>
               {geoLocating ? "Detectando..." : "Usar mi ubicación"}
             </button>
-
-            {/* Shipping info badge */}
-            <div className="as-shipping-info">
-              <div className="as-shipping-info-item as-shipping-caba">
-                <span className="as-shipping-badge">CABA</span>
-                <span>Envío $5.000 · Gratis desde $50.000</span>
-              </div>
-              <div className="as-shipping-info-item as-shipping-gba">
-                <span className="as-shipping-badge as-badge-gba">GBA</span>
-                <span>Envío $7.000 · Gratis desde $50.000</span>
-              </div>
-            </div>
 
             {/* Tabs */}
             <div className="as-tabs" role="tablist">
@@ -590,8 +596,13 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
                 className="as-map-link-btn"
                 onClick={() => {
                   setIsModalOpen(false);
-                  const el = document.getElementById("cobertura-envios");
-                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  if (onGoHome) onGoHome();
+                  requestAnimationFrame(() => {
+                    setTimeout(() => {
+                      const el = document.getElementById("cobertura-envios");
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 100);
+                  });
                 }}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">

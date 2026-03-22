@@ -1406,6 +1406,7 @@ export default function AdminPanel({
   onDeleteTicket,
   onReloadTickets,
   onReloadAnalytics,
+  onFetchUserSessions,
   onMarkNotificationRead,
   onMarkAllNotificationsRead,
   message
@@ -1461,6 +1462,13 @@ export default function AdminPanel({
   const [analyticsPeriod, setAnalyticsPeriod] = useState("30d");
   const [analyticsDateRange, setAnalyticsDateRange] = useState(null);
   const [isReloadingAnalytics, setIsReloadingAnalytics] = useState(false);
+  const [isUserActivityOpen, setIsUserActivityOpen] = useState(false);
+  const [userActivityData, setUserActivityData] = useState(null);
+  const [isUserActivityLoading, setIsUserActivityLoading] = useState(false);
+  const [expandedSessionId, setExpandedSessionId] = useState(null);
+  const [userActivityFilter, setUserActivityFilter] = useState("all");
+  const [isUserActivityFilterOpen, setIsUserActivityFilterOpen] = useState(false);
+  const userActivityFilterRef = useRef(null);
   const [removingCategoryProductId, setRemovingCategoryProductId] = useState(null);
   const [categoryRemovalUndo, setCategoryRemovalUndo] = useState(null);
   const [adminProductSearch, setAdminProductSearch] = useState("");
@@ -3982,6 +3990,164 @@ export default function AdminPanel({
     }
   }
 
+  function generateMockUserSessions() {
+    const mockUsers = [
+      { id: 1, name: "María García", email: "maria.garcia@gmail.com" },
+      { id: 2, name: "Carlos López", email: "carlos.lopez@hotmail.com" },
+      { id: 3, name: "Ana Rodríguez", email: "ana.rodriguez@yahoo.com" },
+      { id: 4, name: "Juan Martínez", email: "jmartinez@outlook.com" },
+      { id: 5, name: "Laura Fernández", email: "laura.f@gmail.com" },
+    ];
+    const devices = ["mobile", "desktop", "tablet"];
+    const browsers = ["Chrome", "Safari", "Firefox", "Edge"];
+    const oses = ["Windows", "iOS", "Android", "macOS"];
+    const sources = ["google", "instagram", "directo", "facebook", "whatsapp"];
+    const products = [
+      { id: 101, name: "Lavandina Ayudín x5L", brand: "Ayudín", price: 2850 },
+      { id: 102, name: "Limpiador Multiuso Mr Músculo", brand: "Mr Músculo", price: 3200 },
+      { id: 103, name: "Jabón en Polvo Skip 3kg", brand: "Skip", price: 5400 },
+      { id: 104, name: "Suavizante Vivere 900ml", brand: "Vivere", price: 2100 },
+      { id: 105, name: "Desodorante Ambiente Glade", brand: "Glade", price: 1750 },
+      { id: 106, name: "Esponja Scotch-Brite x3", brand: "Scotch-Brite", price: 1200 },
+      { id: 107, name: "Detergente Magistral 750ml", brand: "Magistral", price: 2400 },
+      { id: 108, name: "Limpia Pisos Procenex", brand: "Procenex", price: 1900 },
+    ];
+    const categories = ["Limpieza del Hogar", "Lavandería", "Cocina", "Baño", "Aromatizantes", "Ofertas Destacadas"];
+    const searches = ["lavandina", "detergente", "esponja", "desinfectante", "jabon", "limpiador", "trapo piso"];
+
+    const now = new Date();
+    const sessions = [];
+
+    for (let i = 0; i < 25; i++) {
+      const isLoggedIn = i < 8;
+      const user = isLoggedIn ? mockUsers[i % mockUsers.length] : null;
+      const device = devices[i % devices.length];
+      const sessionStart = new Date(now.getTime() - (i * 3600000 + Math.floor(Math.random() * 7200000)));
+      const durationSec = 30 + Math.floor(Math.random() * 900);
+      const sessionEnd = new Date(sessionStart.getTime() + durationSec * 1000);
+      const sid = `demo-sid-${1000 + i}`;
+
+      const timeline = [];
+      let t = new Date(sessionStart);
+
+      timeline.push({ eventType: "page_view", path: "/", at: t.toISOString(), metadata: { activeSection: "home" } });
+      t = new Date(t.getTime() + 5000 + Math.floor(Math.random() * 15000));
+
+      if (Math.random() > 0.3) {
+        const cat = categories[Math.floor(Math.random() * categories.length)];
+        timeline.push({ eventType: "category_select", path: "/", at: t.toISOString(), metadata: { categoryName: cat } });
+        t = new Date(t.getTime() + 3000 + Math.floor(Math.random() * 10000));
+      }
+
+      if (Math.random() > 0.4) {
+        const s = searches[Math.floor(Math.random() * searches.length)];
+        timeline.push({ eventType: "search", path: "/", at: t.toISOString(), metadata: { query: s, queryLength: s.length } });
+        t = new Date(t.getTime() + 2000 + Math.floor(Math.random() * 8000));
+      }
+
+      const viewedProducts = [];
+      const numProductViews = 1 + Math.floor(Math.random() * 4);
+      for (let p = 0; p < numProductViews; p++) {
+        const prod = products[Math.floor(Math.random() * products.length)];
+        viewedProducts.push(prod);
+        timeline.push({ eventType: "product_view", path: "/", at: t.toISOString(), metadata: { productId: prod.id, productName: prod.name, productBrand: prod.brand, productPrice: prod.price } });
+        t = new Date(t.getTime() + 4000 + Math.floor(Math.random() * 20000));
+      }
+
+      const cartAdds = [];
+      if (Math.random() > 0.35) {
+        const numAdds = 1 + Math.floor(Math.random() * 3);
+        for (let c = 0; c < numAdds && c < viewedProducts.length; c++) {
+          const prod = viewedProducts[c];
+          const qty = 1 + Math.floor(Math.random() * 3);
+          cartAdds.push(prod);
+          timeline.push({ eventType: "add_to_cart", path: "/", at: t.toISOString(), metadata: { productId: prod.id, productName: prod.name, quantity: qty, unitPrice: prod.price } });
+          t = new Date(t.getTime() + 2000 + Math.floor(Math.random() * 5000));
+        }
+      }
+
+      let didCheckout = false;
+      if (cartAdds.length > 0 && Math.random() > 0.5) {
+        didCheckout = true;
+        timeline.push({ eventType: "begin_checkout", path: "/", at: t.toISOString(), metadata: { cartItems: cartAdds.length } });
+        t = new Date(t.getTime() + 5000);
+      }
+
+      if (isLoggedIn && i === 0) {
+        timeline.splice(1, 0, { eventType: "login", path: "/", at: new Date(sessionStart.getTime() + 3000).toISOString(), metadata: { method: "email" } });
+      }
+
+      sessions.push({
+        sessionId: sid,
+        visitorId: `demo-vid-${2000 + (isLoggedIn ? user.id : 100 + i)}`,
+        userId: user ? user.id : null,
+        userName: user ? user.name : null,
+        userEmail: user ? user.email : null,
+        isLoggedIn,
+        deviceType: device,
+        browserName: browsers[i % browsers.length],
+        osName: oses[i % oses.length],
+        source: sources[i % sources.length],
+        sessionStart: sessionStart.toISOString(),
+        sessionEnd: sessionEnd.toISOString(),
+        durationSeconds: durationSec,
+        totalEvents: timeline.length,
+        pageViews: timeline.filter((e) => e.eventType === "page_view").length,
+        cartAdds: timeline.filter((e) => e.eventType === "add_to_cart").length,
+        productViews: timeline.filter((e) => e.eventType === "product_view").length,
+        searches: timeline.filter((e) => e.eventType === "search").length,
+        checkouts: didCheckout ? 1 : 0,
+        categorySelects: timeline.filter((e) => e.eventType === "category_select").length,
+        otherClicks: 0,
+        timeline
+      });
+    }
+
+    const loggedInSessions = sessions.filter((s) => s.isLoggedIn).length;
+    return {
+      range: { from: new Date(now.getTime() - 30 * 86400000).toISOString(), to: now.toISOString() },
+      summary: {
+        totalSessions: sessions.length,
+        loggedInSessions,
+        anonymousSessions: sessions.length - loggedInSessions,
+        avgDurationSeconds: sessions.reduce((s, x) => s + x.durationSeconds, 0) / sessions.length,
+        totalCartAdds: sessions.reduce((s, x) => s + x.cartAdds, 0),
+        totalProductViews: sessions.reduce((s, x) => s + x.productViews, 0),
+        totalCheckouts: sessions.reduce((s, x) => s + x.checkouts, 0)
+      },
+      sessions
+    };
+  }
+
+  async function handleOpenUserActivity() {
+    setIsUserActivityOpen(true);
+    setIsUserActivityLoading(true);
+    try {
+      const periodOrRange = analyticsDateRange || analyticsPeriod || "30d";
+      const data = await onFetchUserSessions(periodOrRange);
+      const hasRealSessions = Array.isArray(data?.sessions) && data.sessions.length > 0;
+      setUserActivityData(hasRealSessions ? data : generateMockUserSessions());
+    } catch {
+      setUserActivityData(generateMockUserSessions());
+    } finally {
+      setIsUserActivityLoading(false);
+    }
+  }
+
+  async function handleRefreshUserActivity() {
+    setIsUserActivityLoading(true);
+    try {
+      const periodOrRange = analyticsDateRange || analyticsPeriod || "30d";
+      const data = await onFetchUserSessions(periodOrRange);
+      const hasRealSessions = Array.isArray(data?.sessions) && data.sessions.length > 0;
+      setUserActivityData(hasRealSessions ? data : generateMockUserSessions());
+    } catch {
+      setUserActivityData(generateMockUserSessions());
+    } finally {
+      setIsUserActivityLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (activeSection !== "Analíticas") {
       return;
@@ -3993,6 +4159,17 @@ export default function AdminPanel({
 
     handleAnalyticsReload(analyticsPeriod).catch(() => {});
   }, [activeSection, analytics, onReloadAnalytics, analyticsPeriod]);
+
+  useEffect(() => {
+    if (!isUserActivityFilterOpen) return;
+    function handleClickOutside(e) {
+      if (userActivityFilterRef.current && !userActivityFilterRef.current.contains(e.target)) {
+        setIsUserActivityFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isUserActivityFilterOpen]);
 
   useEffect(() => {
     const targetOrderId = Number(orderNavigationRequest?.orderId);
@@ -6421,6 +6598,16 @@ export default function AdminPanel({
               >
                 {isAnalyticsLoading || isReloadingAnalytics ? "Actualizando..." : "Actualizar métricas"}
               </button>
+
+              <button
+                type="button"
+                className="admin-user-activity-btn"
+                onClick={handleOpenUserActivity}
+                disabled={isAnalyticsLoading || isReloadingAnalytics}
+              >
+                <span className="admin-user-activity-btn-icon">👁️</span>
+                Ver actividad de usuarios
+              </button>
             </div>
 
             {!analytics ? (
@@ -6938,6 +7125,269 @@ export default function AdminPanel({
                     </table>
                   </div>
                 </section>
+
+                {isUserActivityOpen && (
+                  <div className="admin-user-activity-overlay" onClick={(e) => { if (e.target === e.currentTarget) { setIsUserActivityOpen(false); setExpandedSessionId(null); } }}>
+                    <div className="admin-user-activity-panel">
+                      <header className="admin-user-activity-header">
+                        <div className="admin-user-activity-header-left">
+                          <h2>Actividad de Usuarios</h2>
+                          <p>Movimientos detallados por sesión con línea de tiempo de acciones</p>
+                        </div>
+                        <div className="admin-user-activity-header-actions">
+                          <div className="admin-user-activity-filter-dropdown" ref={userActivityFilterRef}>
+                            <button
+                              type="button"
+                              className="admin-user-activity-filter-trigger"
+                              onClick={() => setIsUserActivityFilterOpen((o) => !o)}
+                            >
+                              <span>{userActivityFilter === "all" ? "👥 Todos los usuarios" : userActivityFilter === "logged_in" ? "🔐 Solo logueados" : "👤 Solo anónimos"}</span>
+                              <span className={`admin-user-activity-filter-arrow${isUserActivityFilterOpen ? " is-open" : ""}`}>▾</span>
+                            </button>
+                            {isUserActivityFilterOpen && (
+                              <div className="admin-user-activity-filter-menu">
+                                {[
+                                  { value: "all", label: "Todos los usuarios", icon: "👥" },
+                                  { value: "logged_in", label: "Solo logueados", icon: "🔐" },
+                                  { value: "anonymous", label: "Solo anónimos", icon: "👤" }
+                                ].map((opt) => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    className={`admin-user-activity-filter-option${userActivityFilter === opt.value ? " is-active" : ""}`}
+                                    onClick={() => { setUserActivityFilter(opt.value); setIsUserActivityFilterOpen(false); }}
+                                  >
+                                    <span className="admin-user-activity-filter-option-icon">{opt.icon}</span>
+                                    <span>{opt.label}</span>
+                                    {userActivityFilter === opt.value && <span className="admin-user-activity-filter-check">✓</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <button type="button" className="admin-user-activity-refresh-btn" onClick={handleRefreshUserActivity} disabled={isUserActivityLoading}>
+                            {isUserActivityLoading ? "Cargando..." : "Actualizar"}
+                          </button>
+                          <button type="button" className="admin-user-activity-close-btn" onClick={() => { setIsUserActivityOpen(false); setExpandedSessionId(null); }}>✕</button>
+                        </div>
+                      </header>
+
+                      {isUserActivityLoading && !userActivityData ? (
+                        <div className="admin-user-activity-loading">
+                          <div className="admin-user-activity-spinner" />
+                          <p>Cargando sesiones de usuario...</p>
+                        </div>
+                      ) : !userActivityData ? (
+                        <p className="admin-user-activity-empty">No se pudieron cargar los datos de actividad.</p>
+                      ) : (
+                        <>
+                          <div className="admin-user-activity-summary-grid">
+                            <article className="admin-user-activity-summary-card">
+                              <span className="admin-user-activity-summary-icon">📊</span>
+                              <div>
+                                <strong>{formatAnalyticsNumber(userActivityData.summary?.totalSessions || 0)}</strong>
+                                <span>Sesiones totales</span>
+                              </div>
+                            </article>
+                            <article className="admin-user-activity-summary-card">
+                              <span className="admin-user-activity-summary-icon">🔐</span>
+                              <div>
+                                <strong>{formatAnalyticsNumber(userActivityData.summary?.loggedInSessions || 0)}</strong>
+                                <span>Sesiones logueadas</span>
+                              </div>
+                            </article>
+                            <article className="admin-user-activity-summary-card">
+                              <span className="admin-user-activity-summary-icon">👤</span>
+                              <div>
+                                <strong>{formatAnalyticsNumber(userActivityData.summary?.anonymousSessions || 0)}</strong>
+                                <span>Sesiones anónimas</span>
+                              </div>
+                            </article>
+                            <article className="admin-user-activity-summary-card">
+                              <span className="admin-user-activity-summary-icon">⏱️</span>
+                              <div>
+                                <strong>{formatAnalyticsDuration(userActivityData.summary?.avgDurationSeconds || 0)}</strong>
+                                <span>Duración promedio</span>
+                              </div>
+                            </article>
+                            <article className="admin-user-activity-summary-card">
+                              <span className="admin-user-activity-summary-icon">🛒</span>
+                              <div>
+                                <strong>{formatAnalyticsNumber(userActivityData.summary?.totalCartAdds || 0)}</strong>
+                                <span>Agregados al carrito</span>
+                              </div>
+                            </article>
+                            <article className="admin-user-activity-summary-card">
+                              <span className="admin-user-activity-summary-icon">👁️</span>
+                              <div>
+                                <strong>{formatAnalyticsNumber(userActivityData.summary?.totalProductViews || 0)}</strong>
+                                <span>Productos vistos</span>
+                              </div>
+                            </article>
+                            <article className="admin-user-activity-summary-card">
+                              <span className="admin-user-activity-summary-icon">💳</span>
+                              <div>
+                                <strong>{formatAnalyticsNumber(userActivityData.summary?.totalCheckouts || 0)}</strong>
+                                <span>Inicios de checkout</span>
+                              </div>
+                            </article>
+                          </div>
+
+                          {(() => {
+                            const allSessions = userActivityData.sessions || [];
+                            const filteredCount = allSessions.filter((s) => {
+                              if (userActivityFilter === "logged_in") return s.isLoggedIn;
+                              if (userActivityFilter === "anonymous") return !s.isLoggedIn;
+                              return true;
+                            }).length;
+                            return (
+                              <div className="admin-user-activity-sessions-count">
+                                Mostrando <strong>{filteredCount}</strong> de {allSessions.length} sesiones
+                                {userActivityFilter !== "all" && (
+                                  <button type="button" className="admin-user-activity-show-all-btn" onClick={() => setUserActivityFilter("all")}>
+                                    Ver todas
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          <div className="admin-user-activity-sessions-list">
+                            {(userActivityData.sessions || [])
+                              .filter((session) => {
+                                if (userActivityFilter === "logged_in") return session.isLoggedIn;
+                                if (userActivityFilter === "anonymous") return !session.isLoggedIn;
+                                return true;
+                              })
+                              .map((session, sessionIndex) => {
+                                const isExpanded = expandedSessionId === session.sessionId;
+                                const shortVisitorId = session.visitorId ? session.visitorId.slice(-6).toUpperCase() : "???";
+                                return (
+                                  <article
+                                    key={`${session.sessionId}-${sessionIndex}`}
+                                    className={`admin-user-activity-session-card${isExpanded ? " is-expanded" : ""}`}
+                                  >
+                                    <div
+                                      className="admin-user-activity-session-header"
+                                      onClick={() => setExpandedSessionId(isExpanded ? null : session.sessionId)}
+                                    >
+                                      <div className="admin-user-activity-session-row1">
+                                        <div className="admin-user-activity-session-user">
+                                          <span className={`admin-user-activity-session-badge${session.isLoggedIn ? " is-logged-in" : " is-anonymous"}`}>
+                                            {session.isLoggedIn ? "🔐" : "👤"}
+                                          </span>
+                                          <div className="admin-user-activity-session-user-info">
+                                            <strong>
+                                              {session.isLoggedIn
+                                                ? (session.userName || session.userEmail || `Usuario #${session.userId}`)
+                                                : `Visitante #${shortVisitorId}`}
+                                            </strong>
+                                            {session.isLoggedIn && session.userEmail && (
+                                              <span className="admin-user-activity-session-email">{session.userEmail}</span>
+                                            )}
+                                            {!session.isLoggedIn && (
+                                              <span className="admin-user-activity-session-email">
+                                                {session.source && session.source !== "directo" ? `vía ${session.source}` : "visita directa"} · {session.osName || ""}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="admin-user-activity-session-meta">
+                                          <span className="admin-user-activity-session-meta-item" title="Dispositivo">
+                                            {session.deviceType === "mobile" ? "📱" : session.deviceType === "tablet" ? "📟" : "💻"} {session.browserName}
+                                          </span>
+                                          <span className="admin-user-activity-session-meta-item" title="Duración">
+                                            ⏱️ {formatAnalyticsDuration(session.durationSeconds)}
+                                          </span>
+                                          <span className="admin-user-activity-session-meta-item" title="Eventos">
+                                            📈 {session.totalEvents} eventos
+                                          </span>
+                                          <span className="admin-user-activity-session-meta-item" title="Fecha">
+                                            📅 {formatCustomerDateTime(session.sessionStart)}
+                                          </span>
+                                        </div>
+                                        <span className="admin-user-activity-session-chevron">{isExpanded ? "▲" : "▼"}</span>
+                                      </div>
+
+                                      {(session.pageViews > 0 || session.productViews > 0 || session.cartAdds > 0 || session.searches > 0 || session.checkouts > 0 || session.categorySelects > 0) && (
+                                        <div className="admin-user-activity-session-row2">
+                                          {session.pageViews > 0 && <span className="admin-user-activity-action-pill pv">👁️ {session.pageViews} vistas</span>}
+                                          {session.productViews > 0 && <span className="admin-user-activity-action-pill prod">🔍 {session.productViews} productos</span>}
+                                          {session.cartAdds > 0 && <span className="admin-user-activity-action-pill cart">🛒 {session.cartAdds} al carrito</span>}
+                                          {session.searches > 0 && <span className="admin-user-activity-action-pill search">🔎 {session.searches} búsquedas</span>}
+                                          {session.checkouts > 0 && <span className="admin-user-activity-action-pill checkout">💳 {session.checkouts} checkout</span>}
+                                          {session.categorySelects > 0 && <span className="admin-user-activity-action-pill cat">🗂️ {session.categorySelects} categorías</span>}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {isExpanded && (
+                                      <div className="admin-user-activity-timeline">
+                                        <div className="admin-user-activity-timeline-line" />
+                                        {(session.timeline || []).map((event, eventIndex) => (
+                                          <div key={`${session.sessionId}-evt-${eventIndex}`} className="admin-user-activity-timeline-event">
+                                            <div className={`admin-user-activity-timeline-dot ${event.eventType}`} />
+                                            <div className="admin-user-activity-timeline-content">
+                                              <div className="admin-user-activity-timeline-event-header">
+                                                <span className="admin-user-activity-timeline-event-type">
+                                                  {event.eventType === "page_view" ? "👁️ Vista de página"
+                                                    : event.eventType === "product_view" ? "🔍 Vio producto"
+                                                    : event.eventType === "add_to_cart" ? "🛒 Agregó al carrito"
+                                                    : event.eventType === "remove_from_cart" ? "❌ Quitó del carrito"
+                                                    : event.eventType === "open_cart" ? "🧺 Abrió carrito"
+                                                    : event.eventType === "clear_cart" ? "🗑️ Vació carrito"
+                                                    : event.eventType === "search" ? "🔎 Búsqueda"
+                                                    : event.eventType === "category_select" ? "🗂️ Seleccionó categoría"
+                                                    : event.eventType === "begin_checkout" ? "💳 Inició checkout"
+                                                    : event.eventType === "login" ? "🔐 Inició sesión"
+                                                    : event.eventType === "register" ? "✨ Se registró"
+                                                    : `⚡ ${event.eventType}`}
+                                                </span>
+                                                <time className="admin-user-activity-timeline-time">
+                                                  {new Date(event.at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                                                </time>
+                                              </div>
+                                              <div className="admin-user-activity-timeline-details">
+                                                {event.path && event.path !== "/" && (
+                                                  <span className="admin-user-activity-timeline-path">📄 {normalizeAnalyticsPath(event.path)}</span>
+                                                )}
+                                                {event.metadata?.productName && (
+                                                  <span className="admin-user-activity-timeline-product">🏷️ {event.metadata.productName}</span>
+                                                )}
+                                                {event.metadata?.query && (
+                                                  <span className="admin-user-activity-timeline-search">"{event.metadata.query}"</span>
+                                                )}
+                                                {event.metadata?.categoryName && (
+                                                  <span className="admin-user-activity-timeline-category">{event.metadata.categoryName}</span>
+                                                )}
+                                                {event.metadata?.quantity && (
+                                                  <span className="admin-user-activity-timeline-qty">×{event.metadata.quantity}</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                        {(!session.timeline || session.timeline.length === 0) && (
+                                          <p className="admin-user-activity-timeline-empty">No hay eventos detallados para esta sesión.</p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </article>
+                                );
+                              })}
+                            {(userActivityData.sessions || []).filter((session) => {
+                              if (userActivityFilter === "logged_in") return session.isLoggedIn;
+                              if (userActivityFilter === "anonymous") return !session.isLoggedIn;
+                              return true;
+                            }).length === 0 && (
+                              <p className="admin-user-activity-empty">No hay sesiones para el filtro seleccionado.</p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </>

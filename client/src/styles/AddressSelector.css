@@ -346,50 +346,6 @@
   stroke-linejoin: round;
 }
 
-.as-shipping-info {
-  display: flex;
-  gap: 8px;
-  padding: 14px 22px 0;
-  flex-wrap: wrap;
-}
-
-.as-shipping-info-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  flex: 1;
-  min-width: 0;
-}
-
-.as-shipping-caba {
-  background: rgba(24, 119, 242, 0.06);
-  color: #1565c0;
-}
-
-.as-shipping-gba {
-  background: rgba(255, 152, 0, 0.08);
-  color: #e65100;
-}
-
-.as-shipping-badge {
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  background: var(--blue, #1877f2);
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.as-badge-gba {
-  background: #ff8f00;
-}
-
 /* ── Tabs ───────────────────────────────────────────────── */
 
 .as-tabs {
@@ -714,10 +670,6 @@
     font-size: 0.82rem;
   }
 
-  .as-shipping-info {
-    flex-direction: column;
-    gap: 6px;
-  }
 }
 
 @media (max-width: 480px) {

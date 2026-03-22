@@ -1623,4 +1623,137 @@ adminRouter.get("/reports/sales-by-brand", requireAuth, requireAdmin, async (_re
   }
 });
 
+adminRouter.get("/analytics/user-sessions", requireAuth, requireAdmin, async (req, res) => {
+  const range = resolveAnalyticsRange(req.query?.period, req.query?.days, req.query?.from, req.query?.to);
+  const { from, to } = range;
+
+  try {
+    const sessionsResult = await query(
+      `WITH session_data AS (
+         SELECT
+           e.session_id,
+           MAX(e.visitor_id) AS visitor_id,
+           MAX(e.user_id) AS user_id,
+           MAX(e.device_type) AS device_type,
+           MAX(e.browser_name) AS browser_name,
+           MAX(e.os_name) AS os_name,
+           MAX(e.source) AS source,
+           MIN(e.occurred_at) AS session_start,
+           MAX(e.occurred_at) AS session_end,
+           COUNT(*) AS total_events,
+           COUNT(*) FILTER (WHERE e.event_type = 'page_view') AS page_views,
+           COUNT(*) FILTER (WHERE e.event_type = 'add_to_cart') AS cart_adds,
+           COUNT(*) FILTER (WHERE e.event_type = 'product_view') AS product_views,
+           COUNT(*) FILTER (WHERE e.event_type = 'search') AS searches,
+           COUNT(*) FILTER (WHERE e.event_type = 'begin_checkout') AS checkouts,
+           COUNT(*) FILTER (WHERE e.event_type = 'category_select') AS category_selects,
+           COUNT(*) FILTER (WHERE e.event_type NOT IN ('page_view', 'add_to_cart', 'product_view', 'search', 'begin_checkout', 'category_select')) AS other_clicks
+         FROM web_analytics_events e
+         WHERE e.occurred_at >= $1
+           AND e.occurred_at < $2
+           AND e.session_id IS NOT NULL
+         GROUP BY e.session_id
+       )
+       SELECT
+         sd.*,
+         EXTRACT(EPOCH FROM (sd.session_end - sd.session_start)) AS duration_seconds,
+         u.name AS user_name,
+         u.email AS user_email
+       FROM session_data sd
+       LEFT JOIN users u ON u.id = sd.user_id
+       ORDER BY sd.session_start DESC
+       LIMIT 200`,
+      [from, to]
+    );
+
+    const sessionIds = sessionsResult.rows.map((r) => r.session_id).filter(Boolean);
+
+    let timelineRows = [];
+    if (sessionIds.length > 0) {
+      const timelineResult = await query(
+        `SELECT
+           session_id,
+           event_type,
+           path,
+           occurred_at,
+           metadata
+         FROM web_analytics_events
+         WHERE session_id = ANY($1)
+           AND occurred_at >= $2
+           AND occurred_at < $3
+         ORDER BY occurred_at ASC`,
+        [sessionIds, from, to]
+      );
+      timelineRows = timelineResult.rows;
+    }
+
+    const timelineBySession = new Map();
+    for (const row of timelineRows) {
+      const sid = row.session_id;
+      if (!timelineBySession.has(sid)) {
+        timelineBySession.set(sid, []);
+      }
+      timelineBySession.get(sid).push({
+        eventType: row.event_type,
+        path: row.path || "/",
+        at: row.occurred_at,
+        metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {}
+      });
+    }
+
+    const sessions = sessionsResult.rows.map((row) => ({
+      sessionId: row.session_id,
+      visitorId: row.visitor_id,
+      userId: row.user_id ? Number(row.user_id) : null,
+      userName: row.user_name || null,
+      userEmail: row.user_email || null,
+      isLoggedIn: Boolean(row.user_id),
+      deviceType: row.device_type || "unknown",
+      browserName: row.browser_name || "Other",
+      osName: row.os_name || "Other",
+      source: row.source || "directo",
+      sessionStart: row.session_start,
+      sessionEnd: row.session_end,
+      durationSeconds: Number(row.duration_seconds || 0),
+      totalEvents: Number(row.total_events || 0),
+      pageViews: Number(row.page_views || 0),
+      cartAdds: Number(row.cart_adds || 0),
+      productViews: Number(row.product_views || 0),
+      searches: Number(row.searches || 0),
+      checkouts: Number(row.checkouts || 0),
+      categorySelects: Number(row.category_selects || 0),
+      otherClicks: Number(row.other_clicks || 0),
+      timeline: timelineBySession.get(row.session_id) || []
+    }));
+
+    const totalSessions = sessions.length;
+    const loggedInSessions = sessions.filter((s) => s.isLoggedIn).length;
+    const anonymousSessions = totalSessions - loggedInSessions;
+    const avgDuration = totalSessions > 0 ? sessions.reduce((sum, s) => sum + s.durationSeconds, 0) / totalSessions : 0;
+    const totalCartAdds = sessions.reduce((sum, s) => sum + s.cartAdds, 0);
+    const totalProductViews = sessions.reduce((sum, s) => sum + s.productViews, 0);
+    const totalCheckouts = sessions.reduce((sum, s) => sum + s.checkouts, 0);
+
+    return res.json({
+      range: {
+        from: from.toISOString(),
+        to: to.toISOString()
+      },
+      summary: {
+        totalSessions,
+        loggedInSessions,
+        anonymousSessions,
+        avgDurationSeconds: avgDuration,
+        totalCartAdds,
+        totalProductViews,
+        totalCheckouts
+      },
+      sessions
+    });
+  } catch (err) {
+    console.error("[analytics/user-sessions]", err);
+    return res.status(500).json({ error: "No se pudieron obtener sesiones de usuario" });
+  }
+});
+
 export default adminRouter;

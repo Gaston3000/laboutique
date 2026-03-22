@@ -767,6 +767,32 @@ export async function fetchAdminAnalytics(token, periodOrRange = "30d") {
   return data;
 }
 
+export async function fetchAdminUserSessions(token, periodOrRange = "30d") {
+  const params = new URLSearchParams();
+
+  if (periodOrRange && typeof periodOrRange === "object" && periodOrRange.from && periodOrRange.to) {
+    params.set("from", new Date(periodOrRange.from).toISOString());
+    params.set("to", new Date(periodOrRange.to).toISOString());
+  } else if (typeof periodOrRange === "number" && Number.isFinite(periodOrRange)) {
+    const safeDays = Math.max(1, Math.min(180, Number(periodOrRange)));
+    params.set("days", String(safeDays));
+  } else {
+    const normalizedPeriod = String(periodOrRange || "30d").trim().toLowerCase();
+    params.set("period", normalizedPeriod || "30d");
+  }
+
+  const response = await fetch(`${API_URL}/admin/analytics/user-sessions?${params.toString()}`, {
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudieron cargar las sesiones de usuario");
+  }
+
+  return data;
+}
+
 export async function trackAnalyticsEvent(payload = {}) {
   const endpoint = `${API_URL}/analytics/events`;
   const body = JSON.stringify(payload || {});

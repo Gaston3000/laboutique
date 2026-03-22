@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS web_analytics_events (
   viewport_width INTEGER,
   viewport_height INTEGER,
   timezone TEXT,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   occurred_at TIMESTAMP NOT NULL DEFAULT NOW(),
   created_at TIMESTAMP NOT NULL DEFAULT NOW()

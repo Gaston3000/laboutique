@@ -121,6 +121,7 @@ analyticsRouter.post("/events", async (req, res) => {
   const screenHeight = normalizeInteger(payload.screenHeight);
   const viewportWidth = normalizeInteger(payload.viewportWidth);
   const viewportHeight = normalizeInteger(payload.viewportHeight);
+  const userId = normalizeInteger(payload.userId);
 
   const occurredAtInput = normalizeText(payload.occurredAt, 60);
   const occurredAtDate = occurredAtInput ? new Date(occurredAtInput) : null;
@@ -153,10 +154,11 @@ analyticsRouter.post("/events", async (req, res) => {
          viewport_width,
          viewport_height,
          timezone,
+         user_id,
          metadata,
          occurred_at
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb, $24
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25
        )`,
       [
         eventType,
@@ -181,6 +183,7 @@ analyticsRouter.post("/events", async (req, res) => {
         viewportWidth,
         viewportHeight,
         timezone || null,
+        userId || null,
         JSON.stringify(metadata),
         occurredAt
       ]
