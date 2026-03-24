@@ -141,6 +141,7 @@ export function paymentApproved(d) {
   const deliveryBadge = isPickup
     ? `<div style="background:#f5f3ff;border:2px solid #8b5cf6;border-radius:8px;padding:16px;margin:20px 0;text-align:center;">
         <p style="margin:0;font-weight:600;color:#5b21b6;">🏪 Retiro en tienda</p>
+        <p style="margin:6px 0 0;color:#374151;font-size:14px;">📍 Acevedo 200, Villa Crespo, CABA</p>
         <p style="margin:6px 0 0;color:#6b7280;font-size:14px;">Te avisaremos cuando tu pedido esté listo. Presentá tu DNI y número de pedido <strong>#${d.orderId}</strong>.</p>
       </div>`
     : (d.deliveryAddress ? `<div style="background:#eff6ff;border:2px solid #93c5fd;border-radius:8px;padding:16px;margin:20px 0;">
@@ -232,6 +233,7 @@ export function orderReadyForPickup(d) {
       <div style="background:#f5f3ff;border:2px solid #8b5cf6;border-radius:8px;padding:20px;margin:20px 0;text-align:center;">
         <p style="margin:0 0 8px;font-size:18px;font-weight:bold;color:#5b21b6;">📍 Dirección de retiro</p>
         <p style="margin:0;color:#374151;font-size:15px;">La Boutique de la Limpieza</p>
+        <p style="margin:4px 0 0;color:#374151;font-size:14px;">Acevedo 200, Villa Crespo, CABA</p>
         <p style="margin:4px 0 0;color:#6b7280;font-size:14px;">Presentá tu DNI y número de pedido <strong>#${d.orderId}</strong></p>
       </div>
       ${itemsTable(d.items)}
@@ -330,7 +332,7 @@ export function adminNewOrder(d) {
         <tr><td style="padding:8px 0;font-weight:600;">Email:</td><td>${escapeHtml(d.contactEmail)}</td></tr>
         ${d.customerPhone ? `<tr><td style="padding:8px 0;font-weight:600;">Teléfono:</td><td>${escapeHtml(d.customerPhone)}</td></tr>` : ""}
         <tr><td style="padding:8px 0;font-weight:600;">Total:</td><td style="font-weight:bold;color:#059669;">${fmtMoney(d.totalArs)}</td></tr>
-        <tr><td style="padding:8px 0;font-weight:600;">Método de entrega:</td><td>${d.shippingMethod === "pickup" ? "🏪 Retiro en tienda" : "🚚 Envío a domicilio"}</td></tr>
+        <tr><td style="padding:8px 0;font-weight:600;">Método de entrega:</td><td>${d.shippingMethod === "pickup" ? "🏪 Retiro en tienda — Acevedo 200, Villa Crespo" : "🚚 Envío a domicilio"}</td></tr>
         ${d.deliveryAddress ? `<tr><td style="padding:8px 0;font-weight:600;">Dirección:</td><td>${escapeHtml(d.deliveryAddress)}</td></tr>` : ""}
       </table>
       ${itemRows ? `<h3 style="border-bottom:2px solid #e5e7eb;padding-bottom:8px;">Productos</h3><table style="width:100%;">${itemRows}</table>` : ""}

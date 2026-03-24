@@ -11,57 +11,74 @@ const ACCOUNT_TABS = [
 
 const SHIPPING_ZONES = [
   "CABA",
-  "Vicente Lopez",
-  "San Isidro",
-  "San Fernando",
-  "San Martin",
-  "Tres de Febrero",
-  "Hurlingham",
-  "Ituzaingo",
-  "Morón",
-  "La Matanza Norte",
-  "Lomas de Zamora",
-  "Lanus",
-  "Avellaneda",
-  "Quilmes",
-  "Berazategui",
-  "Florencio Varela",
   "Almirante Brown",
-  "Esteban Echeverría",
-  "Ezeiza",
-  "La Matanza Sur",
-  "Merlo",
-  "Moreno",
-  "San Miguel",
-  "José C. Paz",
-  "Malvinas Argentinas",
-  "Tigre",
-  "Escobar",
-  "Pilar",
-  "Luján",
-  "General Rodríguez",
-  "Marcos Paz",
-  "Cañuelas",
-  "San Vicente",
-  "Guernica",
-  "La Plata",
-  "Ensenada",
+  "Avellaneda",
+  "Berazategui",
   "Berisso",
   "Campana",
+  "Cañuelas",
+  "Ensenada",
+  "Escobar",
+  "Esteban Echeverría",
+  "Ezeiza",
+  "Florencio Varela",
+  "General Rodríguez",
+  "Guernica",
+  "Hurlingham",
+  "Ituzaingó",
+  "José C. Paz",
+  "La Matanza Norte",
+  "La Matanza Sur",
+  "La Plata",
+  "Lanús",
+  "Lomas de Zamora",
+  "Luján",
+  "Malvinas Argentinas",
+  "Marcos Paz",
+  "Merlo",
+  "Moreno",
+  "Morón",
+  "Pilar",
+  "Quilmes",
+  "San Fernando",
+  "San Isidro",
+  "San Martín",
+  "San Miguel",
+  "San Vicente",
+  "Tigre",
+  "Tres de Febrero",
+  "Vicente López",
   "Zárate"
-].sort((leftZone, rightZone) => {
-  if (leftZone === "CABA") {
-    return -1;
-  }
+];
 
-  if (rightZone === "CABA") {
-    return 1;
-  }
+const GBA_DISTRICTS = SHIPPING_ZONES.filter((z) => z !== "CABA");
 
-  return leftZone.localeCompare(rightZone, "es", { sensitivity: "base" });
-});
+const BARRIOS_CABA = [
+  "Agronomía", "Almagro", "Balvanera", "Barracas", "Belgrano", "Boedo",
+  "Caballito", "Chacarita", "Coghlan", "Colegiales", "Constitución", "Devoto",
+  "Flores", "Floresta", "La Boca", "La Paternal", "Liniers", "Mataderos",
+  "Monte Castro", "Montserrat", "Nueva Pompeya", "Núñez", "Palermo",
+  "Parque Avellaneda", "Parque Chacabuco", "Parque Chas", "Parque Patricios",
+  "Puerto Madero", "Recoleta", "Retiro", "Saavedra", "San Cristóbal",
+  "San Nicolás", "San Telmo", "Vélez Sarsfield", "Versalles",
+  "Villa Crespo", "Villa del Parque", "Villa Devoto", "Villa General Mitre",
+  "Villa Lugano", "Villa Luro", "Villa Ortúzar", "Villa Pueyrredón",
+  "Villa Real", "Villa Riachuelo", "Villa Santa Rita", "Villa Soldati", "Villa Urquiza"
+];
 
 const MAX_ADDRESSES = 5;
+
+const ZONE_BADGES = {
+  CABA: { label: "CABA", color: "#2563eb", bg: "#eff6ff" },
+  default: { label: "GBA", color: "#059669", bg: "#ecfdf5" }
+};
+
+function getZoneBadge(region) {
+  const r = String(region || "").trim();
+  if (r === "CABA") return ZONE_BADGES.CABA;
+  if (r) return { ...ZONE_BADGES.default, label: r };
+  return null;
+}
 
 function createAddressId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -77,11 +94,16 @@ function createEmptyAddressForm() {
     height: "",
     floor: "",
     apartment: "",
-    city: "Buenos Aires",
+    city: "",
     region: "",
+    province: "",
+    barrio: "",
+    district: "",
     country: "Argentina",
     postalCode: "",
-    phone: ""
+    phone: "",
+    deliveryNotes: "",
+    addressType: "residencial"
   };
 }
 
@@ -121,11 +143,16 @@ function normalizeAddressEntry(entry, fallbackId) {
     height: String(entry?.height || "").trim(),
     floor: String(entry?.floor || "").trim(),
     apartment: String(entry?.apartment || "").trim(),
-    city: String(entry?.city || "Buenos Aires").trim() || "Buenos Aires",
+    city: String(entry?.city || "").trim(),
     region: String(entry?.region || "").trim(),
+    province: String(entry?.province || "").trim(),
+    barrio: String(entry?.barrio || "").trim(),
+    district: String(entry?.district || "").trim(),
     country: "Argentina",
     postalCode: String(entry?.postalCode || "").trim(),
-    phone: String(entry?.phone || "").trim()
+    phone: String(entry?.phone || "").trim(),
+    deliveryNotes: String(entry?.deliveryNotes || "").trim(),
+    addressType: String(entry?.addressType || "residencial").trim()
   };
 }
 
@@ -156,9 +183,12 @@ function formatAddressDetails(address) {
   return [
     address?.floor ? `Piso ${address.floor}` : "",
     address?.apartment ? `Depto ${address.apartment}` : "",
+    address?.barrio || "",
+    address?.district && address.district !== address.region ? address.district : "",
     address?.city ? `Ciudad: ${address.city}` : "",
     address?.region ? `Zona: ${address.region}` : "",
-    address?.postalCode ? `CP: ${address.postalCode}` : ""
+    address?.postalCode ? `CP: ${address.postalCode}` : "",
+    address?.addressType === "laboral" ? "Laboral" : ""
   ]
     .filter(Boolean)
     .join(" · ");
@@ -178,13 +208,19 @@ function splitName(fullName) {
   return { firstName, lastName };
 }
 
+function capitalizeWords(str) {
+  const s = String(str || "").trim();
+  if (!s) return s;
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function createProfileForm(user) {
   const firstName = String(user?.firstName || "").trim();
   const lastName = String(user?.lastName || "").trim();
   const fallbackNameParts = splitName(user?.name);
 
   return {
-    displayName: user?.name || "",
+    displayName: capitalizeWords(user?.name || ""),
     profileTitle: user?.profileTitle || "",
     firstName: firstName || fallbackNameParts.firstName,
     lastName: lastName || fallbackNameParts.lastName,
@@ -266,6 +302,10 @@ export default function AccountPanel({
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isBlockedOpen, setIsBlockedOpen] = useState(false);
   const [addressError, setAddressError] = useState("");
+  const [addressFieldErrors, setAddressFieldErrors] = useState({});
+  const [isAddressFormOpen, setIsAddressFormOpen] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [profileError, setProfileError] = useState("");
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
@@ -321,6 +361,7 @@ export default function AccountPanel({
 
   function handleAddressFieldChange(field, value) {
     setAddressError("");
+    setAddressFieldErrors({});
     setAddressForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -395,27 +436,50 @@ export default function AccountPanel({
     const normalizedFloor = String(addressForm.floor || "").trim();
     const normalizedApartment = String(addressForm.apartment || "").trim();
     const normalizedPostalCode = String(addressForm.postalCode || "").trim();
-    const normalizedRegion = String(addressForm.region || "").trim();
-    const normalizedCity = String(addressForm.city || "Buenos Aires").trim() || "Buenos Aires";
+    const normalizedProvince = String(addressForm.province || "").trim();
+    const normalizedBarrio = String(addressForm.barrio || "").trim();
+    const normalizedDistrict = String(addressForm.district || "").trim();
     const normalizedPhone = String(addressForm.phone || "").trim();
+    const normalizedDeliveryNotes = String(addressForm.deliveryNotes || "").trim();
+    const normalizedAddressType = addressForm.addressType || "residencial";
+
+    // Derive region and city from province selection
+    const derivedRegion = normalizedProvince === "caba" ? "CABA" : normalizedDistrict;
+    const derivedCity = normalizedProvince === "caba" ? "Buenos Aires" : normalizedDistrict || "Buenos Aires";
 
     if (!normalizedStreet) {
+      setAddressFieldErrors({ street: true });
       setAddressError("La dirección es obligatoria.");
       return;
     }
 
     if (!normalizedHeight) {
+      setAddressFieldErrors({ height: true });
       setAddressError("La altura es obligatoria.");
       return;
     }
 
-    if (!normalizedRegion || !SHIPPING_ZONES.includes(normalizedRegion)) {
-      setAddressError("Seleccioná una zona de envío válida.");
+    if (!normalizedPostalCode) {
+      setAddressFieldErrors({ postalCode: true });
+      setAddressError("El código postal es obligatorio.");
       return;
     }
 
-    if (!normalizedPostalCode) {
-      setAddressError("El código postal es obligatorio.");
+    if (!normalizedProvince) {
+      setAddressFieldErrors({ province: true });
+      setAddressError("Seleccioná una provincia.");
+      return;
+    }
+
+    if (normalizedProvince === "caba" && !normalizedBarrio) {
+      setAddressFieldErrors({ barrio: true });
+      setAddressError("Seleccioná un barrio.");
+      return;
+    }
+
+    if (normalizedProvince === "pba" && !normalizedDistrict) {
+      setAddressFieldErrors({ district: true });
+      setAddressError("Seleccioná un distrito.");
       return;
     }
 
@@ -433,11 +497,16 @@ export default function AccountPanel({
         height: normalizedHeight,
         floor: normalizedFloor,
         apartment: normalizedApartment,
-        city: normalizedCity,
-        region: normalizedRegion,
+        city: derivedCity,
+        region: derivedRegion,
+        province: normalizedProvince,
+        barrio: normalizedBarrio,
+        district: normalizedDistrict,
         country: "Argentina",
         postalCode: normalizedPostalCode,
-        phone: normalizedPhone
+        phone: normalizedPhone,
+        deliveryNotes: normalizedDeliveryNotes,
+        addressType: normalizedAddressType
       });
 
       const nextAddresses = [...addresses, newAddress];
@@ -466,6 +535,8 @@ export default function AccountPanel({
       setAddresses(persistedAddresses);
 
       setAddressForm(createEmptyAddressForm());
+      setIsAddressFormOpen(false);
+      setEditingAddressId(null);
       setSaveMessage("Dirección guardada correctamente.");
       setAddressError("");
     } catch (error) {
@@ -478,7 +549,135 @@ export default function AccountPanel({
   function handleDiscardAddress() {
     setAddressForm(createEmptyAddressForm());
     setAddressError("");
+    setAddressFieldErrors({});
+    setIsAddressFormOpen(false);
+    setEditingAddressId(null);
     setSaveMessage("");
+  }
+
+  function handleOpenAddForm() {
+    if (addresses.length >= MAX_ADDRESSES) {
+      setAddressError(`Podés guardar hasta ${MAX_ADDRESSES} direcciones.`);
+      return;
+    }
+    setAddressForm(createEmptyAddressForm());
+    setAddressError("");
+    setAddressFieldErrors({});
+    setEditingAddressId(null);
+    setIsAddressFormOpen(true);
+  }
+
+  function handleEditAddress(addressId) {
+    const addr = addresses.find((a) => a.id === addressId);
+    if (!addr) return;
+    setAddressForm({
+      street: addr.street || "",
+      height: addr.height || "",
+      floor: addr.floor || "",
+      apartment: addr.apartment || "",
+      city: addr.city || "",
+      region: addr.region || "",
+      province: addr.province || (addr.region === "CABA" ? "caba" : addr.region ? "pba" : ""),
+      barrio: addr.barrio || "",
+      district: addr.district || (addr.region && addr.region !== "CABA" ? addr.region : ""),
+      country: "Argentina",
+      postalCode: addr.postalCode || "",
+      phone: addr.phone || "",
+      deliveryNotes: addr.deliveryNotes || "",
+      addressType: addr.addressType || "residencial"
+    });
+    setEditingAddressId(addressId);
+    setIsAddressFormOpen(true);
+    setAddressError("");
+    setAddressFieldErrors({});
+  }
+
+  async function handleUpdateAddress() {
+    const normalizedStreet = String(addressForm.street || "").trim();
+    const normalizedHeight = String(addressForm.height || "").trim();
+    const normalizedProvince = String(addressForm.province || "").trim();
+    const normalizedBarrio = String(addressForm.barrio || "").trim();
+    const normalizedDistrict = String(addressForm.district || "").trim();
+    const normalizedPostalCode = String(addressForm.postalCode || "").trim();
+
+    const derivedRegion = normalizedProvince === "caba" ? "CABA" : normalizedDistrict;
+    const derivedCity = normalizedProvince === "caba" ? "Buenos Aires" : normalizedDistrict || "Buenos Aires";
+
+    if (!normalizedStreet) { setAddressFieldErrors({ street: true }); setAddressError("La dirección es obligatoria."); return; }
+    if (!normalizedHeight) { setAddressFieldErrors({ height: true }); setAddressError("La altura es obligatoria."); return; }
+    if (!normalizedPostalCode) { setAddressFieldErrors({ postalCode: true }); setAddressError("El código postal es obligatorio."); return; }
+    if (!normalizedProvince) { setAddressFieldErrors({ province: true }); setAddressError("Seleccioná una provincia."); return; }
+    if (normalizedProvince === "caba" && !normalizedBarrio) { setAddressFieldErrors({ barrio: true }); setAddressError("Seleccioná un barrio."); return; }
+    if (normalizedProvince === "pba" && !normalizedDistrict) { setAddressFieldErrors({ district: true }); setAddressError("Seleccioná un distrito."); return; }
+
+    setIsSaving(true);
+    try {
+      const updatedAddress = normalizeAddressEntry({
+        id: editingAddressId,
+        street: normalizedStreet,
+        height: normalizedHeight,
+        floor: String(addressForm.floor || "").trim(),
+        apartment: String(addressForm.apartment || "").trim(),
+        city: derivedCity,
+        region: derivedRegion,
+        province: normalizedProvince,
+        barrio: normalizedBarrio,
+        district: normalizedDistrict,
+        country: "Argentina",
+        postalCode: normalizedPostalCode,
+        phone: String(addressForm.phone || "").trim(),
+        deliveryNotes: String(addressForm.deliveryNotes || "").trim(),
+        addressType: addressForm.addressType || "residencial"
+      });
+
+      const nextAddresses = addresses.map((a) => a.id === editingAddressId ? updatedAddress : a);
+      const nextPrimaryId = getPrimaryAddressId(nextAddresses);
+      const payload = { addresses: nextAddresses, primaryAddressId: nextPrimaryId };
+
+      let savedResult = null;
+      if (typeof onSaveAddress === "function") { savedResult = await onSaveAddress(payload); }
+
+      const persistedAddresses = Array.isArray(savedResult?.addressBook)
+        ? savedResult.addressBook.map((entry, i) => normalizeAddressEntry(entry, `addr-${i + 1}`)).slice(0, MAX_ADDRESSES)
+        : nextAddresses;
+
+      setAddresses(persistedAddresses);
+      setAddressForm(createEmptyAddressForm());
+      setIsAddressFormOpen(false);
+      setEditingAddressId(null);
+      setSaveMessage("Dirección actualizada correctamente.");
+      setAddressError("");
+      setAddressFieldErrors({});
+    } catch (error) {
+      setAddressError(error?.message || "No se pudo actualizar la dirección.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteAddress(addressId) {
+    setIsSaving(true);
+    try {
+      const nextAddresses = addresses.filter((a) => a.id !== addressId);
+      const nextPrimaryId = nextAddresses.length ? getPrimaryAddressId(nextAddresses) : "";
+      const payload = { addresses: nextAddresses, primaryAddressId: nextPrimaryId };
+
+      let savedResult = null;
+      if (typeof onSaveAddress === "function") { savedResult = await onSaveAddress(payload); }
+
+      const persistedAddresses = Array.isArray(savedResult?.addressBook)
+        ? savedResult.addressBook.map((entry, i) => normalizeAddressEntry(entry, `addr-${i + 1}`)).slice(0, MAX_ADDRESSES)
+        : nextAddresses;
+
+      setAddresses(persistedAddresses);
+      setDeleteConfirmId(null);
+      setSaveMessage("Dirección eliminada.");
+      setAddressError("");
+    } catch (error) {
+      setAddressError(error?.message || "No se pudo eliminar la dirección.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleAddAnotherAddress() {
@@ -489,6 +688,7 @@ export default function AccountPanel({
 
     setAddressForm(createEmptyAddressForm());
     setAddressError("");
+    setAddressFieldErrors({});
   }
 
   async function handleSelectPrimaryAddress(addressId) {
@@ -528,6 +728,7 @@ export default function AccountPanel({
       setAddresses(persistedAddresses);
       setSaveMessage("Dirección principal actualizada.");
       setAddressError("");
+      setAddressFieldErrors({});
     } catch (error) {
       setAddressError(error?.message || "No se pudo actualizar la dirección principal.");
     } finally {
@@ -691,161 +892,189 @@ export default function AccountPanel({
 
       {activeTab === "direccion" ? (
         <article className="account-card account-address-card">
-          <h2>Mi dirección</h2>
-          <p>Completá tus datos de entrega. Solo realizamos envíos en zonas habilitadas de Buenos Aires y CABA.</p>
-
-          <div className="account-form-grid">
-            <div className="account-input-group">
-              <label htmlFor="account-address-street">Dirección</label>
-              <input
-                id="account-address-street"
-                type="text"
-                placeholder="Calle"
-                value={addressForm.street}
-                onChange={(event) => handleAddressFieldChange("street", event.target.value)}
-                required
-              />
+          <div className="addr-section-header">
+            <div>
+              <h2>Mis direcciones</h2>
+              <p className="addr-section-subtitle">Gestioná tus direcciones de entrega. Máximo {MAX_ADDRESSES} direcciones.</p>
             </div>
-
-            <div className="account-form-grid two-columns account-address-two-columns">
-              <div className="account-input-group">
-                <label htmlFor="account-address-height">Altura</label>
-                <input
-                  id="account-address-height"
-                  type="text"
-                  placeholder="Ej: 1121"
-                  value={addressForm.height}
-                  onChange={(event) => handleAddressFieldChange("height", event.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="account-input-group">
-                <label htmlFor="account-address-floor">Piso</label>
-                <input
-                  id="account-address-floor"
-                  type="text"
-                  placeholder="Ej: 3"
-                  value={addressForm.floor}
-                  onChange={(event) => handleAddressFieldChange("floor", event.target.value)}
-                />
-              </div>
-
-              <div className="account-input-group">
-                <label htmlFor="account-address-apartment">Departamento</label>
-                <input
-                  id="account-address-apartment"
-                  type="text"
-                  placeholder="Ej: B"
-                  value={addressForm.apartment}
-                  onChange={(event) => handleAddressFieldChange("apartment", event.target.value)}
-                />
-              </div>
-
-              <div className="account-input-group">
-                <label htmlFor="account-address-city">Ciudad</label>
-                <input
-                  id="account-address-city"
-                  type="text"
-                  value={addressForm.city}
-                  onChange={(event) => handleAddressFieldChange("city", event.target.value)}
-                />
-              </div>
-
-              <div className="account-input-group">
-                <label htmlFor="account-address-region">Zona de envío</label>
-                <select
-                  id="account-address-region"
-                  value={addressForm.region}
-                  onChange={(event) => handleAddressFieldChange("region", event.target.value)}
-                  required
-                >
-                  <option value="">Seleccioná una zona</option>
-                  {SHIPPING_ZONES.map((zone) => (
-                    <option key={zone} value={zone}>{zone}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="account-input-group">
-                <label htmlFor="account-address-country">País / región</label>
-                <input
-                  id="account-address-country"
-                  type="text"
-                  value="Argentina"
-                  disabled
-                  readOnly
-                />
-              </div>
-
-              <div className="account-input-group">
-                <label htmlFor="account-address-postal-code">Código postal</label>
-                <input
-                  id="account-address-postal-code"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="Ej: 1414"
-                  value={addressForm.postalCode}
-                  onChange={(event) => handleAddressFieldChange("postalCode", event.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="account-input-group">
-                <label htmlFor="account-address-phone">Teléfono</label>
-                <input
-                  id="account-address-phone"
-                  type="tel"
-                  placeholder="Ej: 01140486698"
-                  value={addressForm.phone}
-                  onChange={(event) => handleAddressFieldChange("phone", event.target.value)}
-                />
-              </div>
-            </div>
-
-            {addressError ? <p className="form-error">{addressError}</p> : null}
+            <span className="addr-counter">{addresses.length}/{MAX_ADDRESSES}</span>
           </div>
 
-          <div className="account-actions-inline">
-            <button type="button" className="ghost-btn" onClick={handleAddAnotherAddress} disabled={isSaving || addresses.length >= MAX_ADDRESSES}>
-              Agregar otra dirección
-            </button>
-            <button type="button" className="ghost-btn" onClick={handleDiscardAddress} disabled={isSaving}>
-              Descartar
-            </button>
-            <button type="button" onClick={handleSaveAddress} disabled={isSaving}>
-              {isSaving ? "Guardando..." : "Guardar dirección"}
-            </button>
-          </div>
-
-          {saveMessage && <p className="account-save-message">{saveMessage}</p>}
-
-          <section className="account-address-list" aria-label="Direcciones guardadas">
+          {/* ── Saved addresses list ── */}
+          <section className="addr-list" aria-label="Direcciones guardadas">
             {addresses.length ? (
               addresses.map((address) => {
                 const isPrimary = getPrimaryAddressId(addresses) === address.id;
+                const badge = getZoneBadge(address.region);
+                const isDeleting = deleteConfirmId === address.id;
 
                 return (
-                  <article key={address.id} className={`account-address-item ${isPrimary ? "is-primary" : ""}`}>
-                    <div>
-                      <h3>{formatAddressHeadline(address) || "Dirección sin completar"}</h3>
-                      <p>{formatAddressDetails(address) || "Completá los datos faltantes."}</p>
+                  <article key={address.id} className={`addr-card${isPrimary ? " addr-card--primary" : ""}`}>
+                    <div className="addr-card-icon">
+                      <svg viewBox="0 0 24 24" width="22" height="22"><path fill={isPrimary ? "#1877f2" : "#9ca3af"} d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0 9.5A2.5 2.5 0 0 1 9.5 9 2.5 2.5 0 0 1 12 6.5 2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5"/></svg>
                     </div>
-                    <button
-                      type="button"
-                      className={isPrimary ? "ghost-btn" : ""}
-                      disabled={isSaving || isPrimary}
-                      onClick={() => handleSelectPrimaryAddress(address.id)}
-                    >
-                      {isPrimary ? "Dirección principal" : "Enviar a esta dirección"}
-                    </button>
+                    <div className="addr-card-body">
+                      <div className="addr-card-top">
+                        <h3>{formatAddressHeadline(address) || "Dirección sin completar"}</h3>
+                        {isPrimary && <span className="addr-badge addr-badge--primary">Principal</span>}
+                        {badge && <span className="addr-badge" style={{ color: badge.color, background: badge.bg }}>{badge.label}</span>}
+                      </div>
+                      <p className="addr-card-details">{formatAddressDetails(address) || "Completá los datos faltantes."}</p>
+                    </div>
+                    <div className="addr-card-actions">
+                      {!isPrimary && !isDeleting && (
+                        <button type="button" className="addr-action-btn addr-action-primary" disabled={isSaving} onClick={() => handleSelectPrimaryAddress(address.id)} title="Marcar como principal">
+                          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                        </button>
+                      )}
+                      <button type="button" className="addr-action-btn addr-action-edit" disabled={isSaving} onClick={() => handleEditAddress(address.id)} title="Editar dirección">
+                        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                      </button>
+                      {!isDeleting ? (
+                        <button type="button" className="addr-action-btn addr-action-delete" disabled={isSaving} onClick={() => setDeleteConfirmId(address.id)} title="Eliminar dirección">
+                          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                      ) : (
+                        <div className="addr-delete-confirm">
+                          <span>¿Eliminar?</span>
+                          <button type="button" className="addr-confirm-yes" disabled={isSaving} onClick={() => handleDeleteAddress(address.id)}>Sí</button>
+                          <button type="button" className="addr-confirm-no" onClick={() => setDeleteConfirmId(null)}>No</button>
+                        </div>
+                      )}
+                    </div>
                   </article>
                 );
               })
             ) : (
-              <p className="account-address-empty">Todavía no guardaste direcciones.</p>
+              <div className="addr-empty">
+                <svg viewBox="0 0 24 24" width="40" height="40"><path fill="#d1d5db" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0 9.5A2.5 2.5 0 0 1 9.5 9 2.5 2.5 0 0 1 12 6.5 2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5"/></svg>
+                <p>Todavía no guardaste direcciones.</p>
+                <small>Agregá tu primera dirección de entrega.</small>
+              </div>
             )}
           </section>
+
+          {saveMessage && <p className="account-save-message">{saveMessage}</p>}
+          {addressError && !Object.values(addressFieldErrors).some(Boolean) && !isAddressFormOpen ? <p className="form-error">{addressError}</p> : null}
+
+          {/* ── Add / Edit form ── */}
+          {!isAddressFormOpen ? (
+            <button type="button" className="addr-add-btn" onClick={handleOpenAddForm} disabled={isSaving || addresses.length >= MAX_ADDRESSES}>
+              <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              Agregar nueva dirección
+            </button>
+          ) : (
+            <div className="addr-form-wrapper">
+              <div className="addr-form-header">
+                <h3>{editingAddressId ? "Editar dirección" : "Nueva dirección"}</h3>
+                <button type="button" className="addr-form-close" onClick={handleDiscardAddress}>
+                  <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+              </div>
+
+              <div className="account-form-grid">
+                {/* DIRECCIÓN */}
+                <div className="account-input-group">
+                  <label htmlFor="account-address-street">Dirección o lugar de entrega *</label>
+                  <input id="account-address-street" type="text" placeholder="Ej: Av. Corrientes" className={addressFieldErrors.street ? "input-error" : ""} value={addressForm.street} onChange={(e) => { handleAddressFieldChange("street", e.target.value); setAddressFieldErrors((p) => ({ ...p, street: false })); }} required />
+                  {addressFieldErrors.street && <span className="field-error-msg">La dirección es obligatoria.</span>}
+                </div>
+
+                <div className="account-form-grid two-columns account-address-two-columns">
+                  {/* ALTURA */}
+                  <div className="account-input-group">
+                    <label htmlFor="account-address-height">Altura *</label>
+                    <input id="account-address-height" type="text" placeholder="Ej: 1121" className={addressFieldErrors.height ? "input-error" : ""} value={addressForm.height} onChange={(e) => { handleAddressFieldChange("height", e.target.value); setAddressFieldErrors((p) => ({ ...p, height: false })); }} required />
+                    {addressFieldErrors.height && <span className="field-error-msg">La altura es obligatoria.</span>}
+                  </div>
+
+                  {/* CÓDIGO POSTAL */}
+                  <div className="account-input-group">
+                    <label htmlFor="account-address-postal-code">Código postal *</label>
+                    <input id="account-address-postal-code" type="text" inputMode="numeric" placeholder="Ej: 1414" className={addressFieldErrors.postalCode ? "input-error" : ""} value={addressForm.postalCode} onChange={(e) => { handleAddressFieldChange("postalCode", e.target.value); setAddressFieldErrors((p) => ({ ...p, postalCode: false })); }} required />
+                    {addressFieldErrors.postalCode && <span className="field-error-msg">El código postal es obligatorio.</span>}
+                  </div>
+
+                  {/* PROVINCIA */}
+                  <div className="account-input-group">
+                    <label htmlFor="account-address-province">Provincia *</label>
+                    <select id="account-address-province" className={addressFieldErrors.province ? "input-error" : ""} value={addressForm.province} onChange={(e) => { const val = e.target.value; handleAddressFieldChange("province", val); setAddressFieldErrors((p) => ({ ...p, province: false, barrio: false, district: false })); if (val === "caba") { handleAddressFieldChange("district", ""); handleAddressFieldChange("city", "Buenos Aires"); } else if (val === "pba") { handleAddressFieldChange("barrio", ""); } else { handleAddressFieldChange("barrio", ""); handleAddressFieldChange("district", ""); } }} required>
+                      <option value="">Seleccioná una provincia</option>
+                      <option value="caba">Capital Federal (CABA)</option>
+                      <option value="pba">Provincia de Buenos Aires</option>
+                    </select>
+                    {addressFieldErrors.province && <span className="field-error-msg">Seleccioná una provincia.</span>}
+                  </div>
+
+                  {/* BARRIO CABA */}
+                  {addressForm.province === "caba" && (
+                    <div className="account-input-group">
+                      <label htmlFor="account-address-barrio">Barrio *</label>
+                      <select id="account-address-barrio" className={addressFieldErrors.barrio ? "input-error" : ""} value={addressForm.barrio} onChange={(e) => { handleAddressFieldChange("barrio", e.target.value); setAddressFieldErrors((p) => ({ ...p, barrio: false })); }} required>
+                        <option value="">Seleccioná un barrio</option>
+                        {BARRIOS_CABA.map((b) => (<option key={b} value={b}>{b}</option>))}
+                      </select>
+                      {addressFieldErrors.barrio && <span className="field-error-msg">Seleccioná un barrio.</span>}
+                    </div>
+                  )}
+
+                  {/* DISTRITO GBA */}
+                  {addressForm.province === "pba" && (
+                    <div className="account-input-group">
+                      <label htmlFor="account-address-district">Distrito *</label>
+                      <select id="account-address-district" className={addressFieldErrors.district ? "input-error" : ""} value={addressForm.district} onChange={(e) => { handleAddressFieldChange("district", e.target.value); setAddressFieldErrors((p) => ({ ...p, district: false })); }} required>
+                        <option value="">Seleccioná un distrito</option>
+                        {GBA_DISTRICTS.map((d) => (<option key={d} value={d}>{d}</option>))}
+                      </select>
+                      {addressFieldErrors.district && <span className="field-error-msg">Seleccioná un distrito.</span>}
+                    </div>
+                  )}
+
+                  {/* PISO */}
+                  <div className="account-input-group">
+                    <label htmlFor="account-address-floor">Piso</label>
+                    <input id="account-address-floor" type="text" placeholder="Ej: 3 (opcional)" value={addressForm.floor} onChange={(e) => handleAddressFieldChange("floor", e.target.value)} />
+                  </div>
+
+                  {/* DEPARTAMENTO */}
+                  <div className="account-input-group">
+                    <label htmlFor="account-address-apartment">Departamento</label>
+                    <input id="account-address-apartment" type="text" placeholder="Ej: B (opcional)" value={addressForm.apartment} onChange={(e) => handleAddressFieldChange("apartment", e.target.value)} />
+                  </div>
+
+                  {/* INDICACIONES PARA LA ENTREGA */}
+                  <div className="account-input-group account-input-full-width">
+                    <label htmlFor="account-address-delivery-notes">Indicaciones para la entrega</label>
+                    <input id="account-address-delivery-notes" type="text" placeholder="Ej: Timbre 4B, portón negro (opcional)" value={addressForm.deliveryNotes} onChange={(e) => handleAddressFieldChange("deliveryNotes", e.target.value)} />
+                  </div>
+
+                  {/* TIPO DE DOMICILIO */}
+                  <div className="account-input-group account-input-full-width">
+                    <label>Tipo de domicilio</label>
+                    <div className="account-address-type-row">
+                      <button type="button" className={`account-address-type-btn${addressForm.addressType === "residencial" ? " is-active" : ""}`} onClick={() => handleAddressFieldChange("addressType", "residencial")}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                        Residencial
+                      </button>
+                      <button type="button" className={`account-address-type-btn${addressForm.addressType === "laboral" ? " is-active" : ""}`} onClick={() => handleAddressFieldChange("addressType", "laboral")}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-2 .89-2 2v11c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2M10 4h4v2h-4z"/></svg>
+                        Laboral
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {addressError && !Object.values(addressFieldErrors).some(Boolean) ? <p className="form-error">{addressError}</p> : null}
+              </div>
+
+              <div className="addr-form-actions">
+                <button type="button" className="addr-cancel-btn" onClick={handleDiscardAddress} disabled={isSaving}>Cancelar</button>
+                <button type="button" className="addr-save-btn" onClick={editingAddressId ? handleUpdateAddress : handleSaveAddress} disabled={isSaving}>
+                  {isSaving ? "Guardando..." : editingAddressId ? "Guardar cambios" : "Guardar dirección"}
+                </button>
+              </div>
+            </div>
+          )}
 
           <p className="account-address-coverage-note">
             Cobertura habilitada en 39 zonas: CABA, GBA norte/oeste/sur, La Plata y alrededores, y corredores seleccionados.

@@ -40,6 +40,12 @@ export async function fetchHealth() {
   return response.json();
 }
 
+export async function fetchPublicShippingRules() {
+  const response = await fetch(`${API_URL}/admin/shipping-rules/public`);
+  if (!response.ok) return { items: [] };
+  return response.json();
+}
+
 export async function fetchProducts() {
   let response;
 

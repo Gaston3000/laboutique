@@ -50,6 +50,18 @@ const ALL_ZONES = [
 // Max distance (in degrees, ~0.5° ≈ 55km) to accept a geolocation match
 const MAX_GEO_DISTANCE = 0.5;
 
+export { ALL_ZONES, MAX_GEO_DISTANCE };
+
+export function findNearestZoneExported(lat, lng) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const z of ALL_ZONES) {
+    const d = Math.sqrt((z.lat - lat) ** 2 + (z.lng - lng) ** 2);
+    if (d < bestDist) { bestDist = d; best = z; }
+  }
+  return bestDist <= MAX_GEO_DISTANCE ? best : null;
+}
+
 const STORAGE_KEY = "delivery:selected-zone";
 
 /* ── Zone detection from postal code ──────────────────── */
@@ -263,7 +275,7 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
       postalCode: zone.postalCode || ""
     };
     setSelectedZone(data);
-    writeStoredZone(data);
+    if (user && token) writeStoredZone(data);
     onZoneSelect?.(data);
     if (user && token) onSyncZone?.(data);
     showConfirmation(zone.label || zone.city);
@@ -326,7 +338,7 @@ export default function AddressSelector({ shippingAddressLabel, user, onOpenMyAd
     const cityLabel = matched ? matched.city : (zone === "caba" ? `CABA (CP ${pc})` : `GBA (CP ${pc})`);
     const data = { city: cityLabel, zone, postalCode: pc };
     setSelectedZone(data);
-    writeStoredZone(data);
+    if (user && token) writeStoredZone(data);
     onZoneSelect?.(data);
     if (user && token) onSyncZone?.(data);
     showConfirmation(matched ? matched.label : cityLabel);

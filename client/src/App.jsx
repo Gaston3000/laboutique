@@ -35,6 +35,7 @@ import {
   fetchSalesByBrand,
   fetchSalesByProduct,
   fetchProducts,
+  fetchPublicShippingRules,
   fetchShippingRules,
   login,
   register,
@@ -69,7 +70,7 @@ const SmartOrderPanel = lazy(() => import("./components/SmartOrderPanel"));
 const WelcomeDiscountModal = lazy(() => import("./components/WelcomeDiscountModal"));
 
 import { categoryDescendantsMap } from "./components/categoryTree";
-import AddressSelector from "./components/AddressSelector";
+import AddressSelector, { ALL_ZONES } from "./components/AddressSelector";
 import BrandsCarousel from "./components/BrandsCarousel";
 import HomeBanners from "./components/HomeBanners";
 import PromoStrip from "./components/PromoStrip";
@@ -93,6 +94,29 @@ const ADDRESS_BOOK_STORAGE_PREFIX = "address-book";
 const MAX_ACCOUNT_ADDRESSES = 5;
 const WELCOME_PROMO_CODE = "PRIMERACOMPRA10";
 const ADMIN_NOTIFICATIONS_SEEN_STORAGE_KEY = "admin:notifications:seen:v1";
+
+const CHECKOUT_GBA_DISTRICTS = [
+  "Almirante Brown", "Avellaneda", "Berazategui", "Berisso", "Campana", "Cañuelas",
+  "Ensenada", "Escobar", "Esteban Echeverría", "Ezeiza", "Florencio Varela",
+  "General Rodríguez", "Guernica", "Hurlingham", "Ituzaingó", "José C. Paz",
+  "La Matanza Norte", "La Matanza Sur", "La Plata", "Lanús", "Lomas de Zamora",
+  "Luján", "Malvinas Argentinas", "Marcos Paz", "Merlo", "Moreno", "Morón", "Pilar",
+  "Quilmes", "San Fernando", "San Isidro", "San Martín", "San Miguel", "San Vicente",
+  "Tigre", "Tres de Febrero", "Vicente López", "Zárate"
+];
+
+const CHECKOUT_BARRIOS_CABA = [
+  "Agronomía", "Almagro", "Balvanera", "Barracas", "Belgrano", "Boedo",
+  "Caballito", "Chacarita", "Coghlan", "Colegiales", "Constitución", "Devoto",
+  "Flores", "Floresta", "La Boca", "La Paternal", "Liniers", "Mataderos",
+  "Monte Castro", "Montserrat", "Nueva Pompeya", "Núñez", "Palermo",
+  "Parque Avellaneda", "Parque Chacabuco", "Parque Chas", "Parque Patricios",
+  "Puerto Madero", "Recoleta", "Retiro", "Saavedra", "San Cristóbal",
+  "San Nicolás", "San Telmo", "Vélez Sarsfield", "Versalles",
+  "Villa Crespo", "Villa del Parque", "Villa Devoto", "Villa General Mitre",
+  "Villa Lugano", "Villa Luro", "Villa Ortúzar", "Villa Pueyrredón",
+  "Villa Real", "Villa Riachuelo", "Villa Santa Rita", "Villa Soldati", "Villa Urquiza"
+];
 
 function LazyFallback() {
   return (
@@ -625,11 +649,16 @@ function normalizeAddressBookEntry(entry, fallbackId) {
     height: String(entry?.height || "").trim(),
     floor: String(entry?.floor || "").trim(),
     apartment: String(entry?.apartment || "").trim(),
-    city: String(entry?.city || "Buenos Aires").trim() || "Buenos Aires",
+    city: String(entry?.city || "").trim(),
     region: String(entry?.region || "").trim(),
+    province: String(entry?.province || "").trim(),
+    barrio: String(entry?.barrio || "").trim(),
+    district: String(entry?.district || "").trim(),
     country: "Argentina",
     postalCode: String(entry?.postalCode || "").trim(),
-    phone: String(entry?.phone || "").trim()
+    phone: String(entry?.phone || "").trim(),
+    deliveryNotes: String(entry?.deliveryNotes || "").trim(),
+    addressType: String(entry?.addressType || "residencial").trim()
   };
 }
 
@@ -967,6 +996,7 @@ function App() {
   const [serverNotifications, setServerNotifications] = useState([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [shippingRules, setShippingRules] = useState([]);
+  const [publicShippingRules, setPublicShippingRules] = useState([]);
   const [categories, setCategories] = useState([]);
   const [promotions, setPromotions] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -992,8 +1022,11 @@ function App() {
     number: "",
     floor: "",
     apartment: "",
-    city: "Buenos Aires",
-    province: "Buenos Aires",
+    city: "",
+    province: "",
+    checkoutProvince: "",
+    checkoutBarrio: "",
+    checkoutDistrict: "",
     postalCode: "",
     notes: "",
     country: "Argentina",
@@ -1007,6 +1040,7 @@ function App() {
   const [addressValidationErrors, setAddressValidationErrors] = useState([]);
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [checkoutLegalPopup, setCheckoutLegalPopup] = useState(null);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isSmartOrderOpen, setIsSmartOrderOpen] = useState(false);
   const [isCartDrawerClosing, setIsCartDrawerClosing] = useState(false);
@@ -1077,6 +1111,7 @@ function App() {
   const mobileSwipeStartXRef = useRef(null);
   const saphirusMobileSwipeStartXRef = useRef(null);
   const similarProductsRowRef = useRef(null);
+  const cartRecsRowRef = useRef(null);
   const saphirusProductsRowRef = useRef(null);
   const cartDrawerLockedScrollYRef = useRef(0);
   const hadCartDrawerBodyLockRef = useRef(false);
@@ -1105,6 +1140,29 @@ function App() {
     const data = await fetchProducts();
     setProducts(data.items || []);
     setProductsLoadError("");
+  }
+
+  function getShippingRule(zone) {
+    return publicShippingRules.find((r) => r.zone === zone) || null;
+  }
+
+  function getShippingEta(zone) {
+    const rule = getShippingRule(zone);
+    if (!rule) return zone === "caba" ? "1–2 días hábiles" : "1–2 días hábiles";
+    if (rule.etaMinDays === rule.etaMaxDays) return `${rule.etaMinDays} día${rule.etaMinDays > 1 ? "s" : ""} hábil${rule.etaMinDays > 1 ? "es" : ""}`;
+    return `${rule.etaMinDays}–${rule.etaMaxDays} días hábiles`;
+  }
+
+  function getShippingCost(zone) {
+    const rule = getShippingRule(zone);
+    if (!rule) return zone === "caba" ? 5000 : 7000;
+    return rule.baseCost;
+  }
+
+  function getShippingFreeFrom(zone) {
+    const rule = getShippingRule(zone);
+    if (!rule) return FREE_SHIPPING_TARGET_ARS;
+    return rule.freeShippingFrom;
   }
 
   function scrollToPageTop() {
@@ -1228,6 +1286,9 @@ function App() {
         setProducts([]);
         setProductsLoadError(error?.message || "No se pudieron cargar los productos.");
       });
+    fetchPublicShippingRules()
+      .then((data) => setPublicShippingRules(data.items || []))
+      .catch(() => {});
   }, []);
 
   // Scroll effect: hide header on scroll down, show on scroll up (Apple/Stripe style)
@@ -1755,11 +1816,11 @@ function App() {
 
     if (checkoutForm.shippingMethod === "delivery") {
       if (hasReachedFreeShipping) return 0;
-      return checkoutForm.shippingZone === "caba" ? 5000 : 7000;
+      return getShippingCost(checkoutForm.shippingZone);
     }
 
     return 0;
-  }, [checkoutForm.shippingMethod, checkoutForm.shippingZone, hasReachedFreeShipping]);
+  }, [checkoutForm.shippingMethod, checkoutForm.shippingZone, hasReachedFreeShipping, publicShippingRules]);
 
   const welcomeDiscountAmount = useMemo(() => {
     if (!auth.user?.welcomeDiscountActive || auth.user?.welcomeDiscountUsed) {
@@ -2014,15 +2075,18 @@ function App() {
         const resolvedCity = city || sublocality;
         const detectedZone = detectShippingZone(resolvedCity, province, postalCode);
 
-        setCheckoutForm((current) => ({
-          ...current,
-          street: streetName || current.street,
-          number: streetNumber || current.number,
-          city: resolvedCity || current.city,
-          province: province || current.province,
-          postalCode: postalCode || current.postalCode,
-          shippingZone: detectedZone,
-        }));
+        setCheckoutForm((current) => {
+          const updated = {
+            ...current,
+            street: streetName || current.street,
+            number: streetNumber || current.number,
+            city: resolvedCity || current.city,
+            province: province || current.province,
+            postalCode: postalCode || current.postalCode,
+            shippingZone: detectedZone,
+          };
+          return updated;
+        });
         setAddressValidationErrors([]);
       }
     );
@@ -3193,18 +3257,46 @@ function App() {
       return;
     }
 
-    const firstCard = rowRef.current.querySelector(".product-card");
-    const rowStyles = window.getComputedStyle(rowRef.current);
+    const el = rowRef.current;
+    const firstCard = el.querySelector(".product-card");
+    const rowStyles = window.getComputedStyle(el);
     const rowGap = Number.parseFloat(rowStyles.columnGap || rowStyles.gap || "0") || 0;
     const amountPerCard = firstCard ? firstCard.getBoundingClientRect().width + rowGap : 240;
     const isMobile = window.innerWidth <= 640;
     const amount = amountPerCard * (isMobile ? 2 : 3);
 
-    rowRef.current.scrollBy({
-      left: direction === "left" ? -amount : amount,
-      behavior: "smooth"
-    });
+    el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
   }
+
+  /* Infinite loop for cart recs carousel: center on middle set and reset when nearing edges */
+  useEffect(() => {
+    const el = cartRecsRowRef.current;
+    if (!el || !el.children.length) return;
+    const totalWidth = el.scrollWidth;
+    const oneThird = totalWidth / 3;
+    el.scrollLeft = oneThird;
+
+    let ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const sl = el.scrollLeft;
+        if (sl < oneThird * 0.05) {
+          el.style.scrollBehavior = "auto";
+          el.scrollLeft = sl + oneThird;
+          el.style.scrollBehavior = "";
+        } else if (sl > oneThird * 2 - el.clientWidth * 0.5) {
+          el.style.scrollBehavior = "auto";
+          el.scrollLeft = sl - oneThird;
+          el.style.scrollBehavior = "";
+        }
+        ticking = false;
+      });
+    }
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [cartViewRecommendations.featured]);
 
   function handleMobileSwipeStart(event) {
     mobileSwipeStartXRef.current = event.touches[0].clientX;
@@ -3382,6 +3474,42 @@ function App() {
     }
 
     setCheckoutMessage("");
+
+    // Auto-fill nombre, apellido y teléfono desde la cuenta del usuario
+    setCheckoutForm((c) => ({
+      ...c,
+      firstName: c.firstName || auth.user?.firstName || "",
+      lastName: c.lastName || auth.user?.lastName || "",
+      customerPhone: c.customerPhone || auth.user?.phone || "",
+    }));
+
+    // Auto-select primary saved address if delivery is selected and no address filled yet
+    if (checkoutForm.shippingMethod === "delivery" && !checkoutForm.street) {
+      const allAddresses = Array.isArray(auth.user?.addressBook) ? auth.user.addressBook.filter((a) => a.street || a.height) : [];
+      // Only consider addresses matching the selected shipping zone
+      const userAddresses = allAddresses.filter((a) => detectShippingZone(a.city || "", a.region || "", a.postalCode || "") === checkoutForm.shippingZone);
+      if (userAddresses.length) {
+        const primaryId = String(auth.user?.primaryAddressId || "").trim();
+        const primaryAddr = userAddresses.find((a) => a.id === primaryId) || userAddresses[0];
+        if (primaryAddr) {
+          setCheckoutForm((c) => ({
+            ...c,
+            street: primaryAddr.street || "",
+            number: primaryAddr.height || "",
+            floor: primaryAddr.floor || "",
+            apartment: primaryAddr.apartment || "",
+            city: primaryAddr.city || "",
+            province: primaryAddr.region || "",
+            checkoutProvince: primaryAddr.province || (primaryAddr.region === "CABA" ? "caba" : primaryAddr.region ? "pba" : ""),
+            checkoutBarrio: primaryAddr.barrio || "",
+            checkoutDistrict: primaryAddr.district || (primaryAddr.region && primaryAddr.region !== "CABA" ? primaryAddr.region : ""),
+            postalCode: primaryAddr.postalCode || "",
+            notes: primaryAddr.deliveryNotes || "",
+          }));
+        }
+      }
+    }
+
     setActiveSection("checkout-details");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -3706,8 +3834,9 @@ function App() {
         .slice(0, MAX_ACCOUNT_ADDRESSES);
 
       if (!nextAddressBook.length) {
-        throw new Error("Agregá al menos una dirección válida.");
-      }
+        nextPrimaryAddressId = "";
+        primaryAddress = "";
+      } else {
 
       if (addressValue.addresses.length > MAX_ACCOUNT_ADDRESSES) {
         throw new Error(`Podés guardar hasta ${MAX_ACCOUNT_ADDRESSES} direcciones.`);
@@ -3720,13 +3849,14 @@ function App() {
 
       const primaryEntry = nextAddressBook.find((entry) => entry.id === nextPrimaryAddressId) || nextAddressBook[0];
       primaryAddress = buildAddressFromEntry(primaryEntry);
+      }
     }
 
-    if (!primaryAddress) {
+    if (!hasAddressBookPayload && !primaryAddress) {
       throw new Error("La dirección es obligatoria.");
     }
 
-    const data = await updateMyAddress(auth.token, primaryAddress);
+    const data = await updateMyAddress(auth.token, primaryAddress || "");
     setAuth((current) => ({
       token: data.token || current.token,
       user: {
@@ -4726,8 +4856,8 @@ function App() {
 
   return (
     <div className={`page${isCartDrawerOpen ? " cart-lock-active" : ""}`}>
-      <PromoStrip />
-      <SiteHeader
+      {activeSection !== "checkout-details" && <PromoStrip />}
+      {activeSection !== "checkout-details" && <SiteHeader
         totalItems={totalItems}
         products={products}
         searchValue={searchInput}
@@ -4757,9 +4887,9 @@ function App() {
         onRepeatOrder={() => { setAccountInitialTab("pedidos"); setActiveSection("account"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
         hasOrders={myOrders.length > 0}
         onSmartOrder={() => setIsSmartOrderOpen(true)}
-      />
+      />}
 
-      <nav className={`nav-bar${showHeader ? "" : " nav-bar-hidden"}`}>
+      <nav className={`nav-bar${showHeader ? "" : " nav-bar-hidden"}${activeSection === "checkout-details" ? " nav-bar-hidden" : ""}`}>
         <div className="container nav-inner">
           <AddressSelector
             shippingAddressLabel={shippingAddressLabel}
@@ -6092,14 +6222,15 @@ function App() {
             </section>
           ) : activeSection === "cart" ? (
             <section className="cart-view" aria-label="Carrito de compras">
-              <div className="cart-view-header">
-                <h1>Mi carrito</h1>
-                <button type="button" className="cart-continue-btn" onClick={() => setActiveSection("home")}>
-                  Seguir navegando ›
-                </button>
-              </div>
 
               {!cart.length ? (
+                <>
+                <div className="cart-view-header">
+                  <h1>Mi carrito</h1>
+                  <button type="button" className="cart-continue-btn" onClick={() => setActiveSection("home")}>
+                    Seguir navegando ›
+                  </button>
+                </div>
                 <div className="cart-view-empty">
                   {/* Hero empty state */}
                   <div className="cart-view-empty-hero">
@@ -6275,9 +6406,16 @@ function App() {
                     </div>
                   </section>
                 </div>
+                </>
               ) : (
                 <div className="cart-checkout-layout">
                   <div className="cart-products-panel">
+                    <div className="cart-view-header">
+                      <h1>Mi carrito</h1>
+                      <button type="button" className="cart-continue-btn" onClick={() => setActiveSection("home")}>
+                        Seguir navegando ›
+                      </button>
+                    </div>
                     <ul className="cart-list">
                       {cart.map((item) => (
                         <li key={item.cartKey || `${item.id}:base`} className="cart-line">
@@ -6467,7 +6605,7 @@ function App() {
                         )}
 
                         <div className="checkout-summary-row">
-                          <span>{checkoutForm.shippingMethod === "pickup" ? "Retiro en el local" : checkoutForm.shippingMethod === "delivery" ? (checkoutForm.shippingZone === "caba" ? "Envío a CABA" : "Envío a GBA") : "Envío"}</span>
+                          <span>{checkoutForm.shippingMethod === "pickup" ? "Retiro en el local · Acevedo 200" : checkoutForm.shippingMethod === "delivery" ? (checkoutForm.shippingZone === "caba" ? "Envío a CABA" : "Envío a GBA") : "Envío"}</span>
                           <strong>{checkoutShippingSummaryLabel}</strong>
                         </div>
 
@@ -6486,7 +6624,7 @@ function App() {
                             </span>
                             <span className="shipping-card-info">
                               <span className="shipping-card-label">Retiro en el local</span>
-                              <span className="shipping-card-sub">Villa Crespo · Lun a Vie</span>
+                              <span className="shipping-card-sub">Acevedo 200 · Villa Crespo · Lun a Vie</span>
                             </span>
                             <span className="shipping-card-price shipping-card-free">Gratis</span>
                             <span className="shipping-card-radio" />
@@ -6498,14 +6636,17 @@ function App() {
                             onClick={() => setCheckoutForm((c) => ({ ...c, shippingMethod: "delivery", shippingZone: "caba", paymentMethod: "mercadopago", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" }))}
                           >
                             <span className="shipping-card-icon">
-                              <svg viewBox="0 0 24 24"><circle cx="5" cy="17" r="2.5"/><circle cx="19" cy="17" r="2.5"/><path d="M5 14.5l3-7h3.5l2.5 5h5.5"/><path d="M8 7.5h3"/></svg>
+                              {hasReachedFreeShipping
+                                ? <img src="/fotos/envioGratis.png" alt="Envío gratis" />
+                                : <svg viewBox="0 0 24 24"><path d="M2 4h12v13H2z"/><path d="M14 9h4l3 3v5h-7"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+                              }
                             </span>
                             <span className="shipping-card-info">
                               <span className="shipping-card-label">Envío a CABA</span>
-                              <span className="shipping-card-sub">1–2 días hábiles</span>
+                              <span className="shipping-card-sub">{getShippingEta("caba")}</span>
                             </span>
                             <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
-                              {hasReachedFreeShipping ? "Gratis" : "$5.000"}
+                              {hasReachedFreeShipping ? "Gratis" : `$${getShippingCost("caba").toLocaleString("es-AR")}`}
                             </span>
                             <span className="shipping-card-radio" />
                           </button>
@@ -6516,14 +6657,17 @@ function App() {
                             onClick={() => setCheckoutForm((c) => ({ ...c, shippingMethod: "delivery", shippingZone: "gba", paymentMethod: "mercadopago", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" }))}
                           >
                             <span className="shipping-card-icon">
-                              <svg viewBox="0 0 24 24"><path d="M2 4h12v13H2z"/><path d="M14 9h4l3 3v5h-7"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+                              {hasReachedFreeShipping
+                                ? <img src="/fotos/envioGratis.png" alt="Envío gratis" />
+                                : <svg viewBox="0 0 24 24"><path d="M2 4h12v13H2z"/><path d="M14 9h4l3 3v5h-7"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+                              }
                             </span>
                             <span className="shipping-card-info">
                               <span className="shipping-card-label">Envío a GBA</span>
-                              <span className="shipping-card-sub">1–3 días hábiles</span>
+                              <span className="shipping-card-sub">{getShippingEta("gba")}</span>
                             </span>
                             <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
-                              {hasReachedFreeShipping ? "Gratis" : "$7.000"}
+                              {hasReachedFreeShipping ? "Gratis" : `$${getShippingCost("gba").toLocaleString("es-AR")}`}
                             </span>
                             <span className="shipping-card-radio" />
                           </button>
@@ -6579,37 +6723,24 @@ function App() {
               {/* Recommendations — always visible */}
               {cartViewRecommendations.featured.length > 0 && (
                 <div className="cart-view-recs-always">
-                  {/* Top brands */}
-                  {cartViewRecommendations.topBrands.length > 0 && (
-                    <section className="cart-view-empty-brands" aria-label="Marcas populares">
-                      <h3 className="cart-view-empty-section-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                        Marcas populares
-                      </h3>
-                      <div className="cart-view-empty-brand-chips">
-                        {cartViewRecommendations.topBrands.map((brand) => (
-                          <button key={brand} type="button" className="cart-view-empty-brand-chip" onClick={() => { setSearchInput(brand); setSearchTerm(brand); setActiveSection("home"); scrollToPageTop(); }}>
-                            {brand}
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Featured products */}
-                  <section className="cart-view-empty-featured" aria-label="Productos recomendados">
+                  {/* Featured products — horizontal carousel */}
+                  <section className="cart-view-empty-featured products-carousel" aria-label="Productos recomendados">
                     <h3 className="cart-view-empty-section-title">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                       {cart.length ? "Completá tu pedido" : "Productos recomendados para vos"}
                     </h3>
-                    <div className="cart-view-empty-products-grid">
-                      {cartViewRecommendations.featured.map((product) => {
-                        const qty = getCatalogQuantity(product.id);
-                        const stockLimit = getStockLimit(product.stock);
-                        const isQtyAtLimit = stockLimit !== null && qty >= stockLimit;
-                        const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
-                        return (
-                          <article key={product.id} className="product-card" role="button" tabIndex={0} onClick={() => openProductPreview(product)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProductPreview(product); } }}>
+                    <button type="button" className="carousel-arrow carousel-arrow-left" onClick={() => scrollProductsRow("left", cartRecsRowRef)} aria-label="Ver productos anteriores">
+                      <span className="nav-arrow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M7 10.5 12 15.5 17 10.5"/></svg></span>
+                    </button>
+                    <div className="products-row" ref={cartRecsRowRef}>
+                      {[0, 1, 2].flatMap((setIdx) =>
+                        cartViewRecommendations.featured.map((product) => {
+                          const qty = getCatalogQuantity(product.id);
+                          const stockLimit = getStockLimit(product.stock);
+                          const isQtyAtLimit = stockLimit !== null && qty >= stockLimit;
+                          const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
+                          return (
+                            <article key={`${setIdx}-${product.id}`} className="product-card" role="button" tabIndex={setIdx === 1 ? 0 : -1} aria-hidden={setIdx !== 1} onClick={() => openProductPreview(product)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProductPreview(product); } }}>
                             <button type="button" className={`favorite-btn card-favorite-btn ${isProductFavorite(product.id) ? "is-active" : ""}`} onClick={(e) => handleToggleFavorite(product, e)} aria-label={isProductFavorite(product.id) ? `Quitar ${product.name} de favoritos` : `Agregar ${product.name} a favoritos`}>
                               <span aria-hidden="true">★</span>
                             </button>
@@ -6638,86 +6769,12 @@ function App() {
                             </div>
                           </article>
                         );
-                      })}
+                      })
+                      )}
                     </div>
-                  </section>
-
-                  {/* By category */}
-                  {cartViewRecommendations.byCategory.map((group) => (
-                    <section key={group.name} className="cart-view-empty-category-section" aria-label={group.name}>
-                      <div className="cart-view-empty-category-header">
-                        <h3 className="cart-view-empty-section-title">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                          {group.name}
-                        </h3>
-                        <button type="button" className="cart-view-empty-see-all" onClick={() => { handleSelectCategory(group.name); }}>
-                          Ver todos ›
-                        </button>
-                      </div>
-                      <div className="cart-view-empty-products-grid">
-                        {group.items.map((product) => {
-                          const qty = getCatalogQuantity(product.id);
-                          const stockLimit = getStockLimit(product.stock);
-                          const isQtyAtLimit = stockLimit !== null && qty >= stockLimit;
-                          const { primaryImageUrl, secondaryImageUrl, primaryImageAlt, secondaryImageAlt } = getCardImagePair(product);
-                          return (
-                            <article key={product.id} className="product-card" role="button" tabIndex={0} onClick={() => openProductPreview(product)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProductPreview(product); } }}>
-                              <button type="button" className={`favorite-btn card-favorite-btn ${isProductFavorite(product.id) ? "is-active" : ""}`} onClick={(e) => handleToggleFavorite(product, e)} aria-label={isProductFavorite(product.id) ? `Quitar ${product.name} de favoritos` : `Agregar ${product.name} a favoritos`}>
-                                <span aria-hidden="true">★</span>
-                              </button>
-                              <figure className={`product-image-stack${secondaryImageUrl ? " has-hover-image" : ""}`}>
-                                <img className="product-image product-image-primary" src={primaryImageUrl} alt={primaryImageAlt} loading="lazy" />
-                                {secondaryImageUrl && <img className="product-image product-image-secondary" src={secondaryImageUrl} alt={secondaryImageAlt} loading="lazy" />}
-                              </figure>
-                              <div className="product-card-content">
-                                {product.brand && <p className="product-brand">{product.brand}</p>}
-                                <h2 className="product-title">{product.name}</h2>
-                                <p className="product-price">${Number(product.price).toLocaleString("es-AR")} ARS</p>
-                                <div className="product-qty" aria-label={`Cantidad para ${product.name}`}>
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, -1); }}>-</button>
-                                  <span>{qty}</span>
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); updateCatalogQuantity(product.id, 1, stockLimit ?? 99); }} disabled={isQtyAtLimit}>+</button>
-                                </div>
-                                <button type="button" className="product-add-btn" onClick={(e) => { e.stopPropagation(); addToCart(product, qty); }}>
-                                  <span className="product-add-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 50 50" style={{width: '1.1em', height: '1.1em', display: 'inline-block', verticalAlign: 'middle'}}>
-                                      <path fill="currentColor" d="M35 34H13c-.3 0-.6-.2-.8-.4s-.2-.6-.1-.9l1.9-4.8L12.1 10H6V8h7c.5 0 .9.4 1 .9l2 19c0 .2 0 .3-.1.5L14.5 32H36z"/>
-                                      <path fill="currentColor" d="m15.2 29l-.4-2L38 22.2V14H14v-2h25c.6 0 1 .4 1 1v10c0 .5-.3.9-.8 1zM36 40c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m-24 6c-2.2 0-4-1.8-4-4s1.8-4 4-4s4 1.8 4 4s-1.8 4-4 4m0-6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/>
-                                    </svg>
-                                  </span>
-                                  <span>Agregar al carrito</span>
-                                </button>
-                              </div>
-                            </article>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  ))}
-
-                  {/* Trust badges */}
-                  <section className="cart-view-empty-trust" aria-label="Beneficios">
-                    <div className="cart-view-empty-trust-item">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                      <div>
-                        <strong>Envío gratis</strong>
-                        <span>En compras superiores a $50.000</span>
-                      </div>
-                    </div>
-                    <div className="cart-view-empty-trust-item">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                      <div>
-                        <strong>Compra segura</strong>
-                        <span>Pagos protegidos con MercadoPago</span>
-                      </div>
-                    </div>
-                    <div className="cart-view-empty-trust-item">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="28" height="28"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                      <div>
-                        <strong>Retiro en el local</strong>
-                        <span>Sin costo adicional</span>
-                      </div>
-                    </div>
+                    <button type="button" className="carousel-arrow carousel-arrow-right" onClick={() => scrollProductsRow("right", cartRecsRowRef)} aria-label="Ver más productos">
+                      <span className="nav-arrow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M7 10.5 12 15.5 17 10.5"/></svg></span>
+                    </button>
                   </section>
                 </div>
               )}
@@ -6728,6 +6785,10 @@ function App() {
                 <div className="checkout-details-title-wrap">
                   <img src="/fotos/logo/La boutique de la limpiezalogo.webp" alt="La Boutique de la Limpieza" className="checkout-details-logo" />
                   <h1>PÁGINA DE PAGO</h1>
+                  <span className="checkout-secure-badge">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="#059669" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14.59l-3.29-3.3 1.41-1.41L11 12.76l4.88-4.88 1.41 1.41L11 15.59z"/></svg>
+                    Compra segura
+                  </span>
                 </div>
                 <button type="button" className="checkout-details-back" onClick={() => setActiveSection("home")}>Seguir navegando</button>
               </header>
@@ -6773,75 +6834,129 @@ function App() {
                     </label>
 
                     <span className="checkout-field-label">Método de entrega *</span>
-                    <div className="shipping-cards shipping-cards--form">
-                      <button
-                        type="button"
-                        className={`shipping-card${checkoutShippingOptionValue === "pickup" ? " shipping-card--active" : ""}`}
-                        onClick={() => { setCheckoutForm((c) => ({ ...c, shippingMethod: "pickup", shippingZone: "", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" })); setAddressValidationErrors([]); }}
-                      >
-                        <span className="shipping-card-icon">
-                          <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
-                        </span>
-                        <span className="shipping-card-info">
-                          <span className="shipping-card-label">Retiro en el local</span>
-                          <span className="shipping-card-sub">Villa Crespo · Lun a Vie</span>
-                        </span>
-                        <span className="shipping-card-price shipping-card-free">Gratis</span>
-                        <span className="shipping-card-radio" />
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`shipping-card${checkoutShippingOptionValue === "delivery-caba" ? " shipping-card--active" : ""}`}
-                        onClick={() => { setCheckoutForm((c) => ({ ...c, shippingMethod: "delivery", shippingZone: "caba", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" })); setAddressValidationErrors([]); }}
-                      >
-                        <span className="shipping-card-icon">
-                          <svg viewBox="0 0 24 24"><circle cx="5" cy="17" r="2.5"/><circle cx="19" cy="17" r="2.5"/><path d="M5 14.5l3-7h3.5l2.5 5h5.5"/><path d="M8 7.5h3"/></svg>
-                        </span>
-                        <span className="shipping-card-info">
-                          <span className="shipping-card-label">Envío a CABA</span>
-                          <span className="shipping-card-sub">1–2 días hábiles</span>
-                        </span>
-                        <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
-                          {hasReachedFreeShipping ? "Gratis" : "$5.000"}
-                        </span>
-                        <span className="shipping-card-radio" />
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`shipping-card${checkoutShippingOptionValue === "delivery-gba" ? " shipping-card--active" : ""}`}
-                        onClick={() => { setCheckoutForm((c) => ({ ...c, shippingMethod: "delivery", shippingZone: "gba", street: "", number: "", floor: "", apartment: "", city: "Buenos Aires", province: "Buenos Aires", postalCode: "", notes: "" })); setAddressValidationErrors([]); }}
-                      >
-                        <span className="shipping-card-icon">
-                          <svg viewBox="0 0 24 24"><path d="M2 4h12v13H2z"/><path d="M14 9h4l3 3v5h-7"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
-                        </span>
-                        <span className="shipping-card-info">
-                          <span className="shipping-card-label">Envío a GBA</span>
-                          <span className="shipping-card-sub">1–3 días hábiles</span>
-                        </span>
-                        <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
-                          {hasReachedFreeShipping ? "Gratis" : "$7.000"}
-                        </span>
-                        <span className="shipping-card-radio" />
-                      </button>
+                    <div className="shipping-cards shipping-cards--form shipping-cards--locked">
+                      {checkoutShippingOptionValue === "pickup" && (
+                        <div className="shipping-card shipping-card--active shipping-card--readonly">
+                          <span className="shipping-card-icon">
+                            <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+                          </span>
+                          <span className="shipping-card-info">
+                            <span className="shipping-card-label">Retiro en el local</span>
+                            <span className="shipping-card-sub">Acevedo 200 · Villa Crespo · Lun a Vie</span>
+                          </span>
+                          <span className="shipping-card-price shipping-card-free">Gratis</span>
+                        </div>
+                      )}
+                      {checkoutShippingOptionValue === "delivery-caba" && (
+                        <div className="shipping-card shipping-card--active shipping-card--readonly">
+                          <span className="shipping-card-icon">
+                            {hasReachedFreeShipping
+                              ? <img src="/fotos/envioGratis.png" alt="Envío gratis" />
+                              : <svg viewBox="0 0 24 24"><path d="M2 4h12v13H2z"/><path d="M14 9h4l3 3v5h-7"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+                            }
+                          </span>
+                          <span className="shipping-card-info">
+                            <span className="shipping-card-label">Envío a CABA</span>
+                            <span className="shipping-card-sub">{getShippingEta("caba")}</span>
+                          </span>
+                          <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
+                            {hasReachedFreeShipping ? "Gratis" : `$${getShippingCost("caba").toLocaleString("es-AR")}`}
+                          </span>
+                        </div>
+                      )}
+                      {checkoutShippingOptionValue === "delivery-gba" && (
+                        <div className="shipping-card shipping-card--active shipping-card--readonly">
+                          <span className="shipping-card-icon">
+                            {hasReachedFreeShipping
+                              ? <img src="/fotos/envioGratis.png" alt="Envío gratis" />
+                              : <svg viewBox="0 0 24 24"><path d="M2 4h12v13H2z"/><path d="M14 9h4l3 3v5h-7"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>
+                            }
+                          </span>
+                          <span className="shipping-card-info">
+                            <span className="shipping-card-label">Envío a GBA</span>
+                            <span className="shipping-card-sub">{getShippingEta("gba")}</span>
+                          </span>
+                          <span className={`shipping-card-price${hasReachedFreeShipping ? " shipping-card-free" : ""}`}>
+                            {hasReachedFreeShipping ? "Gratis" : `$${getShippingCost("gba").toLocaleString("es-AR")}`}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <p className="checkout-details-help">
-                      Seleccioná si preferís recibir el pedido a domicilio o retirarlo en nuestra tienda de Villa Crespo.
+                      * Si deseás {checkoutShippingOptionValue === "pickup" ? "recibir tu pedido a domicilio" : checkoutShippingOptionValue === "delivery-caba" ? "envío a GBA o retiro en el local" : checkoutShippingOptionValue === "delivery-gba" ? "envío a CABA o retiro en el local" : "cambiar el método de entrega"}, <button type="button" className="checkout-change-shipping-link" onClick={() => { setActiveSection("cart"); window.scrollTo({ top: 0, behavior: "smooth" }); }}>volvé al carrito</button>.
                     </p>
 
                     {checkoutForm.shippingMethod === "delivery" && (
                       <>
-                        <label>
-                          <span>País *</span>
-                          <select
-                            value={checkoutForm.country}
-                            onChange={(event) => setCheckoutForm((current) => ({ ...current, country: event.target.value }))}
-                          >
-                            <option value="Argentina">Argentina</option>
-                          </select>
-                        </label>
+                        {(() => {
+                          const allAddresses = Array.isArray(auth.user?.addressBook) ? auth.user.addressBook.filter((a) => a.street || a.height) : [];
+                          const userAddresses = allAddresses.filter((a) => detectShippingZone(a.city || "", a.region || "", a.postalCode || "") === checkoutForm.shippingZone);
+                          const zoneName = checkoutForm.shippingZone === "caba" ? "CABA" : "GBA";
+                          if (!allAddresses.length) return null;
+                          return (
+                            <div className="checkout-saved-addresses">
+                              <span className="checkout-field-label">Direcciones guardadas para envíos en {zoneName}</span>
+                              {!userAddresses.length && (
+                                <p className="checkout-saved-addresses-empty">No tenés direcciones guardadas en {zoneName}. Ingresá una nueva dirección.</p>
+                              )}
+                              <div className="checkout-saved-addresses-list">
+                                {userAddresses.map((addr) => (
+                                  <button
+                                    key={addr.id}
+                                    type="button"
+                                    className={`checkout-saved-address-card${checkoutForm.street === addr.street && checkoutForm.number === addr.height ? " is-selected" : ""}`}
+                                    onClick={() => {
+                                      const updated = {
+                                        ...checkoutForm,
+                                        street: addr.street || "",
+                                        number: addr.height || "",
+                                        floor: addr.floor || "",
+                                        apartment: addr.apartment || "",
+                                        city: addr.city || "",
+                                        province: addr.region || "",
+                                        checkoutProvince: addr.province || (addr.region === "CABA" ? "caba" : addr.region ? "pba" : ""),
+                                        checkoutBarrio: addr.barrio || "",
+                                        checkoutDistrict: addr.district || (addr.region && addr.region !== "CABA" ? addr.region : ""),
+                                        postalCode: addr.postalCode || "",
+                                        notes: addr.deliveryNotes || "",
+                                        shippingZone: detectShippingZone(addr.city || "", addr.region || "", addr.postalCode || ""),
+                                      };
+                                      setCheckoutForm(updated);
+                                      setAddressValidationErrors([]);
+                                    }}
+                                  >
+                                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style={{flexShrink:0}}>
+                                      <path fill="#666" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0 9.5A2.5 2.5 0 0 1 9.5 9 2.5 2.5 0 0 1 12 6.5 2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5"/>
+                                    </svg>
+                                    <span className="checkout-saved-address-text">
+                                      <strong>{addr.street} {addr.height}{addr.floor ? `, Piso ${addr.floor}` : ""}{addr.apartment ? ` ${addr.apartment}` : ""}</strong>
+                                      <small>
+                                        {addr.city}{addr.postalCode ? ` (${addr.postalCode})` : ""}
+                                      </small>
+                                    </span>
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  className={`checkout-saved-address-card checkout-saved-address-new${!userAddresses.some((a) => checkoutForm.street === a.street && checkoutForm.number === a.height) ? " is-selected" : ""}`}
+                                  onClick={() => {
+                                    setCheckoutForm((c) => ({ ...c, street: "", number: "", floor: "", apartment: "", city: "", province: "", checkoutProvince: "", checkoutBarrio: "", checkoutDistrict: "", postalCode: "", notes: "" }));
+                                    setAddressValidationErrors([]);
+                                  }}
+                                >
+                                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style={{flexShrink:0}}>
+                                    <path fill="#666" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                                  </svg>
+                                  <span className="checkout-saved-address-text">
+                                    <strong>Nueva dirección</strong>
+                                    <small>Ingresá una dirección nueva</small>
+                                  </span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         <div className="checkout-details-grid two-columns">
                           <label className="checkout-address-field">
@@ -6888,12 +7003,90 @@ function App() {
 
                         <div className="checkout-details-grid two-columns">
                           <label>
+                            <span>Código postal *</span>
+                            <input
+                              type="text"
+                              value={checkoutForm.postalCode}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setCheckoutForm((current) => ({
+                                  ...current,
+                                  postalCode: value,
+                                  shippingZone: detectShippingZone(current.city, current.province, value),
+                                }));
+                              }}
+                              placeholder="Ej: 1414"
+                              required
+                            />
+                          </label>
+                          <label>
+                            <span>Provincia *</span>
+                            <select
+                              value={checkoutForm.checkoutProvince}
+                              onChange={(event) => {
+                                const val = event.target.value;
+                                setCheckoutForm((current) => ({
+                                  ...current,
+                                  checkoutProvince: val,
+                                  checkoutBarrio: "",
+                                  checkoutDistrict: "",
+                                  province: val === "caba" ? "Ciudad Autónoma de Buenos Aires" : val === "pba" ? "Buenos Aires" : "",
+                                  city: val === "caba" ? "Buenos Aires" : "",
+                                  shippingZone: val === "caba" ? "caba" : val === "pba" ? "gba" : current.shippingZone,
+                                }));
+                              }}
+                              required
+                            >
+                              <option value="">Seleccioná</option>
+                              <option value="caba">Capital Federal (CABA) — {hasReachedFreeShipping ? "Envío gratis" : `Envío $${getShippingCost("caba").toLocaleString("es-AR")}`}</option>
+                              <option value="pba">Provincia de Buenos Aires — {hasReachedFreeShipping ? "Envío gratis" : `Envío $${getShippingCost("gba").toLocaleString("es-AR")}`}</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        {checkoutForm.checkoutProvince === "caba" && (
+                          <label>
+                            <span>Barrio *</span>
+                            <select
+                              value={checkoutForm.checkoutBarrio}
+                              onChange={(event) => setCheckoutForm((current) => ({ ...current, checkoutBarrio: event.target.value }))}
+                              required
+                            >
+                              <option value="">Seleccioná un barrio</option>
+                              {CHECKOUT_BARRIOS_CABA.map((b) => (<option key={b} value={b}>{b}</option>))}
+                            </select>
+                          </label>
+                        )}
+
+                        {checkoutForm.checkoutProvince === "pba" && (
+                          <label>
+                            <span>Distrito *</span>
+                            <select
+                              value={checkoutForm.checkoutDistrict}
+                              onChange={(event) => {
+                                const val = event.target.value;
+                                setCheckoutForm((current) => ({
+                                  ...current,
+                                  checkoutDistrict: val,
+                                  city: val || "",
+                                }));
+                              }}
+                              required
+                            >
+                              <option value="">Seleccioná un distrito</option>
+                              {CHECKOUT_GBA_DISTRICTS.map((d) => (<option key={d} value={d}>{d}</option>))}
+                            </select>
+                          </label>
+                        )}
+
+                        <div className="checkout-details-grid two-columns">
+                          <label>
                             <span>Piso</span>
                             <input
                               type="text"
                               value={checkoutForm.floor}
                               onChange={(event) => setCheckoutForm((current) => ({ ...current, floor: event.target.value }))}
-                              placeholder="Ej: 3"
+                              placeholder="Opcional"
                               autoComplete="new-password"
                             />
                           </label>
@@ -6903,72 +7096,19 @@ function App() {
                               type="text"
                               value={checkoutForm.apartment}
                               onChange={(event) => setCheckoutForm((current) => ({ ...current, apartment: event.target.value }))}
-                              placeholder="Ej: A"
+                              placeholder="Opcional"
                               autoComplete="new-password"
                             />
                           </label>
                         </div>
 
-                        <div className="checkout-details-grid two-columns">
-                          <label>
-                            <span>Ciudad *</span>
-                            <input
-                              type="text"
-                              value={checkoutForm.city}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setCheckoutForm((current) => ({
-                                  ...current,
-                                  city: value,
-                                  shippingZone: detectShippingZone(value, current.province, current.postalCode),
-                                }));
-                              }}
-                              required
-                            />
-                          </label>
-                          <label>
-                            <span>Provincia *</span>
-                            <input
-                              type="text"
-                              value={checkoutForm.province}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setCheckoutForm((current) => ({
-                                  ...current,
-                                  province: value,
-                                  shippingZone: detectShippingZone(current.city, value, current.postalCode),
-                                }));
-                              }}
-                              required
-                            />
-                          </label>
-                        </div>
-
                         <label>
-                          <span>Código postal *</span>
-                          <input
-                            type="text"
-                            value={checkoutForm.postalCode}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCheckoutForm((current) => ({
-                                ...current,
-                                postalCode: value,
-                                shippingZone: detectShippingZone(current.city, current.province, value),
-                              }));
-                            }}
-                            placeholder="Ej: 1414"
-                            required
-                          />
-                        </label>
-
-                        <label>
-                          <span>Referencia de entrega</span>
+                          <span>Indicaciones para la entrega</span>
                           <input
                             type="text"
                             value={checkoutForm.notes}
                             onChange={(event) => setCheckoutForm((current) => ({ ...current, notes: event.target.value }))}
-                            placeholder="Ej: Timbre 2B, portón negro"
+                            placeholder="Ej: Timbre 2B, portón negro (opcional)"
                           />
                         </label>
 
@@ -6981,7 +7121,7 @@ function App() {
                             {" — "}
                             {hasReachedFreeShipping
                               ? <strong style={{ color: '#059669' }}>Envío gratis</strong>
-                              : <strong>${(checkoutForm.shippingZone === "caba" ? 5000 : 7000).toLocaleString("es-AR")} ARS</strong>
+                              : <strong>${getShippingCost(checkoutForm.shippingZone).toLocaleString("es-AR")} ARS</strong>
                             }
                           </span>
                         </div>
@@ -7061,22 +7201,46 @@ function App() {
                       </fieldset>
                     )}
 
-                    {checkoutForm.shippingMethod === "delivery" && (
-                      <label className="checkout-checkbox-row">
-                        <input
-                          type="checkbox"
-                          checked={checkoutForm.saveAddress}
-                          onChange={(event) => setCheckoutForm((current) => ({ ...current, saveAddress: event.target.checked }))}
-                        />
-                        Guardar esta dirección
-                      </label>
+                    {checkoutForm.shippingMethod === "delivery" && checkoutForm.street && (
+                      <div className="checkout-address-summary">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style={{flexShrink:0}}>
+                          <path fill="#059669" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0 9.5A2.5 2.5 0 0 1 9.5 9 2.5 2.5 0 0 1 12 6.5 2.5 2.5 0 0 1 14.5 9a2.5 2.5 0 0 1-2.5 2.5"/>
+                        </svg>
+                        <span>
+                          Enviando a: <strong>{checkoutForm.street} {checkoutForm.number}{checkoutForm.floor ? `, Piso ${checkoutForm.floor}` : ""}{checkoutForm.apartment ? ` ${checkoutForm.apartment}` : ""}</strong>
+                          {" — "}{checkoutForm.shippingZone === "caba" ? "CABA" : "GBA"}
+                        </span>
+                      </div>
                     )}
 
                     <div className="checkout-details-actions">
-                      <button type="button" className="secondary-btn" onClick={() => setActiveSection("cart")}>Usar una dirección diferente</button>
-                      <button type="submit" className="primary-btn" disabled={isCheckoutLoading}>
-                        {isCheckoutLoading ? "Confirmando..." : "Continuar"}
-                      </button>
+                      {(checkoutForm.shippingMethod === "pickup" && checkoutForm.paymentMethod === "cash") ? (
+                        <button type="submit" className="checkout-pay-btn checkout-pay-btn--cash" disabled={isCheckoutLoading}>
+                          {isCheckoutLoading ? (
+                            <span>Procesando...</span>
+                          ) : (
+                            <>
+                              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" style={{flexShrink:0}}>
+                                <path fill="currentColor" d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4"/>
+                              </svg>
+                              <span>Confirmar pedido {checkoutTotal.toLocaleString("es-AR")} ARS — Pago al retirar</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <button type="submit" className="checkout-pay-btn" disabled={isCheckoutLoading}>
+                          {isCheckoutLoading ? (
+                            <span>Procesando...</span>
+                          ) : (
+                            <>
+                              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" style={{flexShrink:0}}>
+                                <path fill="currentColor" d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2m0 14H4v-6h16v6m0-10H4V6h16v2"/>
+                              </svg>
+                              <span>Pagar {checkoutTotal.toLocaleString("es-AR")} ARS con Mercado Pago</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
 
                     {checkoutMessage && <p className="checkout-message">{checkoutMessage}</p>}
@@ -7107,37 +7271,6 @@ function App() {
                     ))}
                   </ul>
 
-                  <button
-                    type="button"
-                    className="checkout-details-promo"
-                    onClick={() => setIsCheckoutPromoOpen((current) => !current)}
-                  >
-                    Ingresar código de promoción
-                  </button>
-
-                  {isCheckoutPromoOpen && (
-                    <div className="cart-extra-panel checkout-details-promo-panel" aria-label="Código promocional en resumen">
-                      <input
-                        type="text"
-                        placeholder="P. ej., OFERTA50"
-                        value={cartPromoCode}
-                        onChange={(event) => setCartPromoCode(event.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="cart-extra-apply-btn"
-                        onClick={handleApplyCartPromotion}
-                        disabled={isApplyingCartPromo}
-                      >
-                        {isApplyingCartPromo ? "Aplicando..." : "Aplicar"}
-                      </button>
-                    </div>
-                  )}
-                  {isCheckoutPromoOpen && cartPromoMessage && <p className="cart-promo-message">{cartPromoMessage}</p>}
-                  {isCheckoutPromoOpen && appliedCartPromoPercent !== null && (
-                    <p className="cart-promo-percent">Descuento aplicado: {appliedCartPromoPercent}%</p>
-                  )}
-
                   <div className="checkout-details-totals">
                     <p><span>Subtotal</span><strong>{cartSubtotal.toLocaleString("es-AR")},00 ARS</strong></p>
                     {cartDiscount > 0 && <p><span>Descuento</span><strong>-{cartDiscount.toLocaleString("es-AR")} ARS</strong></p>}
@@ -7162,6 +7295,93 @@ function App() {
                   </div>
                 </aside>
               </div>
+
+              <div className="checkout-mini-footer">
+                <nav className="checkout-mini-footer-links">
+                  <button type="button" onClick={() => setCheckoutLegalPopup("terms-conditions")}>Términos y Condiciones</button>
+                  <button type="button" onClick={() => setCheckoutLegalPopup("privacy-policies")}>Política de Privacidad</button>
+                  <button type="button" onClick={() => setCheckoutLegalPopup("returns-exchanges")}>Política de Devolución</button>
+                  <button type="button" onClick={() => setCheckoutLegalPopup("contact")}>Contáctanos</button>
+                </nav>
+                <p className="checkout-mini-footer-secure">
+                  <svg viewBox="0 0 50 50" width="16" height="16" aria-hidden="true" style={{flexShrink:0}}>
+                    <g fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
+                      <path stroke="#344054" d="M25 35.417v-2.084m3.125-3.125a3.125 3.125 0 1 1-6.25 0a3.125 3.125 0 0 1 6.25 0"/>
+                      <path stroke="#1877f2" d="M39.583 41.667V20.833c0-1.15-.932-2.083-2.083-2.083h-25c-1.15 0-2.083.933-2.083 2.083v20.834c0 1.15.932 2.083 2.083 2.083h25c1.15 0 2.083-.933 2.083-2.083m-6.25-22.917v-4.167a8.333 8.333 0 1 0-16.666 0v4.167"/>
+                    </g>
+                  </svg>
+                  <span>Pago seguro</span>
+                </p>
+              </div>
+
+              {checkoutLegalPopup && (
+                <div className="checkout-legal-overlay" onClick={() => setCheckoutLegalPopup(null)}>
+                  <div className="checkout-legal-modal" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="checkout-legal-modal-close" onClick={() => setCheckoutLegalPopup(null)} aria-label="Cerrar">
+                      <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                    <div className="checkout-legal-modal-body">
+                      {checkoutLegalPopup === "terms-conditions" && (
+                        <>
+                          <h2>Términos y Condiciones</h2>
+                          <p>Este sitio web es operado por La Boutique de la Limpieza®, con domicilio en Acevedo 200, C1414, Ciudad Autónoma de Buenos Aires, Argentina.</p>
+                          <p>El uso de este sitio web implica la aceptación plena y sin reservas de los presentes Términos y Condiciones.</p>
+                          <h3>Precios y disponibilidad</h3>
+                          <p>Los precios publicados pueden sufrir modificaciones sin previo aviso. Todos los productos están sujetos a disponibilidad de stock.</p>
+                          <h3>Pagos</h3>
+                          <p>Los pagos se realizan a través de plataformas seguras y externas como Mercado Pago. No almacenamos datos bancarios ni de tarjetas de crédito.</p>
+                          <h3>Envíos</h3>
+                          <p>Realizamos envíos dentro de CABA ($5.000) y GBA ($7.000). Envío gratuito en compras superiores a $50.000. Plazo estimado: 3-4 días hábiles.</p>
+                          <h3>Cambios y devoluciones</h3>
+                          <p>El cliente cuenta con 10 días corridos para ejercer el derecho de arrepentimiento conforme la Ley 24.240.</p>
+                          <h3>Protección de datos</h3>
+                          <p>La información personal será tratada conforme a la Ley 25.326 de Protección de los Datos Personales.</p>
+                          <p className="checkout-legal-full-link"><button type="button" onClick={() => { setCheckoutLegalPopup(null); handleOpenInfoPage("terms-conditions"); }}>Ver versión completa →</button></p>
+                        </>
+                      )}
+                      {checkoutLegalPopup === "privacy-policies" && (
+                        <>
+                          <h2>Política de Privacidad</h2>
+                          <p>La Boutique de la Limpieza® se compromete a proteger tu privacidad y datos personales conforme a la Ley 25.326.</p>
+                          <h3>Datos que recopilamos</h3>
+                          <p>Nombre, email, teléfono, dirección de envío y datos de navegación para mejorar tu experiencia de compra.</p>
+                          <h3>Uso de la información</h3>
+                          <p>Tus datos se utilizan exclusivamente para procesar pedidos, envíos, atención al cliente y comunicaciones relevantes.</p>
+                          <h3>Seguridad</h3>
+                          <p>No compartimos, vendemos ni cedemos datos personales a terceros sin tu consentimiento previo.</p>
+                          <h3>Tus derechos</h3>
+                          <p>Podés solicitar el acceso, rectificación o supresión de tus datos en cualquier momento.</p>
+                          <p className="checkout-legal-full-link"><button type="button" onClick={() => { setCheckoutLegalPopup(null); handleOpenInfoPage("privacy-policies"); }}>Ver versión completa →</button></p>
+                        </>
+                      )}
+                      {checkoutLegalPopup === "returns-exchanges" && (
+                        <>
+                          <h2>Política de Devolución</h2>
+                          <p>Aceptamos cambios y devoluciones dentro de los 10 días corridos desde la recepción del producto.</p>
+                          <h3>Condiciones</h3>
+                          <p>El producto debe estar sin uso, con su embalaje y etiquetas originales en perfecto estado.</p>
+                          <h3>Cómo solicitar un cambio</h3>
+                          <p>Contactanos por WhatsApp al +54 9 11-5501-8399 o por email a Laboutiqueacevedo200@gmail.com indicando tu número de pedido.</p>
+                          <h3>Arrepentimiento</h3>
+                          <p>Conforme la Ley 24.240 de Defensa del Consumidor, tenés derecho a devolver el producto dentro de los 10 días corridos sin necesidad de justificación.</p>
+                          <p className="checkout-legal-full-link"><button type="button" onClick={() => { setCheckoutLegalPopup(null); handleOpenInfoPage("returns-exchanges"); }}>Ver versión completa →</button></p>
+                        </>
+                      )}
+                      {checkoutLegalPopup === "contact" && (
+                        <>
+                          <h2>Contáctanos</h2>
+                          <div className="checkout-legal-contact-info">
+                            <p><strong>Dirección:</strong> Acevedo 200, esq Padilla, Villa Crespo, CABA</p>
+                            <p><strong>Horarios:</strong> Lunes a Viernes, 09:00 a 13:00 y 15:00 a 19:00</p>
+                            <p><strong>WhatsApp:</strong> <a href="https://wa.me/5491155018399" target="_blank" rel="noopener noreferrer">+54 9 11-5501-8399</a></p>
+                            <p><strong>Email:</strong> <a href="mailto:Laboutiqueacevedo200@gmail.com">Laboutiqueacevedo200@gmail.com</a></p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
           ) : activeSection === "favorites" ? (
             <section className="favorites-view" aria-label="Productos favoritos">
@@ -7670,7 +7890,7 @@ function App() {
 
               {isInicioActive && <BrandsCarousel onSelectBrand={handleSelectBrandFromCarousel} />}
 
-              {isInicioActive && !auth.user?.welcomeDiscountUsed && (
+              {isInicioActive && (!auth.user || myOrders.length === 0) && (
                 <WelcomePromoSpotlight
                   onActivate={handleActivateWelcomePromo}
                   isActive={auth.user?.welcomeDiscountActive || false}

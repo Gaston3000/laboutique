@@ -210,17 +210,13 @@ authRouter.post("/login", async (req, res) => {
 authRouter.patch("/me/address", requireAuth, async (req, res) => {
   const normalizedAddress = normalizeAddress(req.body?.address);
 
-  if (!normalizedAddress) {
-    return res.status(400).json({ error: "La dirección es obligatoria" });
-  }
-
   try {
     const updatedUserResult = await query(
       `UPDATE users
        SET address = $1
        WHERE id = $2
        RETURNING ${USER_SELECT_FIELDS}`,
-      [normalizedAddress, req.user.id]
+      [normalizedAddress || null, req.user.id]
     );
 
     const updatedUser = mapUserRow(updatedUserResult.rows[0]);

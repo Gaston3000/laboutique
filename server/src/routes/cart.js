@@ -174,7 +174,7 @@ async function ensureWelcomePromoEligibility(queryRunner, authUser) {
   );
 
   if (ordersResult.rows[0]?.has_orders) {
-    throw new Error("El cupón de bienvenida solo aplica a la primera compra");
+    throw new Error("Ya usaste este cupón");
   }
 }
 

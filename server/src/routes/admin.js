@@ -89,7 +89,7 @@ async function ensureWelcomePromoEligibility(authUser) {
   );
 
   if (ordersResult.rows[0]?.has_orders) {
-    throw new Error("El cupón de bienvenida solo aplica a la primera compra");
+    throw new Error("Ya usaste este cupón");
   }
 }
 
@@ -398,6 +398,35 @@ adminRouter.delete("/categories/:id", requireAuth, requireAdmin, async (req, res
     });
   } catch {
     return res.status(500).json({ error: "No se pudo eliminar la categoría" });
+  }
+});
+
+adminRouter.get("/shipping-rules/public", async (_req, res) => {
+  try {
+    const result = await query(
+      `SELECT zone, base_cost_ars, free_shipping_from_ars, eta_min_days, eta_max_days
+       FROM shipping_rules
+       WHERE is_active = TRUE AND zone = ANY($1::text[])
+       ORDER BY CASE zone
+         WHEN 'caba' THEN 1
+         WHEN 'gba' THEN 2
+         WHEN 'retiro_local' THEN 3
+         ELSE 99
+       END`,
+      [ALLOWED_SHIPPING_ZONES]
+    );
+
+    return res.json({
+      items: result.rows.map((row) => ({
+        zone: row.zone,
+        baseCost: Number(row.base_cost_ars),
+        freeShippingFrom: Number(row.free_shipping_from_ars),
+        etaMinDays: row.eta_min_days,
+        etaMaxDays: row.eta_max_days,
+      }))
+    });
+  } catch {
+    return res.status(500).json({ error: "No se pudieron obtener reglas de envío" });
   }
 });
 
