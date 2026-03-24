@@ -13504,7 +13504,7 @@ main h1 {
 }
 
 .shipping-card--active .shipping-card-icon img {
-  filter: grayscale(0) opacity(1);
+  filter: brightness(0) saturate(100%) invert(38%) sepia(90%) saturate(1200%) hue-rotate(200deg) brightness(1.05);
 }
 
 .shipping-card-info {
