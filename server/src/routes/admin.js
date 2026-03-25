@@ -1018,7 +1018,7 @@ adminRouter.get("/customers/:id/activity", requireAuth, requireAdmin, async (req
       if (String(order.payment_status || "").trim()) {
         events.push({
           id: `order-payment-${order.id}`,
-          message: `Pago: ${order.payment_status}${order.payment_method ? ` (${order.payment_method})` : ""}`,
+          message: `Pago: ${order.payment_status}${order.payment_method ? ` (${order.payment_method === "cash" ? "Pago al retirar" : order.payment_method === "mercadopago" ? "Mercado Pago" : order.payment_method})` : ""}`,
           at: order.created_at,
           linkLabel: "Ver factura",
           linkUrl: null

@@ -389,6 +389,21 @@ export async function updateOrderStatus(token, orderId, status, opts = {}) {
   return data;
 }
 
+export async function verifyOrderPayment(token, orderId) {
+  const response = await fetch(`${API_URL}/cart/verify-payment/${orderId}`, {
+    method: "POST",
+    headers: getAuthHeaders(token)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "No se pudo verificar el pago");
+  }
+
+  return data;
+}
+
 export async function ensureOrderInvoice(token, orderId) {
   const response = await fetch(`${API_URL}/orders/${orderId}/invoice`, {
     method: "POST",

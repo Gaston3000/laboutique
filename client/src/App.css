@@ -7681,6 +7681,37 @@ html {
   color: #991b1b;
 }
 
+.admin-order-badge.is-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.admin-order-badge.is-cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.admin-order-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-order-type-tag.is-pickup {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.admin-order-type-tag.is-delivery {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
 .admin-order-total-cell {
   display: inline-flex;
   align-items: center;
@@ -7820,6 +7851,29 @@ html {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.admin-order-status-select {
+  padding: 6px 12px;
+  border: 2px solid #3f6ee8;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e3a8a;
+  background: #eef2ff;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.admin-order-status-select:hover {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.admin-order-status-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
 .admin-order-actions-wrap {

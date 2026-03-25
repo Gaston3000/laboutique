@@ -234,7 +234,7 @@ function formatOrderDateTime(value) {
     return String(value);
   }
 
-  return parsed.toLocaleString("es-AR");
+  return parsed.toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
 }
 
 function formatCustomerDateTime(value) {
@@ -248,6 +248,14 @@ function formatCustomerDateTime(value) {
   }
 
   return parsed.toLocaleString("es-AR");
+}
+
+function formatPaymentMethodLabel(method) {
+  const m = String(method || "").trim().toLowerCase();
+  if (m === "cash") return "Pago al retirar";
+  if (m === "mercadopago") return "Mercado Pago";
+  if (!m) return "-";
+  return method;
 }
 
 function normalizeOrderPaymentStatus(value) {
@@ -313,6 +321,72 @@ function normalizeOrderFulfillmentStatus(value, orderStatus = "") {
 function orderStatusBadgeTone(label) {
   if (label === "Pagado" || label === "Cumplido") return "is-positive";
   if (label === "Confirmado" || label === "Listo para retiro") return "is-positive";
+  if (label === "Cancelado") return "is-negative";
+  return "is-negative";
+}
+
+const ORDER_STATUS_ICONS = {
+  nuevo: "🆕",
+  pago: "💰",
+  confirmado: "✅",
+  preparado: "📦",
+  listo_retiro: "🏪",
+  enviado: "🚚",
+  entregado: "✔️",
+  cancelado: "❌",
+};
+
+const ORDER_STATUS_LABELS = {
+  nuevo: "Nuevo",
+  pago: "Pagado",
+  confirmado: "Confirmado",
+  preparado: "Preparado",
+  listo_retiro: "Listo para retiro",
+  enviado: "Enviado",
+  entregado: "Entregado",
+  cancelado: "Cancelado",
+};
+
+function getOrderStatusFlow(shippingMethod, customerAddress) {
+  const method = String(shippingMethod || "").trim().toLowerCase();
+  const isPickup = method === "pickup" || String(customerAddress || "").toLowerCase().includes("retiro en el local");
+  if (isPickup) {
+    return ["nuevo", "pago", "preparado", "listo_retiro", "entregado", "cancelado"];
+  }
+  return ["nuevo", "pago", "confirmado", "preparado", "enviado", "entregado", "cancelado"];
+}
+
+function derivePaymentBadge(orderStatus) {
+  const s = String(orderStatus || "").trim().toLowerCase();
+  if (["pago", "confirmado", "preparado", "listo_retiro", "enviado", "entregado"].includes(s)) {
+    return "Pagado";
+  }
+  if (s === "cancelado") return "Cancelado";
+  return "No pagado";
+}
+
+function deriveFulfillmentBadge(orderStatus, shippingMethod, customerAddress) {
+  const s = String(orderStatus || "").trim().toLowerCase();
+  const method = String(shippingMethod || "").trim().toLowerCase();
+  const isPickup = method === "pickup" || String(customerAddress || "").toLowerCase().includes("retiro en el local");
+
+  if (s === "entregado") return "Entregado";
+  if (s === "cancelado") return "Cancelado";
+  if (isPickup) {
+    if (s === "listo_retiro") return "Listo para retiro";
+    if (s === "preparado") return "Preparando";
+  } else {
+    if (s === "enviado") return "Enviado";
+    if (s === "preparado") return "Preparando";
+    if (s === "confirmado") return "Confirmado";
+  }
+  return "No procesado";
+}
+
+function derivedBadgeTone(label) {
+  if (["Pagado", "Entregado", "Confirmado", "Listo para retiro", "Enviado"].includes(label)) return "is-positive";
+  if (["Preparando"].includes(label)) return "is-warning";
+  if (["Cancelado"].includes(label)) return "is-cancelled";
   return "is-negative";
 }
 
@@ -699,7 +773,7 @@ function buildOrderActivityItems(order, paymentLabel, fulfillmentLabel) {
     {
       id: `payment-${order.id}`,
       title: `Estado de pago: ${paymentLabel}`,
-      detail: order.paymentMethod || "Método de pago no especificado",
+      detail: formatPaymentMethodLabel(order.paymentMethod) || "Método de pago no especificado",
       at: order.createdAt
     },
     {
@@ -1385,6 +1459,7 @@ export default function AdminPanel({
   onUploadMedia,
   onDelete,
   onOrderStatusChange,
+  onVerifyPayment,
   onEnsureOrderInvoice,
   onLoadVariants,
   onCreateVariant,
@@ -1497,6 +1572,8 @@ export default function AdminPanel({
   const [isOrderActionsOpen, setIsOrderActionsOpen] = useState(false);
   const [isOrderPrintMenuOpen, setIsOrderPrintMenuOpen] = useState(false);
   const [orderActionMessage, setOrderActionMessage] = useState("");
+  const [paymentVerification, setPaymentVerification] = useState(null);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [fulfillmentConfirmOrder, setFulfillmentConfirmOrder] = useState(null);
   const [fulfillmentConfirmMarkPaid, setFulfillmentConfirmMarkPaid] = useState(false);
   const [fulfillmentConfirmSendReadyEmail, setFulfillmentConfirmSendReadyEmail] = useState(false);
@@ -2380,22 +2457,12 @@ export default function AdminPanel({
     }
   }
 
-  const orderStatuses = ["nuevo", "pago", "confirmado", "preparado", "listo_retiro", "enviado", "entregado", "cancelado"];
-  const orderStatusLabels = {
-    nuevo: "Nuevo",
-    pago: "Pagado",
-    confirmado: "Confirmado",
-    preparado: "Preparado",
-    listo_retiro: "Listo para retiro",
-    enviado: "Enviado",
-    entregado: "Entregado",
-    cancelado: "Cancelado",
-  };
+  // orderStatuses and labels are now defined as module-level constants (ORDER_STATUS_LABELS, getOrderStatusFlow)
   const orderFulfillmentOptions = useMemo(() => {
     const values = new Set();
 
     for (const order of orders) {
-      const fulfillmentStatus = normalizeOrderFulfillmentStatus(order.fulfillmentStatus, order.status);
+      const fulfillmentStatus = deriveFulfillmentBadge(order.status, order.shippingMethod, order.customerAddress);
       if (fulfillmentStatus) {
         values.add(fulfillmentStatus);
       }
@@ -2461,7 +2528,7 @@ export default function AdminPanel({
   ]);
   const ordersSummary = useMemo(() => {
     const totalRevenue = orders.reduce((acc, order) => acc + Number(order.total || 0), 0);
-    const paidCount = orders.filter((order) => normalizeOrderPaymentStatus(order.paymentStatus) === "Pagado").length;
+    const paidCount = orders.filter((order) => derivePaymentBadge(order.status) === "Pagado").length;
     const withShippingCount = orders.filter((order) => Number(order.shippingCost || 0) > 0).length;
 
     return {
@@ -2485,7 +2552,7 @@ export default function AdminPanel({
 
       if (
         orderFulfillmentFilter !== "all"
-        && normalizeOrderFulfillmentStatus(order.fulfillmentStatus, order.status).toLowerCase() !== orderFulfillmentFilter.toLowerCase()
+        && deriveFulfillmentBadge(order.status, order.shippingMethod, order.customerAddress).toLowerCase() !== orderFulfillmentFilter.toLowerCase()
       ) {
         return false;
       }
@@ -3230,6 +3297,29 @@ export default function AdminPanel({
       await onOrderStatusChange(order.id, "cancelado");
       setOrderActionMessage(`Pedido #${orderNumber} cancelado.`);
       setIsOrderActionsOpen(false);
+      return;
+    }
+
+    if (actionKey === "verify_payment") {
+      if (!onVerifyPayment) return;
+      setIsVerifyingPayment(true);
+      setPaymentVerification(null);
+      try {
+        const result = await onVerifyPayment(order.id);
+        if (result) {
+          setPaymentVerification(result);
+          setOrderActionMessage(
+            result.verified
+              ? `Pago verificado: ${result.mpStatus} — $${result.mpAmount ?? "?"} (${result.amountMatch ? "monto coincide" : "⚠️ MONTO NO COINCIDE"})`
+              : result.message || "No se encontraron pagos para este pedido"
+          );
+        }
+      } catch (err) {
+        setOrderActionMessage(err?.message || "Error al verificar pago");
+      } finally {
+        setIsVerifyingPayment(false);
+        setIsOrderActionsOpen(false);
+      }
       return;
     }
 
@@ -4270,7 +4360,7 @@ export default function AdminPanel({
                         <div className="admin-notification-content">
                           <p className="admin-notification-message">{n.message}</p>
                           <span className="admin-notification-time">
-                            {new Date(n.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            {new Date(n.createdAt).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
                       </li>
@@ -5710,6 +5800,7 @@ export default function AdminPanel({
                         <th>Pedido</th>
                         <th>Fecha</th>
                         <th>Cliente</th>
+                        <th>Tipo</th>
                         <th>Pago</th>
                         <th>Cumplimiento</th>
                         <th>Total</th>
@@ -5721,9 +5812,8 @@ export default function AdminPanel({
                       {visibleOrders.map((order) => {
                         const totalItems = Number(order.itemsCount || 0) || (order.lines || []).reduce((acc, line) => acc + Number(line.quantity || 0), 0);
                         const currency = order.currency || "ARS";
-                        const paymentLabel = normalizeOrderPaymentStatus(order.paymentStatus);
-                        const fulfillmentLabel = normalizeOrderFulfillmentStatus(order.fulfillmentStatus, order.status);
-
+                        const paymentLabel = derivePaymentBadge(order.status);
+                        const fulfillmentLabel = deriveFulfillmentBadge(order.status, order.shippingMethod, order.customerAddress);
                         return (
                           <tr
                             key={`summary-${order.id}`}
@@ -5755,10 +5845,21 @@ export default function AdminPanel({
                               <strong>{order.customerName || "-"}</strong>
                             </td>
                             <td>
-                              <span className={`admin-order-badge ${orderStatusBadgeTone(paymentLabel)}`}>{paymentLabel}</span>
+                              {(() => {
+                                const m = String(order.shippingMethod || "").trim().toLowerCase();
+                                const isPickup = m === "pickup" || String(order.customerAddress || "").toLowerCase().includes("retiro en el local");
+                                return (
+                                  <span className={`admin-order-type-tag ${isPickup ? "is-pickup" : "is-delivery"}`} title={isPickup ? "Retiro en el local – Acevedo 200" : "Envío a domicilio"}>
+                                    {isPickup ? "🏪 Pick up" : "🚚 Envío"}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td>
-                              <span className={`admin-order-badge ${orderStatusBadgeTone(fulfillmentLabel)}`}>{fulfillmentLabel}</span>
+                              <span className={`admin-order-badge ${derivedBadgeTone(paymentLabel)}`}>{paymentLabel}</span>
+                            </td>
+                            <td>
+                              <span className={`admin-order-badge ${derivedBadgeTone(fulfillmentLabel)}`}>{fulfillmentLabel}</span>
                             </td>
                             <td>
                               <div className="admin-order-total-cell">
@@ -5811,7 +5912,7 @@ export default function AdminPanel({
 
                       {!visibleOrders.length && (
                         <tr>
-                          <td colSpan={9}>Todavía no hay pedidos cargados.</td>
+                          <td colSpan={10}>Todavía no hay pedidos cargados.</td>
                         </tr>
                       )}
                     </tbody>
@@ -5822,21 +5923,22 @@ export default function AdminPanel({
               (() => {
                 const order = selectedOrder;
                 const currency = order.currency || "ARS";
-                const paymentLabel = normalizeOrderPaymentStatus(order.paymentStatus);
-                const fulfillmentLabel = normalizeOrderFulfillmentStatus(order.fulfillmentStatus, order.status);
+                const paymentLabel = derivePaymentBadge(order.status);
+                const fulfillmentLabel = deriveFulfillmentBadge(order.status, order.shippingMethod, order.customerAddress);
+                const statusFlow = getOrderStatusFlow(order.shippingMethod, order.customerAddress);
                 const orderItems = Array.isArray(order.lines) ? order.lines : [];
                 const totalItems = Number(order.itemsCount || 0) || orderItems.reduce((acc, line) => acc + Number(line.quantity || 0), 0);
                 const itemsSubtotal = orderItems.reduce((acc, line) => acc + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0);
                 const timelineItems = buildOrderActivityItems(order, paymentLabel, fulfillmentLabel);
                 const isUnpaidUnprocessedOrder = paymentLabel === "No pagado" && fulfillmentLabel === "No procesado";
                 const isPaidUnprocessedOrder = paymentLabel === "Pagado" && fulfillmentLabel === "No procesado";
-                const isPaidCompletedOrder = paymentLabel === "Pagado" && fulfillmentLabel === "Cumplido";
-                const primaryOrderStatusAction = fulfillmentLabel === "No procesado"
+                const isPaidCompletedOrder = paymentLabel === "Pagado" && ["Entregado", "Enviado", "Listo para retiro"].includes(fulfillmentLabel);
+                const primaryOrderStatusAction = !["Entregado", "Enviado", "Listo para retiro"].includes(fulfillmentLabel)
                   ? { key: "mark_completed", icon: "✅", label: "Marcar como completado" }
                   : {
                     key: "mark_unprocessed",
                     icon: "✖️",
-                    label: isPaidCompletedOrder ? "Pedido marcado como no procesado" : "Marcar como no procesado"
+                    label: isPaidCompletedOrder ? "Pedido marcado como completado" : "Marcar como no procesado"
                   };
 
                 return (
@@ -5852,8 +5954,32 @@ export default function AdminPanel({
                       </div>
 
                       <div className="admin-order-detail-header-actions">
-                        <span className={`admin-order-badge ${orderStatusBadgeTone(paymentLabel)}`}>{paymentLabel}</span>
-                        <span className={`admin-order-badge ${orderStatusBadgeTone(fulfillmentLabel)}`}>{fulfillmentLabel}</span>
+                        <span className={`admin-order-badge ${derivedBadgeTone(paymentLabel)}`}>{paymentLabel}</span>
+                        <span className={`admin-order-badge ${derivedBadgeTone(fulfillmentLabel)}`}>{fulfillmentLabel}</span>
+                        <select
+                          className="admin-order-status-select"
+                          value={order.status}
+                          onChange={(event) => {
+                            const newStatus = event.target.value;
+                            if (newStatus === "cancelado") {
+                              const confirmed = window.confirm(`¿Estás seguro de cancelar el pedido #${order.wixOrderNumber || order.id}? Esta acción no se puede deshacer fácilmente.`);
+                              if (!confirmed) {
+                                event.target.value = order.status;
+                                return;
+                              }
+                            }
+                            setOrderActionMessage(`Actualizando a "${ORDER_STATUS_LABELS[newStatus]}"...`);
+                            onOrderStatusChange(order.id, newStatus).then(() => {
+                              setOrderActionMessage(`${ORDER_STATUS_ICONS[newStatus]} Pedido #${order.wixOrderNumber || order.id} → ${ORDER_STATUS_LABELS[newStatus]}`);
+                            }).catch((err) => {
+                              setOrderActionMessage(`Error: ${err.message}`);
+                            });
+                          }}
+                        >
+                          {statusFlow.map((status) => (
+                            <option key={status} value={status}>{ORDER_STATUS_ICONS[status]} {ORDER_STATUS_LABELS[status] || status}</option>
+                          ))}
+                        </select>
                         <div className="admin-order-actions-wrap" ref={orderActionsRef}>
                           <button
                             type="button"
@@ -5999,7 +6125,7 @@ export default function AdminPanel({
                         <article className="admin-order-detail-card">
                           <div className="admin-order-detail-card-header">
                             <h4>Información de pago</h4>
-                            <span className={`admin-order-badge ${orderStatusBadgeTone(paymentLabel)}`}>{paymentLabel}</span>
+                            <span className={`admin-order-badge ${derivedBadgeTone(paymentLabel)}`}>{paymentLabel}</span>
                           </div>
 
                           <div className="admin-order-payment-grid">
@@ -6008,8 +6134,37 @@ export default function AdminPanel({
                             <div><span>Impuestos</span><strong>{formatOrderCurrency(order.taxTotal, currency)}</strong></div>
                             <div><span>Descuento</span><strong>{formatOrderCurrency(order.discount, currency)}</strong></div>
                             <div><span>Total</span><strong>{formatOrderCurrency(order.total, currency)}</strong></div>
-                            <div><span>Método</span><strong>{order.paymentMethod || "-"}</strong></div>
+                            <div><span>Método</span><strong>{formatPaymentMethodLabel(order.paymentMethod)}</strong></div>
                           </div>
+
+                          {order.paymentMethod === "mercadopago" && (
+                            <div style={{ marginTop: "10px" }}>
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn-outline"
+                                disabled={isVerifyingPayment}
+                                onClick={() => handleOrderQuickAction("verify_payment", order)}
+                                style={{ fontSize: "0.82rem", padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                              >
+                                <span aria-hidden="true">{isVerifyingPayment ? "⏳" : "🔍"}</span>
+                                <span>{isVerifyingPayment ? "Verificando..." : "Verificar pago en MP"}</span>
+                              </button>
+
+                              {paymentVerification && (
+                                <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "8px", fontSize: "0.82rem", lineHeight: 1.5, background: paymentVerification.mpStatus === "approved" && paymentVerification.amountMatch ? "#ecfdf5" : "#fef2f2", border: `1px solid ${paymentVerification.mpStatus === "approved" && paymentVerification.amountMatch ? "#a7f3d0" : "#fecaca"}` }}>
+                                  <div><strong>Estado MP:</strong> {paymentVerification.mpStatus || "sin pagos"}</div>
+                                  {paymentVerification.mpAmount != null && <div><strong>Monto pagado:</strong> ${paymentVerification.mpAmount}</div>}
+                                  {paymentVerification.orderTotal != null && <div><strong>Total pedido:</strong> ${paymentVerification.orderTotal}</div>}
+                                  {paymentVerification.amountMatch != null && (
+                                    <div><strong>Monto:</strong> {paymentVerification.amountMatch ? "✅ Coincide" : "⚠️ NO coincide"}</div>
+                                  )}
+                                  {paymentVerification.mpDateApproved && <div><strong>Aprobado:</strong> {new Date(paymentVerification.mpDateApproved).toLocaleString("es-AR")}</div>}
+                                  {paymentVerification.mpStatusDetail && <div><strong>Detalle:</strong> {paymentVerification.mpStatusDetail}</div>}
+                                  {paymentVerification.message && <div>{paymentVerification.message}</div>}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </article>
 
                         <article className="admin-order-detail-card">
@@ -6060,16 +6215,6 @@ export default function AdminPanel({
                           </div>
 
                           <div className="admin-order-info-list">
-                            <div><span>Estado interno</span>
-                              <select
-                                value={order.status}
-                                onChange={(event) => onOrderStatusChange(order.id, event.target.value)}
-                              >
-                                {orderStatuses.map((status) => (
-                                  <option key={status} value={status}>{orderStatusLabels[status] || status}</option>
-                                ))}
-                              </select>
-                            </div>
                             <div><span>Zona de envío</span><strong>{order.shippingZone || "-"}</strong></div>
                             <div><span>Tracking</span><strong>{order.trackingNumber || "-"}</strong></div>
                             <div><span>Nota del cliente</span><p>{order.customerNote || "Sin nota"}</p></div>

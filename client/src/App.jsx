@@ -59,7 +59,8 @@ import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
-  syncDeliveryZone
+  syncDeliveryZone,
+  verifyOrderPayment
 } from "./api";
 
 // Lazy-loaded heavy components (code splitting)
@@ -913,6 +914,7 @@ function formatNotificationRelativeDate(value) {
   }
 
   return date.toLocaleDateString("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
     day: "numeric",
     month: "long",
     year: "numeric"
@@ -1560,6 +1562,19 @@ function App() {
     const interval = setInterval(() => {
       refreshServerNotifications(auth.token);
     }, 45_000);
+
+    return () => clearInterval(interval);
+  }, [auth.token, auth.user?.role, activeSection]);
+
+  // Polling de pedidos cada 30s para ver nuevos sin recargar
+  useEffect(() => {
+    if (!auth.token || auth.user?.role !== "admin" || activeSection !== "admin") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      refreshOrders(auth.token).catch(() => {});
+    }, 30_000);
 
     return () => clearInterval(interval);
   }, [auth.token, auth.user?.role, activeSection]);
@@ -4022,6 +4037,17 @@ function App() {
       setAdminMessage("Estado de pedido actualizado");
     } catch (error) {
       setAdminMessage(error.message);
+      throw error;
+    }
+  }
+
+  async function handleVerifyPayment(orderId) {
+    try {
+      const result = await verifyOrderPayment(auth.token, orderId);
+      return result;
+    } catch (error) {
+      setAdminMessage(error.message);
+      return null;
     }
   }
 
@@ -5477,6 +5503,7 @@ function App() {
               onUploadMedia={handleUploadProductMedia}
               onDelete={handleDeleteProduct}
               onOrderStatusChange={handleOrderStatusChange}
+              onVerifyPayment={handleVerifyPayment}
               onEnsureOrderInvoice={handleEnsureOrderInvoice}
               onLoadVariants={handleLoadVariants}
               onCreateVariant={handleCreateVariant}

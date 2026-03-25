@@ -396,7 +396,7 @@ UPDATE orders SET status = 'preparado' WHERE status = 'preparando';
 
 ALTER TABLE orders
   ADD CONSTRAINT orders_status_check
-  CHECK (status IN ('nuevo', 'pago', 'preparado', 'enviado', 'entregado', 'cancelado'));
+  CHECK (status IN ('nuevo', 'pago', 'confirmado', 'preparado', 'listo_retiro', 'enviado', 'entregado', 'cancelado'));
 
 ALTER TABLE tickets
   ADD CONSTRAINT tickets_status_check
@@ -459,8 +459,8 @@ WHERE p.name = 'Lavandina 1L'
 
 INSERT INTO shipping_rules (zone, base_cost_ars, free_shipping_from_ars, eta_min_days, eta_max_days)
 VALUES
-  ('caba', 2500, 35000, 1, 2),
-  ('gba', 3900, 45000, 1, 3),
+  ('caba', 5000, 35000, 1, 2),
+  ('gba', 7000, 45000, 1, 3),
   ('retiro_local', 0, 0, 1, 1)
 ON CONFLICT (zone) DO UPDATE
 SET

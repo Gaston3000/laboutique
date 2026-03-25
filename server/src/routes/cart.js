@@ -772,7 +772,7 @@ cartRouter.post("/checkout", async (req, res) => {
     const shippingCost = shippingData?.shippingCost ?? 0;
     const total = toMoneyAmount(subtotal + shippingCost - discountAmount);
 
-    const shippingMethod = shippingZone === "pickup" ? "pickup" : "shipping";
+    const shippingMethod = (shippingZone === "pickup" || String(req.body?.shippingMethod || "").trim().toLowerCase() === "pickup") ? "pickup" : "shipping";
 
     const orderResult = await client.query(
       `INSERT INTO orders (
@@ -941,14 +941,13 @@ cartRouter.post("/checkout", async (req, res) => {
 
 /**
  * Validate MercadoPago webhook signature (HMAC-SHA256).
- * Returns true if valid or if no secret is configured (graceful degradation).
+ * SECURITY: Rejects ALL webhooks if secret is not configured (no graceful degradation).
  */
 function validateMercadoPagoSignature(req) {
   const mpWebhookSecret = String(process.env.MERCADOPAGO_WEBHOOK_SECRET || "").trim();
   if (!mpWebhookSecret) {
-    // No secret configured — log warning but allow (for dev/sandbox)
-    console.warn("⚠️ MERCADOPAGO_WEBHOOK_SECRET no configurado — webhook sin validación de firma");
-    return true;
+    console.error("🚫 MERCADOPAGO_WEBHOOK_SECRET no configurado — webhook RECHAZADO por seguridad");
+    return false;
   }
 
   const xSignature = req.headers["x-signature"];
@@ -974,33 +973,86 @@ function validateMercadoPagoSignature(req) {
 }
 
 cartRouter.post("/mercadopago/webhook", async (req, res) => {
-  // Validate webhook signature
-  if (!validateMercadoPagoSignature(req)) {
-    console.warn("⚠️ Webhook MercadoPago con firma inválida rechazado");
-    return res.status(401).json({ error: "Invalid signature" });
-  }
-
+  const signatureOk = validateMercadoPagoSignature(req);
   const type = String(req.body?.type || req.query?.type || "").trim().toLowerCase();
   const action = String(req.body?.action || "").trim().toLowerCase();
   const dataId = Number(req.body?.data?.id || req.query?.["data.id"] || req.query?.id);
 
+  // Log every incoming webhook for audit
+  const logEntry = {
+    event_type: type,
+    event_action: action,
+    data_id: Number.isInteger(dataId) && dataId > 0 ? dataId : 0,
+    signature_ok: signatureOk,
+    raw_body: req.body || null
+  };
+
+  // Reject unsigned webhooks
+  if (!signatureOk) {
+    console.warn("🚫 Webhook MercadoPago con firma inválida RECHAZADO");
+    logEntry.error_message = "Invalid signature";
+    await safeLogWebhook(logEntry);
+    return res.status(401).json({ error: "Invalid signature" });
+  }
+
   if (type !== "payment" && !action.includes("payment")) {
+    logEntry.skipped = true;
+    await safeLogWebhook(logEntry);
     return res.status(200).json({ ok: true, ignored: true });
   }
 
   if (!Number.isInteger(dataId) || dataId <= 0) {
+    logEntry.skipped = true;
+    logEntry.error_message = "Invalid data.id";
+    await safeLogWebhook(logEntry);
     return res.status(200).json({ ok: true, ignored: true });
   }
 
   try {
+    // VERIFICACIÓN ACTIVA: consultamos directo a la API de MP el estado real del pago
     const payment = await fetchMercadoPagoPayment(dataId);
     const externalReference = Number(payment.external_reference);
 
     if (!Number.isInteger(externalReference) || externalReference <= 0) {
+      logEntry.skipped = true;
+      logEntry.error_message = "Invalid external_reference";
+      await safeLogWebhook(logEntry);
       return res.status(200).json({ ok: true, ignored: true });
     }
 
     const mpStatus = String(payment.status || "").trim().toLowerCase();
+    logEntry.order_id = externalReference;
+    logEntry.mp_status = mpStatus;
+
+    // IDEMPOTENCIA: no procesar el mismo payment+status dos veces
+    const alreadyProcessed = await checkWebhookIdempotency(dataId, mpStatus);
+    if (alreadyProcessed) {
+      console.log(`ℹ️ Webhook duplicado ignorado: payment ${dataId} status ${mpStatus}`);
+      logEntry.skipped = true;
+      logEntry.error_message = "Duplicate — already processed";
+      logEntry.processed = false;
+      await safeLogWebhook(logEntry);
+      return res.status(200).json({ ok: true, duplicate: true });
+    }
+
+    // Verificar que el monto pagado coincide con el total del pedido
+    const orderCheck = await query(
+      `SELECT total_ars, payment_status FROM orders WHERE id = $1`,
+      [externalReference]
+    );
+    if (orderCheck.rows.length > 0 && mpStatus === "approved") {
+      const orderTotal = Number(orderCheck.rows[0].total_ars);
+      const paidAmount = Number(payment.transaction_amount || 0);
+      if (Math.abs(orderTotal - paidAmount) > 1) {
+        console.error(`🚫 MONTO NO COINCIDE pedido #${externalReference}: esperado $${orderTotal}, recibido $${paidAmount}`);
+        logEntry.error_message = `Amount mismatch: order $${orderTotal} vs payment $${paidAmount}`;
+        logEntry.processed = false;
+        await safeLogWebhook(logEntry);
+        // Still respond 200 so MP doesn't retry, but don't update order
+        return res.status(200).json({ ok: true, ignored: true, reason: "amount_mismatch" });
+      }
+    }
+
     const mappedOrderStatus = mpStatus === "approved" ? "pago" : "nuevo";
 
     await query(
@@ -1033,6 +1085,9 @@ cartRouter.post("/mercadopago/webhook", async (req, res) => {
       ]
     );
 
+    // Marcar como procesado para idempotencia
+    await markWebhookProcessed(dataId, mpStatus, externalReference);
+
     // Fire notification for payment status change (non-blocking)
     if (mpStatus === "approved") {
       handleOrderStatusChange(externalReference, "pago", { skipDbUpdate: true }).catch((err) => {
@@ -1044,10 +1099,160 @@ cartRouter.post("/mercadopago/webhook", async (req, res) => {
       });
     }
 
+    logEntry.processed = true;
+    await safeLogWebhook(logEntry);
+
     return res.status(200).json({ ok: true, orderStatus: mappedOrderStatus });
   } catch (err) {
     console.error(`⚠️ Error procesando webhook MercadoPago (payment ${dataId}):`, err.message);
+    logEntry.error_message = err.message;
+    await safeLogWebhook(logEntry);
     return res.status(200).json({ ok: true, ignored: true });
+  }
+});
+
+/* ─── Helpers de seguridad para webhooks ─── */
+
+async function checkWebhookIdempotency(paymentId, mpStatus) {
+  try {
+    const result = await query(
+      `SELECT 1 FROM webhook_processed WHERE payment_id = $1 AND mp_status = $2 LIMIT 1`,
+      [paymentId, mpStatus]
+    );
+    return result.rows.length > 0;
+  } catch {
+    // Si la tabla no existe todavía, no bloquear
+    return false;
+  }
+}
+
+async function markWebhookProcessed(paymentId, mpStatus, orderId) {
+  try {
+    await query(
+      `INSERT INTO webhook_processed (payment_id, mp_status, order_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (payment_id, mp_status) DO NOTHING`,
+      [paymentId, mpStatus, orderId]
+    );
+  } catch (err) {
+    console.warn(`⚠️ No se pudo registrar idempotencia webhook: ${err.message}`);
+  }
+}
+
+async function safeLogWebhook(entry) {
+  try {
+    await query(
+      `INSERT INTO webhook_logs (event_type, event_action, data_id, order_id, mp_status, signature_ok, processed, skipped, error_message, raw_body)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        entry.event_type || "unknown",
+        entry.event_action || null,
+        entry.data_id || 0,
+        entry.order_id || null,
+        entry.mp_status || null,
+        entry.signature_ok ?? false,
+        entry.processed ?? false,
+        entry.skipped ?? false,
+        entry.error_message || null,
+        entry.raw_body ? JSON.stringify(entry.raw_body) : null
+      ]
+    );
+  } catch (err) {
+    console.warn(`⚠️ No se pudo loguear webhook: ${err.message}`);
+  }
+}
+
+/* ─── Verificación manual de pago (admin) ─── */
+
+cartRouter.post("/verify-payment/:orderId", async (req, res) => {
+  // Verificar que es admin (reusamos el token JWT)
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: "No autorizado" });
+
+  try {
+    const token = authHeader.replace("Bearer ", "");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded?.isAdmin) return res.status(403).json({ error: "Solo administradores" });
+  } catch {
+    return res.status(401).json({ error: "Token inválido" });
+  }
+
+  const orderId = Number(req.params.orderId);
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: "ID de pedido inválido" });
+  }
+
+  try {
+    // Buscar el preference_id / payment info guardada en el pedido
+    const orderResult = await query(
+      `SELECT id, total_ars, payment_status, raw_payload FROM orders WHERE id = $1`,
+      [orderId]
+    );
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    const order = orderResult.rows[0];
+    const rawPayload = order.raw_payload || {};
+    const mpPaymentId = rawPayload?.mercadopago_payment?.id;
+
+    if (!mpPaymentId) {
+      // Intentar buscar el pago por external_reference
+      const accessToken = String(process.env.MERCADOPAGO_ACCESS_TOKEN || "").trim();
+      if (!accessToken) return res.status(500).json({ error: "MERCADOPAGO_ACCESS_TOKEN no configurado" });
+
+      const searchResp = await fetch(
+        `${MERCADOPAGO_API_URL}/v1/payments/search?external_reference=${orderId}&sort=date_created&criteria=desc&limit=5`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const searchData = await searchResp.json();
+
+      if (!searchData.results || searchData.results.length === 0) {
+        return res.json({
+          orderId,
+          verified: false,
+          message: "No se encontraron pagos en Mercado Pago para este pedido",
+          currentPaymentStatus: order.payment_status
+        });
+      }
+
+      // Tomar el pago más reciente
+      const latestPayment = searchData.results[0];
+      return res.json({
+        orderId,
+        verified: true,
+        mpPaymentId: latestPayment.id,
+        mpStatus: latestPayment.status,
+        mpStatusDetail: latestPayment.status_detail,
+        mpAmount: latestPayment.transaction_amount,
+        orderTotal: Number(order.total_ars),
+        amountMatch: Math.abs(Number(order.total_ars) - Number(latestPayment.transaction_amount)) <= 1,
+        currentPaymentStatus: order.payment_status,
+        mpDateApproved: latestPayment.date_approved,
+        mpDateCreated: latestPayment.date_created
+      });
+    }
+
+    // Consultar directamente el pago conocido
+    const payment = await fetchMercadoPagoPayment(mpPaymentId);
+
+    return res.json({
+      orderId,
+      verified: true,
+      mpPaymentId: payment.id,
+      mpStatus: payment.status,
+      mpStatusDetail: payment.status_detail,
+      mpAmount: payment.transaction_amount,
+      orderTotal: Number(order.total_ars),
+      amountMatch: Math.abs(Number(order.total_ars) - Number(payment.transaction_amount)) <= 1,
+      currentPaymentStatus: order.payment_status,
+      mpDateApproved: payment.date_approved,
+      mpDateCreated: payment.date_created
+    });
+  } catch (err) {
+    console.error(`⚠️ Error verificando pago para pedido #${orderId}:`, err.message);
+    return res.status(500).json({ error: "Error al verificar pago con Mercado Pago" });
   }
 });
 
