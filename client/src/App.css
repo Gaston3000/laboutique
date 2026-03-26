@@ -8255,6 +8255,97 @@ html {
   font: inherit;
 }
 
+.admin-verify-payment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #3f6ee8;
+  background: rgba(63, 110, 232, 0.07);
+  border: 1px solid rgba(63, 110, 232, 0.22);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+  margin-top: 10px;
+}
+
+.admin-verify-payment-btn:hover {
+  background: rgba(63, 110, 232, 0.14);
+  border-color: rgba(63, 110, 232, 0.38);
+  transform: translateY(-1px);
+}
+
+.admin-verify-payment-btn:active {
+  transform: translateY(0);
+}
+
+.admin-verify-payment-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.admin-verify-payment-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(63, 110, 232, 0.22);
+}
+
+.admin-verify-payment-result {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.admin-verify-payment-result--ok {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.admin-verify-payment-result--error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.admin-sync-payment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  background: #16a34a;
+  border: 1px solid #15803d;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.admin-sync-payment-btn:hover {
+  background: #15803d;
+  transform: translateY(-1px);
+}
+
+.admin-sync-payment-btn:active {
+  transform: translateY(0);
+}
+
+.admin-sync-payment-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.admin-sync-payment-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.3);
+}
+
 .admin-order-activity-list {
   list-style: none;
   margin: 0;

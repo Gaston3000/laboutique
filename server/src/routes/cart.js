@@ -3,6 +3,7 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { db, query } from "../db.js";
 import { handleOrderStatusChange } from "../services/notificationService.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 
 const cartRouter = Router();
 const MERCADOPAGO_API_URL = "https://api.mercadopago.com";
@@ -1164,19 +1165,7 @@ async function safeLogWebhook(entry) {
 
 /* ─── Verificación manual de pago (admin) ─── */
 
-cartRouter.post("/verify-payment/:orderId", async (req, res) => {
-  // Verificar que es admin (reusamos el token JWT)
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: "No autorizado" });
-
-  try {
-    const token = authHeader.replace("Bearer ", "");
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decoded?.isAdmin) return res.status(403).json({ error: "Solo administradores" });
-  } catch {
-    return res.status(401).json({ error: "Token inválido" });
-  }
-
+cartRouter.post("/verify-payment/:orderId", requireAuth, requireAdmin, async (req, res) => {
   const orderId = Number(req.params.orderId);
   if (!Number.isInteger(orderId) || orderId <= 0) {
     return res.status(400).json({ error: "ID de pedido inválido" });
@@ -1253,6 +1242,93 @@ cartRouter.post("/verify-payment/:orderId", async (req, res) => {
   } catch (err) {
     console.error(`⚠️ Error verificando pago para pedido #${orderId}:`, err.message);
     return res.status(500).json({ error: "Error al verificar pago con Mercado Pago" });
+  }
+});
+
+// ── Sincronizar estado de pago desde MP ──
+cartRouter.post("/sync-payment/:orderId", requireAuth, requireAdmin, async (req, res) => {
+  const orderId = Number(req.params.orderId);
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: "ID de pedido inválido" });
+  }
+
+  try {
+    const orderResult = await query(
+      `SELECT id, total_ars, payment_status, raw_payload FROM orders WHERE id = $1`,
+      [orderId]
+    );
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    const order = orderResult.rows[0];
+    const rawPayload = order.raw_payload || {};
+    const mpPaymentId = rawPayload?.mercadopago_payment?.id;
+    const accessToken = String(process.env.MERCADOPAGO_ACCESS_TOKEN || "").trim();
+    if (!accessToken) return res.status(500).json({ error: "MERCADOPAGO_ACCESS_TOKEN no configurado" });
+
+    let payment;
+
+    if (mpPaymentId) {
+      payment = await fetchMercadoPagoPayment(mpPaymentId);
+    } else {
+      const searchResp = await fetch(
+        `${MERCADOPAGO_API_URL}/v1/payments/search?external_reference=${orderId}&sort=date_created&criteria=desc&limit=5`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const searchData = await searchResp.json();
+      if (!searchData.results || searchData.results.length === 0) {
+        return res.status(404).json({ error: "No se encontraron pagos en Mercado Pago" });
+      }
+      payment = searchData.results[0];
+    }
+
+    const mpStatus = payment.status;
+    if (mpStatus !== "approved") {
+      return res.status(400).json({ error: `El pago en MP no está aprobado (estado: ${mpStatus})` });
+    }
+
+    const paidAmount = Number(payment.transaction_amount || 0);
+    const orderTotal = Number(order.total_ars);
+    if (Math.abs(orderTotal - paidAmount) > 1) {
+      return res.status(400).json({ error: `Monto no coincide: pedido $${orderTotal} vs pago $${paidAmount}` });
+    }
+
+    await query(
+      `UPDATE orders
+       SET status = 'pago',
+           payment_status = 'approved',
+           payment_method = COALESCE(NULLIF($1, ''), payment_method, 'mercadopago'),
+           source = COALESCE(source, 'web-mp'),
+           raw_payload = COALESCE(raw_payload, '{}'::jsonb) || $2::jsonb
+       WHERE id = $3`,
+      [
+        String(payment.payment_method_id || "").trim(),
+        JSON.stringify({
+          mercadopago_payment: {
+            id: payment.id,
+            status: mpStatus,
+            status_detail: payment.status_detail || null,
+            approved_at: payment.date_approved || null,
+            updated_at: new Date().toISOString(),
+            transaction_amount: payment.transaction_amount || null,
+            external_reference: payment.external_reference || null,
+            synced_manually: true
+          }
+        }),
+        orderId
+      ]
+    );
+
+    // Notificación (non-blocking)
+    handleOrderStatusChange(orderId, "pago", { skipDbUpdate: true }).catch((err) => {
+      console.error(`⚠️ Error en notificación sync-payment para pedido #${orderId}:`, err.message);
+    });
+
+    return res.json({ ok: true, orderId, newStatus: "pago", newPaymentStatus: "approved" });
+  } catch (err) {
+    console.error(`⚠️ Error sincronizando pago para pedido #${orderId}:`, err.message);
+    return res.status(500).json({ error: "Error al sincronizar pago con Mercado Pago" });
   }
 });
 

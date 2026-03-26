@@ -340,7 +340,7 @@ const ORDER_STATUS_LABELS = {
   nuevo: "Nuevo",
   pago: "Pagado",
   confirmado: "Confirmado",
-  preparado: "Preparado",
+  preparado: "En preparación",
   listo_retiro: "Listo para retiro",
   enviado: "Enviado",
   entregado: "Entregado",
@@ -374,10 +374,10 @@ function deriveFulfillmentBadge(orderStatus, shippingMethod, customerAddress) {
   if (s === "cancelado") return "Cancelado";
   if (isPickup) {
     if (s === "listo_retiro") return "Listo para retiro";
-    if (s === "preparado") return "Preparando";
+    if (s === "preparado") return "En preparación";
   } else {
     if (s === "enviado") return "Enviado";
-    if (s === "preparado") return "Preparando";
+    if (s === "preparado") return "En preparación";
     if (s === "confirmado") return "Confirmado";
   }
   return "No procesado";
@@ -385,7 +385,7 @@ function deriveFulfillmentBadge(orderStatus, shippingMethod, customerAddress) {
 
 function derivedBadgeTone(label) {
   if (["Pagado", "Entregado", "Confirmado", "Listo para retiro", "Enviado"].includes(label)) return "is-positive";
-  if (["Preparando"].includes(label)) return "is-warning";
+  if (["En preparación"].includes(label)) return "is-warning";
   if (["Cancelado"].includes(label)) return "is-cancelled";
   return "is-negative";
 }
@@ -1460,6 +1460,7 @@ export default function AdminPanel({
   onDelete,
   onOrderStatusChange,
   onVerifyPayment,
+  onSyncPayment,
   onEnsureOrderInvoice,
   onLoadVariants,
   onCreateVariant,
@@ -1574,6 +1575,7 @@ export default function AdminPanel({
   const [orderActionMessage, setOrderActionMessage] = useState("");
   const [paymentVerification, setPaymentVerification] = useState(null);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
+  const [isSyncingPayment, setIsSyncingPayment] = useState(false);
   const [fulfillmentConfirmOrder, setFulfillmentConfirmOrder] = useState(null);
   const [fulfillmentConfirmMarkPaid, setFulfillmentConfirmMarkPaid] = useState(false);
   const [fulfillmentConfirmSendReadyEmail, setFulfillmentConfirmSendReadyEmail] = useState(false);
@@ -6138,20 +6140,19 @@ export default function AdminPanel({
                           </div>
 
                           {order.paymentMethod === "mercadopago" && (
-                            <div style={{ marginTop: "10px" }}>
+                            <div>
                               <button
                                 type="button"
-                                className="admin-btn admin-btn-outline"
+                                className="admin-verify-payment-btn"
                                 disabled={isVerifyingPayment}
                                 onClick={() => handleOrderQuickAction("verify_payment", order)}
-                                style={{ fontSize: "0.82rem", padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
                               >
                                 <span aria-hidden="true">{isVerifyingPayment ? "⏳" : "🔍"}</span>
                                 <span>{isVerifyingPayment ? "Verificando..." : "Verificar pago en MP"}</span>
                               </button>
 
                               {paymentVerification && (
-                                <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "8px", fontSize: "0.82rem", lineHeight: 1.5, background: paymentVerification.mpStatus === "approved" && paymentVerification.amountMatch ? "#ecfdf5" : "#fef2f2", border: `1px solid ${paymentVerification.mpStatus === "approved" && paymentVerification.amountMatch ? "#a7f3d0" : "#fecaca"}` }}>
+                                <div className={`admin-verify-payment-result ${paymentVerification.mpStatus === "approved" && paymentVerification.amountMatch ? "admin-verify-payment-result--ok" : "admin-verify-payment-result--error"}`}>
                                   <div><strong>Estado MP:</strong> {paymentVerification.mpStatus || "sin pagos"}</div>
                                   {paymentVerification.mpAmount != null && <div><strong>Monto pagado:</strong> ${paymentVerification.mpAmount}</div>}
                                   {paymentVerification.orderTotal != null && <div><strong>Total pedido:</strong> ${paymentVerification.orderTotal}</div>}
@@ -6161,6 +6162,31 @@ export default function AdminPanel({
                                   {paymentVerification.mpDateApproved && <div><strong>Aprobado:</strong> {new Date(paymentVerification.mpDateApproved).toLocaleString("es-AR")}</div>}
                                   {paymentVerification.mpStatusDetail && <div><strong>Detalle:</strong> {paymentVerification.mpStatusDetail}</div>}
                                   {paymentVerification.message && <div>{paymentVerification.message}</div>}
+
+                                  {paymentVerification.mpStatus === "approved" && paymentVerification.amountMatch && order.paymentStatus !== "approved" && (
+                                    <button
+                                      type="button"
+                                      className="admin-sync-payment-btn"
+                                      disabled={isSyncingPayment}
+                                      onClick={async () => {
+                                        setIsSyncingPayment(true);
+                                        try {
+                                          const result = await onSyncPayment(order.id);
+                                          if (result?.ok) {
+                                            setOrderActionMessage("✅ Pago sincronizado — pedido marcado como pagado");
+                                            setPaymentVerification(null);
+                                          }
+                                        } catch (err) {
+                                          setOrderActionMessage(err?.message || "Error al sincronizar pago");
+                                        } finally {
+                                          setIsSyncingPayment(false);
+                                        }
+                                      }}
+                                    >
+                                      <span aria-hidden="true">{isSyncingPayment ? "⏳" : "✅"}</span>
+                                      <span>{isSyncingPayment ? "Sincronizando..." : "Marcar como pagado"}</span>
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>

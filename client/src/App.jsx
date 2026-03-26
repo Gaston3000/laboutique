@@ -60,7 +60,8 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   syncDeliveryZone,
-  verifyOrderPayment
+  verifyOrderPayment,
+  syncOrderPayment
 } from "./api";
 
 // Lazy-loaded heavy components (code splitting)
@@ -4051,6 +4052,23 @@ function App() {
     }
   }
 
+  async function handleSyncPayment(orderId) {
+    try {
+      const result = await syncOrderPayment(auth.token, orderId);
+      if (result?.ok) {
+        setAdminOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId ? { ...o, status: "pago", paymentStatus: "approved" } : o
+          )
+        );
+      }
+      return result;
+    } catch (error) {
+      setAdminMessage(error.message);
+      return null;
+    }
+  }
+
   async function handleMarkNotificationRead(notifId) {
     try {
       await markNotificationRead(auth.token, notifId);
@@ -5504,6 +5522,7 @@ function App() {
               onDelete={handleDeleteProduct}
               onOrderStatusChange={handleOrderStatusChange}
               onVerifyPayment={handleVerifyPayment}
+              onSyncPayment={handleSyncPayment}
               onEnsureOrderInvoice={handleEnsureOrderInvoice}
               onLoadVariants={handleLoadVariants}
               onCreateVariant={handleCreateVariant}
