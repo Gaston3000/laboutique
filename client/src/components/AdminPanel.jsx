@@ -3451,14 +3451,21 @@ export default function AdminPanel({
     });
   }
 
+  function formatPriceDisplay(value) {
+    const num = String(value).replace(/\./g, "");
+    if (!num) return "";
+    return num.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+
   function handleInventoryPriceDraftChange(productId, value) {
-    if (!/^\d*\.?\d{0,2}$/.test(value)) {
+    const raw = value.replace(/\./g, "");
+    if (raw !== "" && !/^\d+$/.test(raw)) {
       return;
     }
 
     setInventoryPriceDraftById((current) => ({
       ...current,
-      [productId]: value
+      [productId]: raw
     }));
 
     setInventoryErrorsById((current) => {
@@ -3514,8 +3521,8 @@ export default function AdminPanel({
     };
   }
 
-  async function handleInventorySave(product) {
-    const draftValue = inventoryDraftById[product.id];
+  async function handleInventorySave(product, overrides) {
+    const draftValue = overrides?.stock ?? inventoryDraftById[product.id];
     const normalizedDraft = typeof draftValue === "string" && draftValue !== ""
       ? draftValue
       : String(product.stock ?? 0);
@@ -3530,7 +3537,7 @@ export default function AdminPanel({
       return;
     }
 
-    const priceDraftValue = inventoryPriceDraftById[product.id];
+    const priceDraftValue = overrides?.price ?? inventoryPriceDraftById[product.id];
     const normalizedPriceDraft = typeof priceDraftValue === "string" && priceDraftValue !== ""
       ? priceDraftValue
       : String(product.price ?? 0);
@@ -3612,7 +3619,10 @@ export default function AdminPanel({
     const bulkPrice = bulkPriceValue.trim();
     const bulkStock = bulkStockValue.trim();
 
-    if (bulkPrice && /^\d+\.?\d{0,2}$/.test(bulkPrice) && Number.isFinite(Number(bulkPrice)) && Number(bulkPrice) >= 0) {
+    const validBulkPrice = bulkPrice && /^\d+$/.test(bulkPrice) && Number(bulkPrice) >= 0;
+    const validBulkStock = bulkStock && /^\d+$/.test(bulkStock) && Number.isInteger(Number(bulkStock)) && Number(bulkStock) >= 0;
+
+    if (validBulkPrice) {
       setInventoryPriceDraftById((current) => {
         const next = { ...current };
         for (const productId of inventorySelectedIds) {
@@ -3622,7 +3632,7 @@ export default function AdminPanel({
       });
     }
 
-    if (bulkStock && /^\d+$/.test(bulkStock) && Number.isInteger(Number(bulkStock)) && Number(bulkStock) >= 0) {
+    if (validBulkStock) {
       setInventoryDraftById((current) => {
         const next = { ...current };
         for (const productId of inventorySelectedIds) {
@@ -3632,14 +3642,16 @@ export default function AdminPanel({
       });
     }
 
-    await new Promise((r) => setTimeout(r, 0));
+    const overrides = {};
+    if (validBulkPrice) overrides.price = bulkPrice;
+    if (validBulkStock) overrides.stock = bulkStock;
 
     const selectedProducts = filteredInventoryProducts.filter((p) => inventorySelectedIds.has(p.id));
 
     setInventoryBulkSaving(true);
 
     for (const product of selectedProducts) {
-      await handleInventorySave(product);
+      await handleInventorySave(product, overrides);
     }
 
     setInventoryBulkSaving(false);
@@ -5115,9 +5127,9 @@ export default function AdminPanel({
                           type="text"
                           inputMode="decimal"
                           className="admin-inventory-bulk-input"
-                          placeholder="1500"
-                          value={bulkPriceValue}
-                          onChange={(e) => { if (/^\d*\.?\d{0,2}$/.test(e.target.value)) setBulkPriceValue(e.target.value); }}
+                          placeholder="1.500"
+                          value={formatPriceDisplay(bulkPriceValue)}
+                          onChange={(e) => { const raw = e.target.value.replace(/\./g, ""); if (raw === "" || /^\d+$/.test(raw)) setBulkPriceValue(raw); }}
                           disabled={inventoryBulkSaving}
                         />
                       </div>
@@ -5230,7 +5242,7 @@ export default function AdminPanel({
                               inputMode="decimal"
                               min="0"
                               className="admin-inventory-stock-input admin-inventory-price-input"
-                              value={inventoryPriceDraftById[product.id] ?? String(product.price ?? 0)}
+                              value={formatPriceDisplay(inventoryPriceDraftById[product.id] ?? String(product.price ?? 0))}
                               onChange={(event) => handleInventoryPriceDraftChange(product.id, event.target.value)}
                               onKeyDown={(event) => {
                                 if (event.key === "Enter") {
