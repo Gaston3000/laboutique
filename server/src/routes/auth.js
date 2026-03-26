@@ -177,13 +177,18 @@ authRouter.post("/login", async (req, res) => {
     const userRow = result.rows[0];
 
     if (!userRow) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      return res.status(401).json({ error: "No encontramos una cuenta con ese email", errorField: "email" });
+    }
+
+    // Account created via Google without password
+    if (!userRow.password_hash) {
+      return res.status(401).json({ error: "Esta cuenta fue creada con Google. Usá el botón de Google para ingresar.", errorField: "email" });
     }
 
     const isValidPassword = await bcrypt.compare(password, userRow.password_hash);
 
     if (!isValidPassword) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      return res.status(401).json({ error: "La contraseña ingresada es incorrecta", errorField: "password" });
     }
 
     // Block login if the account was never verified (admins are exempt)
@@ -557,6 +562,77 @@ authRouter.post("/reset-password", async (req, res) => {
   } catch (error) {
     console.error("Reset password error:", error);
     return res.status(500).json({ error: "No se pudo restablecer la contraseña" });
+  }
+});
+
+// Google OAuth login/register
+authRouter.post("/google", async (req, res) => {
+  const { access_token } = req.body || {};
+
+  if (!access_token) {
+    return res.status(400).json({ error: "Token de Google requerido" });
+  }
+
+  try {
+    // Verify access token by fetching user info from Google
+    const googleRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${access_token}` }
+    });
+
+    if (!googleRes.ok) {
+      return res.status(401).json({ error: "Token de Google inválido" });
+    }
+
+    const payload = await googleRes.json();
+    const googleId = payload.sub;
+    const email = payload.email.toLowerCase().trim();
+    const name = payload.name || email.split("@")[0];
+    const avatarUrl = payload.picture || null;
+
+    // Check if user exists by google_id or email
+    const existingResult = await query(
+      `SELECT ${USER_SELECT_FIELDS}, google_id FROM users WHERE google_id = $1 OR email = $2 LIMIT 1`,
+      [googleId, email]
+    );
+
+    let user;
+
+    if (existingResult.rows[0]) {
+      const existingRow = existingResult.rows[0];
+
+      // Link Google account if not already linked
+      if (!existingRow.google_id) {
+        await query(
+          "UPDATE users SET google_id = $1, auth_provider = 'both', email_verified = TRUE WHERE id = $2",
+          [googleId, existingRow.id]
+        );
+      } else if (!existingRow.email_verified) {
+        await query("UPDATE users SET email_verified = TRUE WHERE id = $1", [existingRow.id]);
+      }
+
+      const refreshedResult = await query(`SELECT ${USER_SELECT_FIELDS} FROM users WHERE id = $1`, [existingRow.id]);
+      user = mapUserRow(refreshedResult.rows[0]);
+    } else {
+      // Create new user (no password needed for Google-only users)
+      const createdResult = await query(
+        `INSERT INTO users (name, email, role, password_hash, google_id, auth_provider, email_verified, avatar_url)
+         VALUES ($1, $2, 'client', NULL, $3, 'google', TRUE, $4)
+         RETURNING ${USER_SELECT_FIELDS}`,
+        [name, email, googleId, avatarUrl]
+      );
+
+      user = mapUserRow(createdResult.rows[0]);
+
+      sendWelcomeEmail(email, { userName: name }).catch((err) =>
+        console.error("Failed to send welcome email:", err.message)
+      );
+    }
+
+    const token = signToken(user);
+    return res.json({ token, user });
+  } catch (error) {
+    console.error("Google auth error:", error);
+    return res.status(401).json({ error: "No se pudo verificar el token de Google" });
   }
 });
 

@@ -82,7 +82,34 @@ export async function login(email, password) {
         err.notVerified = true;
         err.email = data.email;
       }
+      if (data.errorField) {
+        err.errorField = data.errorField;
+      }
       throw err;
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servidor. Verificá que la API esté levantada en puerto 4000.");
+    }
+
+    throw error;
+  }
+}
+
+export async function googleLogin(accessToken) {
+  try {
+    const response = await fetch(`${API_URL}/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: accessToken })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo iniciar sesión con Google");
     }
 
     return data;

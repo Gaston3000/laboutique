@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useGoogleLogin } from "@react-oauth/google";
 import {
   addTicketComment,
   applyPromotion,
@@ -38,6 +39,7 @@ import {
   fetchPublicShippingRules,
   fetchShippingRules,
   login,
+  googleLogin,
   register,
   resendVerificationCode,
   verifyEmail,
@@ -1004,6 +1006,7 @@ function App() {
   const [pendingWelcomePromoFocus, setPendingWelcomePromoFocus] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [authErrorField, setAuthErrorField] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
   const [orders, setOrders] = useState([]);
   const [myOrders, setMyOrders] = useState([]);
@@ -3642,6 +3645,88 @@ function App() {
     setCartNoteMessage("Nota guardada correctamente.");
   }
 
+  async function handleGoogleLoginSuccess(tokenResponse) {
+    setIsAuthLoading(true);
+    setAuthError("");
+    setAuthErrorField("");
+
+    try {
+      const data = await googleLogin(tokenResponse.access_token);
+
+      const storedAddressData = readStoredAddressBook(data.user || {});
+      const hasStoredBook = storedAddressData.addressBook.length > 0;
+      const validPrimaryAddressId = hasStoredBook
+        ? (storedAddressData.addressBook.some((entry) => entry.id === storedAddressData.primaryAddressId)
+          ? storedAddressData.primaryAddressId
+          : storedAddressData.addressBook[0]?.id || "")
+        : "";
+      const primaryEntry = hasStoredBook
+        ? (storedAddressData.addressBook.find((entry) => entry.id === validPrimaryAddressId) || storedAddressData.addressBook[0])
+        : null;
+      const userWithAddresses = {
+        ...(data.user || {}),
+        address: primaryEntry ? buildAddressFromEntry(primaryEntry) : String(data.user?.address || "").trim(),
+        addressBook: hasStoredBook ? storedAddressData.addressBook : (Array.isArray(data.user?.addressBook) ? data.user.addressBook : []),
+        primaryAddressId: hasStoredBook ? validPrimaryAddressId : String(data.user?.primaryAddressId || "").trim()
+      };
+
+      let nextCart = [];
+
+      if (data.token) {
+        const cartResponse = await fetchUserCart(data.token);
+        const backendCart = Array.isArray(cartResponse?.items) ? cartResponse.items : [];
+        const localCart = Array.isArray(cart) ? cart : [];
+
+        if (backendCart.length > 0 && localCart.length > 0) {
+          nextCart = mergeCartItems(localCart, backendCart);
+        } else if (backendCart.length > 0) {
+          nextCart = backendCart;
+        } else {
+          nextCart = localCart;
+        }
+
+        if (nextCart.length > 0) {
+          saveUserCart(data.token, nextCart).catch(() => {});
+        }
+      }
+
+      sendAnalytics("login", {
+        role: userWithAddresses?.role || "client",
+        provider: "google",
+        emailDomain: String(data.user?.email || "").includes("@") ? String(data.user.email).split("@").pop() : ""
+      });
+      setCart(nextCart);
+      setAuth({ token: data.token, user: userWithAddresses });
+      localStorage.removeItem(GUEST_CART_STORAGE_KEY);
+      localStorage.removeItem("cart");
+      if (userWithAddresses?.role === "admin") {
+        setActiveSection("admin");
+        await Promise.all([
+          refreshOrders(data.token),
+          refreshAdminData(data.token),
+          refreshTicketsData(data.token, userWithAddresses.role)
+        ]);
+      } else {
+        await refreshTicketsData(data.token, userWithAddresses?.role || "client");
+      }
+      setIsLoginOpen(false);
+      setLoginInviteMessage("");
+      setVerificationEmail("");
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
+  const triggerGoogleLogin = useGoogleLogin({
+    onSuccess: handleGoogleLoginSuccess,
+    onError: () => {
+      setAuthError("No se pudo iniciar sesión con Google");
+      setIsAuthLoading(false);
+    }
+  });
+
   async function handleLogin(authPayload) {
     const mode = authPayload?.mode === "register" ? "register" : "login";
     const email = String(authPayload?.email || "").trim();
@@ -3652,6 +3737,7 @@ function App() {
 
     setIsAuthLoading(true);
     setAuthError("");
+    setAuthErrorField("");
 
     try {
       const data = mode === "register"
@@ -3735,6 +3821,7 @@ function App() {
         return;
       }
       setAuthError(error.message);
+      setAuthErrorField(error.errorField || "");
     } finally {
       setIsAuthLoading(false);
     }
@@ -5527,12 +5614,14 @@ function App() {
           setPendingWelcomePromoFocus(false);
         }}
         onSubmit={handleLogin}
+        onGoogleLogin={triggerGoogleLogin}
         onVerifyEmail={handleVerifyEmail}
         onResendCode={handleResendVerificationCode}
         onForgotPassword={handleForgotPassword}
         onResetPassword={handleResetPassword}
         isLoading={isAuthLoading}
         error={authError}
+        errorField={authErrorField}
         initialView={loginModalView}
         inviteMessage={loginInviteMessage}
         verificationEmail={verificationEmail}

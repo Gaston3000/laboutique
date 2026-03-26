@@ -4,12 +4,14 @@ export default function LoginModal({
   isOpen,
   onClose,
   onSubmit,
+  onGoogleLogin,
   onVerifyEmail,
   onResendCode,
   onForgotPassword,
   onResetPassword,
   isLoading,
   error,
+  errorField = "",
   initialView = "register",
   inviteMessage = "",
   verificationEmail = ""
@@ -79,12 +81,12 @@ export default function LoginModal({
 
         {view === "register" ? (
           <>
-            <h2>Registrate</h2>
+            <h2>Crear cuenta</h2>
             {inviteMessage ? <p className="form-info">{inviteMessage}</p> : null}
             <p className="register-intro">
-              ¿Ya tienes un perfil personal?{" "}
+              Elegí cómo querés registrarte.{" "}
               <button type="button" className="premium-login-link" onClick={() => setView("login")}>
-                Iniciar sesión
+                Ya tengo cuenta
               </button>
             </p>
 
@@ -93,7 +95,10 @@ export default function LoginModal({
                 <button
                   type="button"
                   className="register-provider-btn google"
-                  onClick={() => setLocalMessage("El acceso con Google estará disponible nuevamente en breve.")}
+                  disabled={isLoading}
+                  onClick={() => {
+                    if (onGoogleLogin) onGoogleLogin();
+                  }}
                 >
                   <span className="provider-icon" aria-hidden="true">
                     <svg viewBox="0 0 48 48">
@@ -227,9 +232,15 @@ export default function LoginModal({
           </>
         ) : view === "verify" ? (
           <>
-            <h2>Verificá tu Email</h2>
+            <div className="login-modal-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="3" />
+                <path d="m2 7 10 7 10-7" />
+              </svg>
+            </div>
+            <h2>Verificá tu email</h2>
             <p className="register-intro">
-              Te enviamos un código de 6 dígitos a <strong>{verificationEmail || email}</strong>
+              Enviamos un código de 6 dígitos a <strong>{verificationEmail || email}</strong>
             </p>
 
             <form onSubmit={(e) => {
@@ -238,9 +249,10 @@ export default function LoginModal({
                 onVerifyEmail(verificationEmail || email, verificationCode);
               }
             }}>
-              <label htmlFor="verify-code">Código de Verificación</label>
+              <label htmlFor="verify-code">Código de verificación</label>
               <input
                 id="verify-code"
+                className="code-input"
                 type="text"
                 value={verificationCode}
                 onChange={(event) => setVerificationCode(event.target.value)}
@@ -249,7 +261,6 @@ export default function LoginModal({
                 pattern="[0-9]{6}"
                 required
                 autoFocus
-                style={{ fontSize: "24px", textAlign: "center", letterSpacing: "8px" }}
               />
 
               {error && <p className="form-error">{error}</p>}
@@ -273,7 +284,7 @@ export default function LoginModal({
               </div>
             </form>
 
-            <p className="register-intro" style={{ marginTop: "20px" }}>
+            <p className="login-modal-footer-link">
               ¿No recibiste el código?{" "}
               <button 
                 type="button" 
@@ -285,15 +296,21 @@ export default function LoginModal({
                 }}
                 disabled={isLoading}
               >
-                Reenviar código
+                Reenviar
               </button>
             </p>
           </>
         ) : view === "forgot" ? (
           <>
+            <div className="login-modal-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </div>
             <h2>Recuperar contraseña</h2>
             <p className="register-intro">
-              Ingresá tu email y te enviamos un código para restablecer tu contraseña.
+              Ingresá tu email y te enviamos un código para restablecerla.
             </p>
 
             <form onSubmit={async (e) => {
@@ -329,9 +346,16 @@ export default function LoginModal({
           </>
         ) : view === "reset" ? (
           <>
+            <div className="login-modal-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                <polyline points="10 17 15 12 10 7" />
+                <line x1="15" y1="12" x2="3" y2="12" />
+              </svg>
+            </div>
             <h2>Nueva contraseña</h2>
             <p className="register-intro">
-              Ingresá el código que recibiste en <strong>{forgotEmail}</strong> y tu nueva contraseña.
+              Ingresá el código que recibiste en <strong>{forgotEmail}</strong> y elegí tu nueva contraseña.
             </p>
 
             <form onSubmit={(e) => {
@@ -341,6 +365,7 @@ export default function LoginModal({
               <label htmlFor="reset-code">Código de recuperación</label>
               <input
                 id="reset-code"
+                className="code-input"
                 type="text"
                 value={resetCode}
                 onChange={(e) => setResetCode(e.target.value)}
@@ -349,7 +374,6 @@ export default function LoginModal({
                 pattern="[0-9]{6}"
                 required
                 autoFocus
-                style={{ fontSize: "24px", textAlign: "center", letterSpacing: "8px" }}
               />
 
               <label htmlFor="reset-new-password">Nueva contraseña</label>
@@ -396,7 +420,7 @@ export default function LoginModal({
               </div>
             </form>
 
-            <p className="register-intro" style={{ marginTop: "20px" }}>
+            <p className="login-modal-footer-link">
               ¿No recibiste el código?{" "}
               <button
                 type="button"
@@ -404,7 +428,7 @@ export default function LoginModal({
                 onClick={() => { if (onForgotPassword) onForgotPassword(forgotEmail); }}
                 disabled={isLoading}
               >
-                Reenviar código
+                Reenviar
               </button>
             </p>
           </>
@@ -413,9 +437,6 @@ export default function LoginModal({
             <h2>Iniciar sesión</h2>
             <p className="register-intro">
               Accedé con tu email y contraseña.
-              <button type="button" className="premium-login-link subtle" onClick={() => setView("register")}>
-                Volver a registro
-              </button>
             </p>
 
             <form onSubmit={handleSubmit}>
@@ -423,16 +444,24 @@ export default function LoginModal({
               <input
                 id="login-email"
                 type="email"
+                className={errorField === "email" ? "input-error" : ""}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
               />
+              {error && errorField === "email" && (
+                <p className="form-error field-error" role="alert">
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M10 6v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="10" cy="14" r="1" fill="currentColor"/></svg>
+                  {error}
+                </p>
+              )}
 
               <label htmlFor="login-password">Contraseña</label>
               <div className="password-field">
                 <input
                   id="login-password"
                   type={isPasswordVisible ? "text" : "password"}
+                  className={errorField === "password" ? "input-error" : ""}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   required
@@ -458,8 +487,14 @@ export default function LoginModal({
                   )}
                 </button>
               </div>
+              {error && errorField === "password" && (
+                <p className="form-error field-error" role="alert">
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M10 6v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="10" cy="14" r="1" fill="currentColor"/></svg>
+                  {error}
+                </p>
+              )}
 
-              {error && <p className="form-error">{error}</p>}
+              {error && !errorField && <p className="form-error">{error}</p>}
 
               <div className="modal-actions login-actions">
                 <button type="button" className="secondary-btn" onClick={onClose}>
@@ -471,7 +506,7 @@ export default function LoginModal({
               </div>
             </form>
 
-            <p className="register-intro" style={{ marginTop: "16px" }}>
+            <p className="login-modal-footer-link" style={{ marginTop: "8px" }}>
               <button
                 type="button"
                 className="premium-login-link"
@@ -481,6 +516,38 @@ export default function LoginModal({
                 }}
               >
                 ¿Olvidaste tu contraseña?
+              </button>
+            </p>
+
+            <div className="register-divider" aria-hidden="true">
+              <span />
+              <strong>o</strong>
+              <span />
+            </div>
+
+            <button
+              type="button"
+              className="register-provider-btn google"
+              disabled={isLoading}
+              onClick={() => {
+                if (onGoogleLogin) onGoogleLogin();
+              }}
+            >
+              <span className="provider-icon" aria-hidden="true">
+                <svg viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.74 1.22 9.26 3.62l6.9-6.9C35.96 2.34 30.42 0 24 0 14.62 0 6.54 5.38 2.6 13.22l8.02 6.23C12.54 13.62 17.82 9.5 24 9.5Z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.14-3.08-.4-4.55H24v9.1h12.94c-.58 2.98-2.24 5.5-4.78 7.2l7.74 6c4.52-4.16 7.08-10.3 7.08-17.75Z" />
+                  <path fill="#FBBC05" d="M10.62 28.55A14.5 14.5 0 0 1 9.8 24c0-1.58.28-3.1.82-4.55L2.6 13.22A24.06 24.06 0 0 0 0 24c0 3.88.93 7.55 2.6 10.78l8.02-6.23Z" />
+                  <path fill="#34A853" d="M24 48c6.42 0 11.82-2.12 15.76-5.76l-7.74-6c-2.12 1.44-4.84 2.26-8.02 2.26-6.18 0-11.46-4.12-13.38-9.95L2.6 34.78C6.54 42.62 14.62 48 24 48Z" />
+                </svg>
+              </span>
+              <span>Continuar con Google</span>
+            </button>
+
+            <p className="login-modal-footer-link" style={{ textAlign: "center", marginTop: "12px" }}>
+              ¿No tenés cuenta?{" "}
+              <button type="button" className="premium-login-link" onClick={() => setView("register")}>
+                Registrate
               </button>
             </p>
           </>
