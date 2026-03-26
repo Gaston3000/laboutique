@@ -6,10 +6,6 @@ export const categoryTree = [
         name: "Ver todo el catálogo",
         children: ["Todos los artículos", "Productos destacados", "Nuevos ingresos"]
       },
-      {
-        name: "Novedades",
-        children: ["Nuevos lanzamientos", "Nuevas marcas", "Nuevas fragancias"]
-      },
       "Ofertas destacadas",
       "Más vendidos"
     ]

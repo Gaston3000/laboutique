@@ -19483,3 +19483,255 @@ body:has(.checkout-details-view) .site-footer {
 @keyframes lazySpin {
   to { transform: rotate(360deg); }
 }
+
+/* ───────────────────────────────────────────────────
+   Purchase Success Modal  (PurchaseSuccessModal.jsx)
+   ─────────────────────────────────────────────────── */
+
+.psm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(0);
+  transition: background 0.4s ease, backdrop-filter 0.4s ease;
+  padding: 20px;
+}
+.psm-overlay--visible {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+.psm-card {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: var(--white);
+  border-radius: 24px;
+  padding: 48px 36px 36px;
+  text-align: center;
+  box-shadow:
+    0 25px 80px rgba(0, 0, 0, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(32px) scale(0.95);
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.psm-card--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Shimmering top gradient bar */
+.psm-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #22c55e, #10b981, #06b6d4, #3b82f6, #22c55e);
+  background-size: 200% 100%;
+  animation: psmShimmer 3s linear infinite;
+}
+
+@keyframes psmShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Confetti container */
+.psm-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.psm-confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  top: -12px;
+  left: calc(5% + var(--i) * 5%);
+  opacity: 0;
+  animation: psmFall 1.6s ease-out forwards;
+  animation-delay: calc(0.1s + var(--i) * 0.08s);
+}
+.psm-confetti-piece:nth-child(3n)   { background: #22c55e; width: 6px; height: 10px; }
+.psm-confetti-piece:nth-child(3n+1) { background: #3b82f6; width: 10px; height: 6px; border-radius: 50%; }
+.psm-confetti-piece:nth-child(3n+2) { background: #f59e0b; width: 7px; height: 7px; }
+.psm-confetti-piece:nth-child(5n)   { background: #ec4899; }
+.psm-confetti-piece:nth-child(7n)   { background: #8b5cf6; }
+
+@keyframes psmFall {
+  0%   { opacity: 0; transform: translateY(0) rotate(0deg) scale(0); }
+  15%  { opacity: 1; transform: translateY(40px) rotate(60deg) scale(1); }
+  100% { opacity: 0; transform: translateY(320px) rotate(360deg) scale(0.6); }
+}
+
+/* Animated checkmark */
+.psm-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.psm-logo {
+  height: 54px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  opacity: 0;
+  animation: psmFadeIn 0.5s ease 0.15s forwards;
+}
+
+@keyframes psmFadeIn {
+  to { opacity: 1; }
+}
+
+.psm-check-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.psm-check-svg {
+  width: 80px;
+  height: 80px;
+  filter: drop-shadow(0 4px 12px rgba(34, 197, 94, 0.3));
+}
+.psm-check-circle {
+  fill: none;
+  stroke-dasharray: 230;
+  stroke-dashoffset: 230;
+  animation: psmCircle 0.7s ease-out 0.3s forwards;
+}
+.psm-check-tick {
+  fill: none;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: psmTick 0.4s ease-out 0.8s forwards;
+}
+
+@keyframes psmCircle {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes psmTick {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Typography */
+.psm-title {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.psm-order-id {
+  font-size: 0.92rem;
+  color: #6b7280;
+  margin: 0 0 16px;
+}
+.psm-order-id strong {
+  color: var(--blue);
+  font-weight: 700;
+}
+
+/* Total paid */
+.psm-total {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 12px 20px;
+  margin: 0 0 18px;
+}
+.psm-total-label {
+  font-size: 0.88rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+.psm-total-amount {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #166534;
+  letter-spacing: -0.01em;
+}
+
+.psm-body {
+  font-size: 0.97rem;
+  line-height: 1.6;
+  color: #4b5563;
+  margin: 0 0 20px;
+}
+.psm-body strong {
+  color: var(--text-main);
+}
+
+/* Divider */
+.psm-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+  margin: 0 0 24px;
+}
+
+/* CTA button */
+.psm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 36px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--blue), #2563eb);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 16px rgba(24, 119, 242, 0.35);
+  letter-spacing: 0.01em;
+}
+.psm-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(24, 119, 242, 0.45);
+}
+.psm-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(24, 119, 242, 0.3);
+}
+
+/* Footer note */
+.psm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin: 18px 0 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .psm-card {
+    padding: 40px 24px 28px;
+    border-radius: 20px;
+  }
+  .psm-title {
+    font-size: 1.35rem;
+  }
+  .psm-btn {
+    width: 100%;
+    padding: 14px 24px;
+  }
+}

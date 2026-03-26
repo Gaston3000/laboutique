@@ -71,6 +71,7 @@ const LoginModal = lazy(() => import("./components/LoginModal"));
 const SmartOrderPanel = lazy(() => import("./components/SmartOrderPanel"));
 const WelcomeDiscountModal = lazy(() => import("./components/WelcomeDiscountModal"));
 
+import PurchaseSuccessModal from "./components/PurchaseSuccessModal";
 import { categoryDescendantsMap } from "./components/categoryTree";
 import AddressSelector, { ALL_ZONES } from "./components/AddressSelector";
 import BrandsCarousel from "./components/BrandsCarousel";
@@ -84,11 +85,14 @@ import WelcomeDiscountTimer from "./components/WelcomeDiscountTimer";
 const CATEGORY_PAGE_SIZE = 10;
 const SEARCH_PAGE_SIZE = 10;
 const RESULTS_SORT_OPTIONS = [
+  { key: "random", label: "Al azar", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 4h-4l-2 3-2-3H6"/><path d="M6 20h4l2-3 2 3h4"/><path d="M4 12h2"/><path d="M18 12h2"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/></svg> },
   { key: "recent", label: "Mas reciente", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
-  { key: "price-desc", label: "Precios mas alto", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="4"/><polyline points="6 10 12 4 18 10"/></svg> },
-  { key: "price-asc", label: "Precios mas bajo", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="4" x2="12" y2="20"/><polyline points="18 14 12 20 6 14"/></svg> },
-  { key: "name-asc", label: "Nombre, creciente", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h10"/><path d="M3 12h7"/><path d="M3 18h4"/><path d="M18 6v12"/><polyline points="15 18 18 21 21 18"/></svg> },
-  { key: "name-desc", label: "Nombre, decreciente", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h4"/><path d="M3 12h7"/><path d="M3 18h10"/><path d="M18 6v12"/><polyline points="15 6 18 3 21 6"/></svg> }
+  { key: "price-desc", label: "Precio: mayor a menor", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="4"/><polyline points="6 10 12 4 18 10"/></svg> },
+  { key: "price-asc", label: "Precio: menor a mayor", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="4" x2="12" y2="20"/><polyline points="18 14 12 20 6 14"/></svg> },
+  { key: "name-asc", label: "Nombre A-Z", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h10"/><path d="M3 12h7"/><path d="M3 18h4"/><path d="M18 6v12"/><polyline points="15 18 18 21 21 18"/></svg> },
+  { key: "name-desc", label: "Nombre Z-A", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h4"/><path d="M3 12h7"/><path d="M3 18h10"/><path d="M18 6v12"/><polyline points="15 6 18 3 21 6"/></svg> },
+  { key: "brand-asc", label: "Marca A-Z", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.6 3.1 21 11.5a1 1 0 0 1 0 1.4l-7.1 7.1a1 1 0 0 1-1.4 0L3 11.5V4.1a1 1 0 0 1 1-1h8.6Z"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/></svg> },
+  { key: "stock-desc", label: "Mayor disponibilidad", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> }
 ];
 const RECENT_SEARCHES_STORAGE_KEY = "search:recent:queries";
 const RECENT_SEARCHES_LIMIT = 6;
@@ -523,6 +527,14 @@ const CATEGORY_FILTER_ALIASES = {
 const CATEGORY_BRAND_CONSTRAINT = {
   aerosoles: "saphirus"
 };
+
+// Palabras clave de categorías inusuales/curiosas para "Productos destacados"
+const FEATURED_UNUSUAL_KEYWORDS = [
+  "broches", "fosforos", "panuelos", "velas", "sopapas",
+  "antihumedad", "limpia tapizados", "quitamanchas",
+  "holder", "sensaciones", "difusor premium", "difusores premium",
+  "insecticida", "repelente", "amoniaco", "plasticos"
+];
 
 // Map from normalized parent category name → normalized descendant names (all levels)
 const CATEGORY_PARENT_EXPANSIONS = Object.fromEntries(
@@ -1043,6 +1055,7 @@ function App() {
   const [addressValidationErrors, setAddressValidationErrors] = useState([]);
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [purchaseSuccessOrder, setPurchaseSuccessOrder] = useState(null);
   const [checkoutLegalPopup, setCheckoutLegalPopup] = useState(null);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isSmartOrderOpen, setIsSmartOrderOpen] = useState(false);
@@ -1361,6 +1374,7 @@ function App() {
 
     if (checkoutStatus === "success") {
       clearCart();
+      setPurchaseSuccessOrder({ orderId: orderId || null, total: null });
       setCheckoutMessage(orderId
         ? `Pago aprobado. Pedido #${orderId}. ¡Gracias por tu compra!`
         : "Pago aprobado. ¡Gracias por tu compra!");
@@ -2118,25 +2132,43 @@ function App() {
     const normalizedSelectedCategory = normalizeSearchText(selectedCategory);
     const visibleProducts = products.filter((product) => product.isVisible !== false);
 
+    const isAllProductsCategory = (
+      !normalizedSelectedCategory
+      || normalizedSelectedCategory === "todos los productos"
+      || normalizedSelectedCategory === "todos los articulos"
+      || normalizedSelectedCategory === "nuevos ingresos"
+    );
+
+    const isFeaturedCategory = normalizedSelectedCategory === "productos destacados";
+
     const categoryFilteredProducts =
-      !normalizedSelectedCategory || normalizedSelectedCategory === "todos los productos"
+      isAllProductsCategory
         ? visibleProducts
-        : visibleProducts.filter((product) => {
-          const productCategories = getProductCategoriesForSearch(product)
-            .map((category) => normalizeSearchText(category))
-            .filter(Boolean);
+        : isFeaturedCategory
+          ? visibleProducts.filter((product) => {
+            const productCategories = getProductCategoriesForSearch(product)
+              .map((category) => normalizeSearchText(category))
+              .filter(Boolean);
+            return FEATURED_UNUSUAL_KEYWORDS.some((keyword) =>
+              productCategories.some((cat) => cat.includes(keyword))
+            );
+          })
+          : visibleProducts.filter((product) => {
+            const productCategories = getProductCategoriesForSearch(product)
+              .map((category) => normalizeSearchText(category))
+              .filter(Boolean);
 
-          if (!matchesSelectedCategory(productCategories, normalizedSelectedCategory)) {
-            return false;
-          }
+            if (!matchesSelectedCategory(productCategories, normalizedSelectedCategory)) {
+              return false;
+            }
 
-          const requiredBrand = CATEGORY_BRAND_CONSTRAINT[normalizedSelectedCategory];
-          if (requiredBrand) {
-            return normalizeSearchText(product?.brand) === requiredBrand;
-          }
+            const requiredBrand = CATEGORY_BRAND_CONSTRAINT[normalizedSelectedCategory];
+            if (requiredBrand) {
+              return normalizeSearchText(product?.brand) === requiredBrand;
+            }
 
-          return true;
-        });
+            return true;
+          });
 
     if (!normalizedSearch) {
       return categoryFilteredProducts;
@@ -2147,6 +2179,14 @@ function App() {
 
   const sortedFilteredProducts = useMemo(() => {
     const productsToSort = [...filteredProducts];
+
+    if (resultsSortKey === "random") {
+      for (let index = productsToSort.length - 1; index > 0; index -= 1) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [productsToSort[index], productsToSort[randomIndex]] = [productsToSort[randomIndex], productsToSort[index]];
+      }
+      return productsToSort;
+    }
 
     productsToSort.sort((left, right) => {
       if (resultsSortKey === "price-desc") {
@@ -2163,6 +2203,14 @@ function App() {
 
       if (resultsSortKey === "name-desc") {
         return String(right?.name || "").localeCompare(String(left?.name || ""), "es", { sensitivity: "base" });
+      }
+
+      if (resultsSortKey === "brand-asc") {
+        return String(left?.brand || "").localeCompare(String(right?.brand || ""), "es", { sensitivity: "base" });
+      }
+
+      if (resultsSortKey === "stock-desc") {
+        return Number(right?.stock || 0) - Number(left?.stock || 0);
       }
 
       return getProductRecentValue(right) - getProductRecentValue(left);
@@ -3178,6 +3226,15 @@ function App() {
       categoryName: normalizedCategory
     });
 
+    const normalizedKey = normalizeSearchText(normalizedCategory);
+    if (normalizedKey === "todos los articulos") {
+      setResultsSortKey("random");
+    } else if (normalizedKey === "nuevos ingresos") {
+      setResultsSortKey("recent");
+    } else if (normalizedKey === "productos destacados") {
+      setResultsSortKey("recent");
+    }
+
     setSelectedCategory(categoryName || "Todos los productos");
     setSearchInput("");
     setSearchTerm("");
@@ -3454,7 +3511,9 @@ function App() {
 
       if (payload.paymentMethod === "cash") {
         // Cash on delivery — no MP redirect, show success
+        const paidTotal = checkoutTotal;
         clearCart();
+        setPurchaseSuccessOrder({ orderId: result?.item?.id || null, total: paidTotal });
         setCheckoutMessage(`¡Pedido #${result?.item?.id} confirmado! Te enviamos un email con los detalles. Abonarás al retirar en el local.`);
         setActiveSection("home");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -5479,6 +5538,17 @@ function App() {
         verificationEmail={verificationEmail}
       />
       </Suspense>
+
+      <PurchaseSuccessModal
+        isOpen={!!purchaseSuccessOrder}
+        orderId={purchaseSuccessOrder?.orderId}
+        total={purchaseSuccessOrder?.total}
+        onClose={() => {
+          setPurchaseSuccessOrder(null);
+          setActiveSection("home");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
 
       <Suspense fallback={null}>
       <WelcomeDiscountModal

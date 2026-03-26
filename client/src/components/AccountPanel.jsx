@@ -70,13 +70,13 @@ const MAX_ADDRESSES = 5;
 
 const ZONE_BADGES = {
   CABA: { label: "CABA", color: "#2563eb", bg: "#eff6ff" },
-  default: { label: "GBA", color: "#059669", bg: "#ecfdf5" }
+  default: { label: "PBA", color: "#059669", bg: "#ecfdf5" }
 };
 
 function getZoneBadge(region) {
   const r = String(region || "").trim();
   if (r === "CABA") return ZONE_BADGES.CABA;
-  if (r) return { ...ZONE_BADGES.default, label: r };
+  if (r) return ZONE_BADGES.default;
   return null;
 }
 
@@ -186,7 +186,7 @@ function formatAddressDetails(address) {
     address?.barrio || "",
     address?.district && address.district !== address.region ? address.district : "",
     address?.city ? `Ciudad: ${address.city}` : "",
-    address?.region ? `Zona: ${address.region}` : "",
+    address?.region ? `Zona: ${address.region === "CABA" ? "CABA" : "PBA"}` : "",
     address?.postalCode ? `CP: ${address.postalCode}` : "",
     address?.addressType === "laboral" ? "Laboral" : ""
   ]
