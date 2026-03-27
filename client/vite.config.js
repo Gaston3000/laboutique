@@ -12,7 +12,10 @@ export default defineConfig({
         target: "http://localhost:4000",
         changeOrigin: true
       }
-    }
+    },
+    allowedHosts: [
+      'unopted-jaylah-lovely.ngrok-free.dev'
+    ]
   },
   build: {
     rollupOptions: {

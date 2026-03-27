@@ -25,10 +25,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load .env from server directory
-const envPath = path.join(__dirname, "../.env");
-console.log("[ENV] Cargando desde:", envPath);
-dotenv.config({ path: envPath, override: true });
-console.log("[ENV] OPENAI key cargada:", process.env.OPENAI_API_KEY?.slice(0, 15) + "..."); // v2
+dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -71,6 +68,8 @@ app.use(
   })
 );
 app.use(express.json());
+// Para soportar webhooks que envían x-www-form-urlencoded
+app.use(express.urlencoded({ extended: true }));
 // Static uploads with long-term cache (images rarely change, URL includes unique name)
 app.use(
   "/uploads",
@@ -83,9 +82,14 @@ app.use(
 
 app.get("/", (_req, res) => {
   res.json({
-    name: "La Boutique de la Limpieza API",
+    name: "La Boutique de la Limpieza API", //cart/mercadopago/webhook
     version: "1.0.0"
   });
+});
+
+app.post("/cart/mercadopago/webhook", (req, res) => {
+  console.log("Webhook recibido:", req.body);
+  res.status(200).send("OK");
 });
 
 function xmlEscape(value) {
