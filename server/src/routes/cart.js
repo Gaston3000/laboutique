@@ -976,12 +976,10 @@ cartRouter.post("/mercadopago/webhook", async (req, res) => {
     raw_body: req.body || null
   };
 
-  // Reject unsigned webhooks
+  // Las notificaciones de notification_url no envían x-signature (solo las del panel de MP lo hacen).
+  // La seguridad real está en la verificación activa contra la API de MP más abajo.
   if (!signatureOk) {
-    console.warn("🚫 Webhook MercadoPago con firma inválida RECHAZADO");
-    logEntry.error_message = "Invalid signature";
-    await safeLogWebhook(logEntry);
-    return res.status(401).json({ error: "Invalid signature" });
+    console.warn("⚠️ Webhook MercadoPago sin firma válida — procesando igual con verificación activa");
   }
 
   if (type !== "payment" && !action.includes("payment")) {
