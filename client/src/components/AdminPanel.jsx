@@ -285,8 +285,7 @@ function normalizeOrderFulfillmentStatus(value, orderStatus = "") {
   const normalizedOrderStatus = String(orderStatus || "").trim().toLowerCase();
 
   if (
-    normalizedOrderStatus.includes("confirmado")
-    || normalizedOrderStatus.includes("preparado")
+    normalizedOrderStatus.includes("preparado")
     || normalizedOrderStatus.includes("listo_retiro")
     || normalizedOrderStatus.includes("enviado")
     || normalizedOrderStatus.includes("entregado")
@@ -328,7 +327,6 @@ function orderStatusBadgeTone(label) {
 const ORDER_STATUS_ICONS = {
   nuevo: "🆕",
   pago: "💰",
-  confirmado: "✅",
   preparado: "📦",
   listo_retiro: "🏪",
   enviado: "🚚",
@@ -339,7 +337,6 @@ const ORDER_STATUS_ICONS = {
 const ORDER_STATUS_LABELS = {
   nuevo: "Nuevo",
   pago: "Pagado",
-  confirmado: "Confirmado",
   preparado: "En preparación",
   listo_retiro: "Listo para retiro",
   enviado: "Enviado",
@@ -353,12 +350,12 @@ function getOrderStatusFlow(shippingMethod, customerAddress) {
   if (isPickup) {
     return ["nuevo", "pago", "preparado", "listo_retiro", "entregado", "cancelado"];
   }
-  return ["nuevo", "pago", "confirmado", "preparado", "enviado", "entregado", "cancelado"];
+  return ["nuevo", "pago", "preparado", "enviado", "entregado", "cancelado"];
 }
 
 function derivePaymentBadge(orderStatus) {
   const s = String(orderStatus || "").trim().toLowerCase();
-  if (["pago", "confirmado", "preparado", "listo_retiro", "enviado", "entregado"].includes(s)) {
+  if (["pago", "preparado", "listo_retiro", "enviado", "entregado"].includes(s)) {
     return "Pagado";
   }
   if (s === "cancelado") return "Cancelado";
@@ -378,13 +375,12 @@ function deriveFulfillmentBadge(orderStatus, shippingMethod, customerAddress) {
   } else {
     if (s === "enviado") return "Enviado";
     if (s === "preparado") return "En preparación";
-    if (s === "confirmado") return "Confirmado";
   }
   return "No procesado";
 }
 
 function derivedBadgeTone(label) {
-  if (["Pagado", "Entregado", "Confirmado", "Listo para retiro", "Enviado"].includes(label)) return "is-positive";
+  if (["Pagado", "Entregado", "Listo para retiro", "Enviado"].includes(label)) return "is-positive";
   if (["En preparación"].includes(label)) return "is-warning";
   if (["Cancelado"].includes(label)) return "is-cancelled";
   return "is-negative";
