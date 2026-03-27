@@ -1133,6 +1133,19 @@ export default function AccountPanel({
                       ))}
                     </ul>
 
+                    {order.trackingNumber && (
+                      <div className="account-order-tracking">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" width="14" height="14">
+                          <path d="M3 8h10l2 4H3V8z"/><path d="M5 16a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm8 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+                          <path d="M1 4h7"/>
+                        </svg>
+                        <span>Tracking:</span>
+                        <strong>{order.trackingNumber}</strong>
+                        {order.fulfillmentService && (
+                          <em>({order.fulfillmentService})</em>
+                        )}
+                      </div>
+                    )}
                     <div className="account-order-bottom">
                       <span className="account-order-total">
                         Total: <strong>${Number(order.total).toLocaleString("es-AR")} ARS</strong>

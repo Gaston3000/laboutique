@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { query } from "../db.js";
 import { handleOrderStatusChange } from "../services/notificationService.js";
+import { refundPayment } from "../services/mercadopago.js";
 
 const ordersRouter = Router();
 const allowedStatuses = [
@@ -13,6 +14,28 @@ const allowedStatuses = [
   "entregado",
   "cancelado"
 ];
+
+// Transiciones válidas del state machine de pedidos
+// nuevo → preparado está permitido para pedidos con pago contra entrega/retiro (sin MP)
+const VALID_TRANSITIONS = {
+  nuevo:        ["pago", "preparado", "cancelado"],
+  pago:         ["preparado", "cancelado"],
+  preparado:    ["listo_retiro", "enviado", "cancelado"],
+  listo_retiro: ["entregado", "cancelado"],
+  enviado:      ["entregado", "cancelado"],
+  entregado:    [],
+  cancelado:    [],
+};
+
+const ORDER_STATUS_LABELS = {
+  nuevo: "Nuevo",
+  pago: "Pagado",
+  preparado: "En preparación",
+  listo_retiro: "Listo para retirar",
+  enviado: "Enviado",
+  entregado: "Entregado",
+  cancelado: "Cancelado",
+};
 
 ordersRouter.get("/my-orders", requireAuth, async (req, res) => {
   try {
@@ -87,7 +110,7 @@ ordersRouter.get("/", requireAuth, requireAdmin, async (_req, res) => {
             payment_status, payment_method, fulfillment_status, tracking_number,
             fulfillment_service, shipping_label, currency,
             payment_card_amount_ars, shipping_cost_ars, tax_total_ars, net_amount_ars,
-            discount_ars, promo_code, source, raw_payload, o.created_at,
+            discount_ars, surcharge_ars, promo_code, source, raw_payload, o.created_at, internal_notes,
             oi.invoice_number, oi.created_at AS invoice_created_at
        FROM orders o
        LEFT JOIN order_invoices oi ON oi.order_id = o.id
@@ -169,6 +192,7 @@ ordersRouter.get("/", requireAuth, requireAdmin, async (_req, res) => {
       source: row.source,
       rawPayload: row.raw_payload,
       createdAt: row.created_at,
+      internalNotes: row.internal_notes || null,
       invoiceNumber: row.invoice_number ? Number(row.invoice_number) : null,
       invoiceCreatedAt: row.invoice_created_at,
       lines: itemsByOrderId[row.id] || []
@@ -246,6 +270,23 @@ ordersRouter.patch("/:id/status", requireAuth, requireAdmin, async (req, res) =>
     : undefined;
 
   try {
+    // Validar transición según state machine
+    const currentResult = await query("SELECT status FROM orders WHERE id = $1", [orderId]);
+    if (!currentResult.rows[0]) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    const currentStatus = currentResult.rows[0].status;
+    const validNext = VALID_TRANSITIONS[currentStatus] || [];
+
+    if (!validNext.includes(normalizedStatus)) {
+      const fromLabel = ORDER_STATUS_LABELS[currentStatus] || currentStatus;
+      const toLabel = ORDER_STATUS_LABELS[normalizedStatus] || normalizedStatus;
+      return res.status(400).json({
+        error: `No se puede cambiar de "${fromLabel}" a "${toLabel}". Transición no permitida.`
+      });
+    }
+
     const { order } = await handleOrderStatusChange(orderId, normalizedStatus, {
       trackingNumber: trackingNumber || undefined
     });
@@ -266,6 +307,359 @@ ordersRouter.patch("/:id/status", requireAuth, requireAdmin, async (req, res) =>
   } catch (err) {
     console.error(`Error actualizando pedido #${orderId}:`, err.message);
     return res.status(500).json({ error: "No se pudo actualizar el pedido" });
+  }
+});
+
+// Cancelar pedido (con o sin reembolso en MP)
+ordersRouter.post("/:id/cancel", requireAuth, requireAdmin, async (req, res) => {
+  const orderId = Number(req.params.id);
+  const doRefund = req.body?.refund === true;
+
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: "ID de pedido inválido" });
+  }
+
+  try {
+    const orderResult = await query(
+      "SELECT status, payment_method, raw_payload FROM orders WHERE id = $1",
+      [orderId]
+    );
+    const order = orderResult.rows[0];
+
+    if (!order) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+    if (order.status === "cancelado") {
+      return res.status(400).json({ error: "El pedido ya está cancelado" });
+    }
+    if (order.status === "entregado") {
+      return res.status(400).json({ error: "No se puede cancelar un pedido ya entregado" });
+    }
+
+    let refundResult = null;
+
+    if (doRefund) {
+      const paymentId = order.raw_payload?.id;
+      if (!paymentId) {
+        return res.status(400).json({ error: "No hay pago registrado para reembolsar en este pedido" });
+      }
+
+      try {
+        refundResult = await refundPayment(paymentId);
+      } catch (err) {
+        return res.status(502).json({ error: `Error al reembolsar en Mercado Pago: ${err.message}` });
+      }
+
+      await query("UPDATE orders SET payment_status = 'refunded' WHERE id = $1", [orderId]);
+    }
+
+    await handleOrderStatusChange(orderId, "cancelado", { isManualCancel: true });
+
+    return res.json({
+      success: true,
+      refunded: doRefund,
+      refundId: refundResult?.refundId || null
+    });
+  } catch (err) {
+    console.error(`Error cancelando pedido #${orderId}:`, err.message);
+    return res.status(500).json({ error: "No se pudo cancelar el pedido" });
+  }
+});
+
+// Reembolsar sin cancelar
+ordersRouter.post("/:id/refund", requireAuth, requireAdmin, async (req, res) => {
+  const orderId = Number(req.params.id);
+
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: "ID de pedido inválido" });
+  }
+
+  try {
+    const orderResult = await query(
+      "SELECT status, raw_payload FROM orders WHERE id = $1",
+      [orderId]
+    );
+    const order = orderResult.rows[0];
+
+    if (!order) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    const paymentId = order.raw_payload?.id;
+    if (!paymentId) {
+      return res.status(400).json({ error: "No hay pago registrado para reembolsar en este pedido" });
+    }
+
+    const refundResult = await refundPayment(paymentId);
+    await query("UPDATE orders SET payment_status = 'refunded' WHERE id = $1", [orderId]);
+
+    return res.json({
+      success: true,
+      refundId: refundResult.refundId
+    });
+  } catch (err) {
+    console.error(`Error reembolsando pedido #${orderId}:`, err.message);
+    return res.status(502).json({ error: err.message || "No se pudo procesar el reembolso" });
+  }
+});
+
+// Exportar pedidos a CSV
+ordersRouter.get("/export/csv", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const ordersResult = await query(
+      `SELECT o.id, o.wix_order_number, o.customer_name, o.contact_email,
+              o.customer_phone, o.customer_address, o.total_ars, o.status,
+              o.shipping_method, o.shipping_zone, o.shipping_city,
+              o.payment_method, o.payment_status, o.tracking_number,
+              o.discount_ars, o.shipping_cost_ars, o.surcharge_ars,
+              o.internal_notes, o.created_at
+       FROM orders o
+       ORDER BY o.created_at DESC`
+    );
+
+    const itemsResult = await query(
+      `SELECT order_id, product_name, quantity, unit_price_ars, wix_variant
+       FROM order_items ORDER BY order_id ASC, id ASC`
+    );
+
+    const itemsByOrderId = itemsResult.rows.reduce((acc, row) => {
+      if (!acc[row.order_id]) acc[row.order_id] = [];
+      acc[row.order_id].push(`${row.product_name}${row.wix_variant ? ` (${row.wix_variant})` : ""} x${row.quantity} @ $${row.unit_price_ars}`);
+      return acc;
+    }, {});
+
+    const escape = (v) => {
+      const s = String(v == null ? "" : v).replace(/"/g, '""');
+      return /[,"\n\r]/.test(s) ? `"${s}"` : s;
+    };
+
+    const headers = [
+      "ID", "Nro. pedido", "Fecha", "Cliente", "Email", "Teléfono", "Dirección",
+      "Estado", "Pago", "Estado pago", "Envío método", "Zona", "Ciudad",
+      "Subtotal", "Descuento", "Costo envío", "Cargo adicional", "Total",
+      "Tracking", "Notas internas", "Ítems"
+    ];
+
+    const rows = ordersResult.rows.map((o) => {
+      const itemsStr = (itemsByOrderId[o.id] || []).join(" | ");
+      const subtotal = Number(o.total_ars) - Number(o.shipping_cost_ars || 0)
+        + Number(o.discount_ars || 0) - Number(o.surcharge_ars || 0);
+
+      return [
+        o.id,
+        o.wix_order_number || "",
+        new Date(o.created_at).toLocaleDateString("es-AR"),
+        o.customer_name || "",
+        o.contact_email || "",
+        o.customer_phone || "",
+        o.customer_address || "",
+        o.status || "",
+        o.payment_method || "",
+        o.payment_status || "",
+        o.shipping_method || "",
+        o.shipping_zone || "",
+        o.shipping_city || "",
+        subtotal.toFixed(2),
+        Number(o.discount_ars || 0).toFixed(2),
+        Number(o.shipping_cost_ars || 0).toFixed(2),
+        Number(o.surcharge_ars || 0).toFixed(2),
+        Number(o.total_ars).toFixed(2),
+        o.tracking_number || "",
+        o.internal_notes || "",
+        itemsStr
+      ].map(escape).join(",");
+    });
+
+    const csv = "\uFEFF" + [headers.map(escape).join(","), ...rows].join("\r\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="pedidos-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return res.send(csv);
+  } catch (err) {
+    console.error("Error exportando CSV:", err.message);
+    return res.status(500).json({ error: "No se pudo exportar" });
+  }
+});
+
+// Guardar/actualizar notas internas de un pedido
+ordersRouter.patch("/:id/notes", requireAuth, requireAdmin, async (req, res) => {
+  const orderId = Number(req.params.id);
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: "ID de pedido inválido" });
+  }
+
+  const notes = typeof req.body?.notes === "string" ? req.body.notes : "";
+
+  try {
+    const result = await query(
+      "UPDATE orders SET internal_notes = $1 WHERE id = $2 RETURNING id",
+      [notes.trim() || null, orderId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: "Pedido no encontrado" });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error(`Error guardando notas para pedido #${orderId}:`, err.message);
+    return res.status(500).json({ error: "No se pudieron guardar las notas" });
+  }
+});
+
+// Editar pedido (ítems, contacto, entrega, ajuste de precio)
+ordersRouter.patch("/:id/edit", requireAuth, requireAdmin, async (req, res) => {
+  const orderId = Number(req.params.id);
+
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: "ID de pedido inválido" });
+  }
+
+  const {
+    customerName,
+    contactEmail,
+    customerPhone,
+    customerAddress,
+    shippingMethod,
+    shippingZone,
+    shippingCost,
+    discount,
+    surcharge,
+    items
+  } = req.body || {};
+
+  // Validar ítems
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "El pedido debe tener al menos un ítem" });
+  }
+
+  for (const item of items) {
+    if (!item.productName || String(item.productName).trim() === "") {
+      return res.status(400).json({ error: "Cada ítem debe tener nombre de producto" });
+    }
+    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) < 1) {
+      return res.status(400).json({ error: "La cantidad de cada ítem debe ser >= 1" });
+    }
+    if (!Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0) {
+      return res.status(400).json({ error: "El precio unitario de cada ítem debe ser >= 0" });
+    }
+  }
+
+  const parsedShippingCost = Math.max(0, Number(shippingCost) || 0);
+  const parsedDiscount     = Math.max(0, Number(discount) || 0);
+  const parsedSurcharge    = Math.max(0, Number(surcharge) || 0);
+
+  const subtotal = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0);
+  const newTotal = subtotal - parsedDiscount + parsedShippingCost + parsedSurcharge;
+
+  if (newTotal < 0) {
+    return res.status(400).json({ error: "El total del pedido no puede ser negativo" });
+  }
+
+  try {
+    const currentResult = await query("SELECT status FROM orders WHERE id = $1", [orderId]);
+    if (!currentResult.rows[0]) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    const currentStatus = currentResult.rows[0].status;
+    if (currentStatus === "cancelado" || currentStatus === "entregado") {
+      return res.status(400).json({ error: `No se puede editar un pedido en estado "${currentStatus}"` });
+    }
+
+    // Actualizar campos del pedido
+    await query(
+      `UPDATE orders SET
+        customer_name       = COALESCE($2, customer_name),
+        contact_email       = COALESCE($3, contact_email),
+        customer_phone      = COALESCE($4, customer_phone),
+        customer_address    = COALESCE($5, customer_address),
+        shipping_method     = COALESCE($6, shipping_method),
+        shipping_zone       = COALESCE($7, shipping_zone),
+        shipping_cost_ars   = $8,
+        discount_ars        = $9,
+        surcharge_ars       = $10,
+        total_ars           = $11,
+        order_items_count   = $12
+       WHERE id = $1`,
+      [
+        orderId,
+        customerName   ? String(customerName).trim()   : null,
+        contactEmail   ? String(contactEmail).trim()   : null,
+        customerPhone  ? String(customerPhone).trim()  : null,
+        customerAddress? String(customerAddress).trim(): null,
+        shippingMethod ? String(shippingMethod).trim() : null,
+        shippingZone   ? String(shippingZone).trim()   : null,
+        parsedShippingCost,
+        parsedDiscount,
+        parsedSurcharge,
+        newTotal,
+        items.length
+      ]
+    );
+
+    // Reemplazar ítems
+    await query("DELETE FROM order_items WHERE order_id = $1", [orderId]);
+
+    for (const item of items) {
+      await query(
+        `INSERT INTO order_items
+          (order_id, product_id, variant_id, product_name, quantity, unit_price_ars, wix_variant, wix_sku)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          orderId,
+          item.productId   ? Number(item.productId)   : null,
+          item.variantId   ? Number(item.variantId)   : null,
+          String(item.productName).trim(),
+          Number(item.quantity),
+          Number(item.unitPrice),
+          item.variant ? String(item.variant).trim() : null,
+          item.sku     ? String(item.sku).trim()     : null
+        ]
+      );
+    }
+
+    // Actualizar factura: si existía, borrar y emitir una nueva
+    const invoiceCheck = await query("SELECT id FROM order_invoices WHERE order_id = $1", [orderId]);
+    let newInvoiceNumber = null;
+    if (invoiceCheck.rows.length > 0) {
+      await query("DELETE FROM order_invoices WHERE order_id = $1", [orderId]);
+      const invoiceResult = await query(
+        `INSERT INTO order_invoices (order_id, invoice_number)
+         VALUES ($1, nextval('order_invoice_number_seq'))
+         RETURNING invoice_number`,
+        [orderId]
+      );
+      newInvoiceNumber = Number(invoiceResult.rows[0].invoice_number);
+    }
+
+    return res.json({
+      success: true,
+      total: newTotal,
+      invoiceNumber: newInvoiceNumber
+    });
+  } catch (err) {
+    console.error(`Error editando pedido #${orderId}:`, err.message);
+    return res.status(500).json({ error: "No se pudo guardar el pedido" });
+  }
+});
+
+// Archivar pedido
+ordersRouter.patch("/:id/archive", requireAuth, requireAdmin, async (req, res) => {
+  const orderId = Number(req.params.id);
+
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: "ID de pedido inválido" });
+  }
+
+  try {
+    const result = await query(
+      "UPDATE orders SET archived_at = NOW() WHERE id = $1 RETURNING id",
+      [orderId]
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error(`Error archivando pedido #${orderId}:`, err.message);
+    return res.status(500).json({ error: "No se pudo archivar el pedido" });
   }
 });
 

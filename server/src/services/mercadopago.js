@@ -206,6 +206,43 @@ export async function getPayment(paymentId) {
 }
 
 /**
+ * Emite un reembolso total (o parcial) sobre un pago ya aprobado.
+ * @param {string|number} paymentId  – ID del pago en Mercado Pago
+ * @param {number|null}   amount     – Monto a reembolsar; null = reembolso total
+ */
+export async function refundPayment(paymentId, amount = null) {
+  ensureConfigured();
+
+  const accessToken = String(process.env.MERCADOPAGO_ACCESS_TOKEN || "").trim();
+  const body = amount !== null ? { amount: Number(amount) } : {};
+
+  const response = await fetch(
+    `https://api.mercadopago.com/v1/payments/${paymentId}/refunds`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const detail = data?.cause?.[0]?.description || data?.message || "Error desconocido";
+    throw new Error(`Mercado Pago: ${detail}`);
+  }
+
+  return {
+    refundId: data.id,
+    status: data.status,
+    amount: data.amount
+  };
+}
+
+/**
  * Busca pagos en Mercado Pago por external_reference (nuestro orderId).
  */
 export async function searchPayments(orderId) {

@@ -51,9 +51,6 @@ export default function PurchaseSuccessModal({ isOpen, orderId, total, onClose }
 
         <h2 className="psm-title">¡Gracias por tu compra!</h2>
 
-        {orderId && (
-          <p className="psm-order-id">Pedido <strong>#{orderId}</strong></p>
-        )}
 
         {total != null && (
           <div className="psm-total">

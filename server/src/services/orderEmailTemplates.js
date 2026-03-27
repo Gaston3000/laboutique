@@ -343,3 +343,36 @@ export function adminNewOrder(d) {
     html: wrapLayout(body),
   };
 }
+
+/** ORDER_CANCELLED — "Tu pedido fue cancelado" (to user, manual cancellation by admin) */
+export function orderCancelled(d) {
+  const body = `
+    ${headerBlock("❌", "Tu pedido fue cancelado", `Pedido #${d.orderId}`, "linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)")}
+    <tr>
+      <td style="padding:30px;">
+        <p style="margin:0 0 20px 0;font-size:16px;color:#374151;">
+          Hola <strong>${escapeHtml(d.customerName)}</strong>,
+        </p>
+        <p style="margin:0 0 20px 0;font-size:16px;color:#374151;">
+          Te informamos que tu pedido <strong>#${d.orderId}</strong> fue cancelado.
+        </p>
+        ${d.paymentMethod === "mercadopago"
+          ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin:0 0 20px 0;">
+               <p style="margin:0;font-size:15px;color:#991b1b;">
+                 💳 Si realizaste un pago con Mercado Pago, el reembolso se procesará en los próximos <strong>1 a 15 días hábiles</strong> según tu banco o medio de pago.
+               </p>
+             </div>`
+          : ""}
+        ${itemsTable(d.items)}
+        ${orderSummaryBlock(d)}
+        <p style="margin:20px 0 0 0;font-size:14px;color:#6b7280;">
+          Si tenés alguna consulta, no dudes en contactarnos respondiendo este email.
+        </p>
+      </td>
+    </tr>
+    ${footerBlock()}`;
+  return {
+    subject: `Tu pedido #${d.orderId} fue cancelado`,
+    html: wrapLayout(body),
+  };
+}

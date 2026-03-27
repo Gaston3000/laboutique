@@ -1,5 +1,18 @@
 const LOCAL_API_URL = "http://localhost:4000/api";
 
+// Intercepta fetch global para detectar 401 en llamadas autenticadas y
+// disparar el evento "auth:expired" que App.jsx escucha para hacer logout automático.
+if (typeof window !== "undefined") {
+  const _nativeFetch = window.fetch.bind(window);
+  window.fetch = async function interceptedFetch(url, options = {}) {
+    const response = await _nativeFetch(url, options);
+    if (response.status === 401 && options?.headers?.Authorization) {
+      window.dispatchEvent(new CustomEvent("auth:expired"));
+    }
+    return response;
+  };
+}
+
 function resolveApiUrl() {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
@@ -443,6 +456,67 @@ export async function syncOrderPayment(token, orderId) {
     throw new Error(data.error || "No se pudo sincronizar el pago");
   }
 
+  return data;
+}
+
+export async function cancelOrder(token, orderId, refund = false) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/cancel`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ refund })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "No se pudo cancelar el pedido");
+  return data;
+}
+
+export async function refundOrder(token, orderId) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/refund`, {
+    method: "POST",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "No se pudo procesar el reembolso");
+  return data;
+}
+
+export async function updateOrderNotes(token, orderId, notes) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/notes`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ notes })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "No se pudieron guardar las notas");
+  return data;
+}
+
+export async function exportOrdersCsv(token) {
+  const response = await fetch(`${API_URL}/orders/export/csv`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error("No se pudo exportar el CSV");
+  return response.blob();
+}
+
+export async function editOrder(token, orderId, payload) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/edit`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "No se pudo guardar el pedido");
+  return data;
+}
+
+export async function archiveOrder(token, orderId) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/archive`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "No se pudo archivar el pedido");
   return data;
 }
 

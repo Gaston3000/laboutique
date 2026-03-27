@@ -12,7 +12,7 @@ import { query } from "../db.js";
 import { sendOrderEmail, sendAdminOrderEmail } from "./emailService.js";
 import * as tpl from "./orderEmailTemplates.js";
 
-// Status → event type mapping
+// Status → event type mapping (cancelado manual usa ORDER_CANCELLED via opts.isManualCancel)
 const STATUS_EVENT_MAP = {
   nuevo: "ORDER_CREATED",
   pago: "PAYMENT_APPROVED",
@@ -35,6 +35,7 @@ const ADMIN_MESSAGES = {
   ORDER_SHIPPED: (o) => `Pedido #${o.id} enviado — ${o.customer_name}`,
   ORDER_DELIVERED: (o) => `Pedido #${o.id} entregado — ${o.customer_name}`,
   PAYMENT_FAILED: (o) => `Pago rechazado para pedido #${o.id} — ${o.customer_name}`,
+  ORDER_CANCELLED: (o) => `Pedido #${o.id} cancelado manualmente — ${o.customer_name}`,
 };
 
 // Status → user email template builder
@@ -48,6 +49,7 @@ const USER_EMAIL_MAP = {
   ORDER_SHIPPED: tpl.orderShipped,
   ORDER_DELIVERED: tpl.orderDelivered,
   PAYMENT_FAILED: tpl.paymentFailed,
+  ORDER_CANCELLED: tpl.orderCancelled,
 };
 
 // Events that also send an email to admins
@@ -152,11 +154,47 @@ async function createAdminNotification(orderId, eventType, message) {
  * @param {boolean} [opts.skipDbUpdate]   – true when the DB was already updated (e.g. webhook)
  * @param {boolean} [opts.skipEmail]      – true to suppress email sending
  * @param {boolean} [opts.isCashOrder]    – true for cash-on-delivery orders
+ * @param {boolean} [opts.isManualCancel] – true when admin cancels manually (vs webhook auto-cancel)
  * @param {string}  [opts.trackingNumber] – include tracking number for shipped status
  * @returns {Promise<{order: object, event: string}>}
  */
+/**
+ * Restore stock for all items in an order (called on cancellation).
+ */
+async function restoreOrderStock(orderId) {
+  try {
+    const itemsResult = await query(
+      `SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = $1`,
+      [orderId]
+    );
+
+    for (const item of itemsResult.rows) {
+      if (item.variant_id) {
+        await query(
+          `UPDATE product_variants SET stock = stock + $1 WHERE id = $2`,
+          [item.quantity, item.variant_id]
+        );
+      } else if (item.product_id) {
+        await query(
+          `UPDATE products SET stock = stock + $1 WHERE id = $2`,
+          [item.quantity, item.product_id]
+        );
+      }
+    }
+
+    console.log(`♻️ Stock restaurado para pedido #${orderId} (${itemsResult.rows.length} ítems)`);
+  } catch (err) {
+    console.error(`⚠️ Error restaurando stock para pedido #${orderId}:`, err.message);
+  }
+}
+
 export async function handleOrderStatusChange(orderId, newStatus, opts = {}) {
-  const { skipDbUpdate = false, skipEmail = false, isCashOrder = false, trackingNumber } = opts;
+  const { skipDbUpdate = false, skipEmail = false, isCashOrder = false, isManualCancel = false, trackingNumber } = opts;
+
+  // 0. Si se cancela el pedido, restaurar stock antes de todo
+  if (newStatus === "cancelado") {
+    await restoreOrderStock(orderId);
+  }
 
   // 1. Update DB if not already done
   if (!skipDbUpdate) {
@@ -181,11 +219,16 @@ export async function handleOrderStatusChange(orderId, newStatus, opts = {}) {
   // 2. Determine event type
   //    For cash-on-delivery orders created with status "nuevo" → CASH_ORDER_RECEIVED
   //    For MP orders created with status "nuevo" → ORDER_CREATED (admin only, no customer email)
+  //    For manual cancellations by admin → ORDER_CANCELLED (vs PAYMENT_FAILED for webhook auto-cancel)
   let eventType = STATUS_EVENT_MAP[newStatus];
   if (!eventType) return { order: null, event: null };
 
   if (eventType === "ORDER_CREATED" && isCashOrder) {
     eventType = "CASH_ORDER_RECEIVED";
+  }
+
+  if (eventType === "PAYMENT_FAILED" && isManualCancel) {
+    eventType = "ORDER_CANCELLED";
   }
 
   // 3. Load full order details

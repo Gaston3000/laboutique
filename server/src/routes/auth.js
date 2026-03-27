@@ -68,7 +68,7 @@ function signToken(user) {
       welcomeDiscountUsed: user.welcomeDiscountUsed
     },
     process.env.JWT_SECRET || "dev-secret",
-    { expiresIn: "12h" }
+    { expiresIn: "24h" }
   );
 }
 

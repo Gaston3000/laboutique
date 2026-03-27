@@ -63,7 +63,13 @@ import {
   markAllNotificationsRead,
   syncDeliveryZone,
   verifyOrderPayment,
-  syncOrderPayment
+  syncOrderPayment,
+  cancelOrder,
+  editOrder,
+  refundOrder,
+  archiveOrder,
+  updateOrderNotes,
+  exportOrdersCsv
 } from "./api";
 
 // Lazy-loaded heavy components (code splitting)
@@ -600,6 +606,47 @@ function matchesProductSearch(product, query) {
   const combinedText = searchableTexts.join(" ");
 
   return queryWords.every((word) => isFuzzySearchMatch(word, combinedText));
+}
+
+/**
+ * Scoring de relevancia para resultados de búsqueda.
+ * Menor score = más relevante (se ordena ascendente).
+ *
+ *  0 → nombre exacto
+ *  1 → nombre empieza con la query
+ *  2 → nombre contiene la query como palabra completa
+ *  3 → nombre contiene la query (substring)
+ *  4 → coincidencia ortográfica exacta en nombre
+ *  5 → nombre ortográfico contiene query
+ *  6 → marca coincide con query
+ *  7 → categoría coincide con query
+ *  8 → descripción corta coincide
+ *  9 → resto (fuzzy / descripción larga / SEO)
+ */
+function getProductSearchRelevanceScore(product, normalizedQuery) {
+  if (!normalizedQuery) return 9;
+
+  const name      = normalizeSearchText(product?.name || "");
+  const brand     = normalizeSearchText(product?.brand || "");
+  const cats      = getProductCategoriesForSearch(product).map((c) => normalizeSearchText(c)).join(" ");
+  const shortDesc = normalizeSearchText(product?.shortDescription || "");
+  const qOrtho    = normalizeOrthography(normalizedQuery);
+  const nameOrtho = normalizeOrthography(name);
+
+  if (name === normalizedQuery) return 0;
+  if (name.startsWith(normalizedQuery)) return 1;
+
+  // Palabra completa en el nombre (precedida/seguida por espacio o inicio/fin)
+  const escaped = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(name)) return 2;
+
+  if (name.includes(normalizedQuery)) return 3;
+  if (nameOrtho === qOrtho || nameOrtho.startsWith(qOrtho)) return 4;
+  if (nameOrtho.includes(qOrtho)) return 5;
+  if (brand.includes(normalizedQuery) || normalizeOrthography(brand).includes(qOrtho)) return 6;
+  if (cats.includes(normalizedQuery) || normalizeOrthography(cats).includes(qOrtho)) return 7;
+  if (shortDesc.includes(normalizedQuery) || normalizeOrthography(shortDesc).includes(qOrtho)) return 8;
+  return 9;
 }
 
 function getSearchSuggestionScore(query, option) {
@@ -1461,6 +1508,23 @@ function App() {
     localStorage.setItem("auth", JSON.stringify(auth));
   }, [auth]);
 
+  // Logout automático cuando el token JWT vence (detectado por interceptor fetch en api.js)
+  useEffect(() => {
+    function handleSessionExpired() {
+      if (!auth?.token) return; // ya estaba deslogueado, ignorar
+      setAuth({ token: null, user: null });
+      setActiveSection("home");
+      setIsLoginOpen(true);
+      setLoginModalView("login");
+      setAuthError("Tu sesión expiró. Por favor volvé a iniciar sesión.");
+      setAdminMessage("");
+    }
+
+    window.addEventListener("auth:expired", handleSessionExpired);
+    return () => window.removeEventListener("auth:expired", handleSessionExpired);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth?.token]);
+
   useEffect(() => {
     if (!auth.user) {
       return;
@@ -2182,8 +2246,10 @@ function App() {
 
   const sortedFilteredProducts = useMemo(() => {
     const productsToSort = [...filteredProducts];
+    const normalizedSearch = searchTerm ? normalizeSearchText(searchTerm) : "";
 
-    if (resultsSortKey === "random") {
+    // Sin búsqueda activa y sort aleatorio → shuffle puro
+    if (!normalizedSearch && resultsSortKey === "random") {
       for (let index = productsToSort.length - 1; index > 0; index -= 1) {
         const randomIndex = Math.floor(Math.random() * (index + 1));
         [productsToSort[index], productsToSort[randomIndex]] = [productsToSort[randomIndex], productsToSort[index]];
@@ -2192,6 +2258,17 @@ function App() {
     }
 
     productsToSort.sort((left, right) => {
+      // Cuando hay búsqueda activa, ordenar primero por relevancia
+      if (normalizedSearch) {
+        const scoreLeft  = getProductSearchRelevanceScore(left,  normalizedSearch);
+        const scoreRight = getProductSearchRelevanceScore(right, normalizedSearch);
+        if (scoreLeft !== scoreRight) return scoreLeft - scoreRight;
+        // Empate en relevancia → desempatar por stock (con stock primero)
+        const stockDiff = Number(right?.stock || 0) - Number(left?.stock || 0);
+        if (stockDiff !== 0) return stockDiff;
+      }
+
+      // Orden secundario (o primario cuando no hay búsqueda)
       if (resultsSortKey === "price-desc") {
         return Number(right?.price || 0) - Number(left?.price || 0);
       }
@@ -2220,7 +2297,7 @@ function App() {
     });
 
     return productsToSort;
-  }, [filteredProducts, resultsSortKey]);
+  }, [filteredProducts, resultsSortKey, searchTerm]);
 
   const activeResultsSortOption = useMemo(
     () => RESULTS_SORT_OPTIONS.find((option) => option.key === resultsSortKey) || RESULTS_SORT_OPTIONS[0],
@@ -2437,15 +2514,19 @@ function App() {
     if (activeSection !== "product" || !selectedProduct) {
       document.title = defaultTitle;
       const defaultImage = `${window.location.origin}/fotos/foto-inicio.webp`;
+      const siteUrl = `${window.location.origin}${window.location.pathname}`;
       upsertMeta("name", "description", defaultDescription);
       upsertMeta("name", "robots", "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1");
       upsertMeta("property", "og:type", "website");
       upsertMeta("property", "og:title", defaultTitle);
       upsertMeta("property", "og:description", defaultDescription);
-      upsertMeta("property", "og:url", `${window.location.origin}${window.location.pathname}`);
+      upsertMeta("property", "og:url", siteUrl);
       upsertMeta("property", "og:site_name", siteName);
       upsertMeta("property", "og:locale", "es_AR");
       upsertMeta("property", "og:image", defaultImage);
+      upsertMeta("property", "og:image:width", "600");
+      upsertMeta("property", "og:image:height", "600");
+      upsertMeta("property", "og:image:alt", "La Boutique de la Limpieza");
       upsertMeta("name", "twitter:card", "summary_large_image");
       upsertMeta("name", "twitter:title", defaultTitle);
       upsertMeta("name", "twitter:description", defaultDescription);
@@ -2453,7 +2534,7 @@ function App() {
       removeMeta("name", "keywords");
       removeMeta("property", "product:price:amount");
       removeMeta("property", "product:price:currency");
-      setCanonical(`${window.location.origin}${window.location.pathname}`);
+      setCanonical(siteUrl);
 
       const siteJsonLdScript = document.createElement("script");
       siteJsonLdScript.id = "site-seo-jsonld";
@@ -2496,17 +2577,25 @@ function App() {
     const twitterTitle = String(seo.twitterTitle || "").trim() || title;
     const twitterDescription = String(seo.twitterDescription || "").trim() || description;
 
+    // Ensure OG/Twitter image is always an absolute URL (required by Facebook, WhatsApp, etc.)
+    const toAbsoluteUrl = (url) => {
+      if (!url) return `${window.location.origin}/fotos/foto-inicio.webp`;
+      if (url.startsWith("http://") || url.startsWith("https://")) return url;
+      return `${window.location.origin}${url.startsWith("/") ? "" : "/"}${url}`;
+    };
+    const ogImage = toAbsoluteUrl(selectedProductImages[0] || "");
+
     document.title = title;
     upsertMeta("name", "description", description);
     upsertMeta("name", "keywords", keywords);
     upsertMeta("property", "og:type", "product");
     upsertMeta("property", "og:title", ogTitle);
     upsertMeta("property", "og:description", ogDescription);
-    upsertMeta("property", "og:image", selectedProductImages[0] || "/fotos/foto-inicio.webp");
+    upsertMeta("property", "og:image", ogImage);
     upsertMeta("name", "twitter:card", "summary_large_image");
     upsertMeta("name", "twitter:title", twitterTitle);
     upsertMeta("name", "twitter:description", twitterDescription);
-    upsertMeta("name", "twitter:image", selectedProductImages[0] || "/fotos/foto-inicio.webp");
+    upsertMeta("name", "twitter:image", ogImage);
 
     const canonicalFromSeo = String(seo.canonicalUrl || "").trim();
     const slug = String(getProductSeoSlug(selectedProduct) || "").trim();
@@ -2522,6 +2611,13 @@ function App() {
     upsertMeta("property", "product:price:amount", String(Number(selectedProduct.price || 0)));
     upsertMeta("property", "product:price:currency", "ARS");
 
+    const absoluteProductImages = selectedProductImages
+      .filter(Boolean)
+      .map((img) => {
+        if (img.startsWith("http://") || img.startsWith("https://")) return img;
+        return `${window.location.origin}${img.startsWith("/") ? "" : "/"}${img}`;
+      });
+
     const jsonLdScript = document.createElement("script");
     jsonLdScript.id = "product-seo-jsonld";
     jsonLdScript.type = "application/ld+json";
@@ -2531,10 +2627,17 @@ function App() {
       name: baseName,
       url: canonicalHref,
       description,
-      image: selectedProductImages.filter(Boolean),
+      image: absoluteProductImages,
       sku: String(selectedProduct.id || ""),
-      category: Array.isArray(selectedProduct.categories) ? selectedProduct.categories[0] : undefined,
-      brand: selectedProduct.brand ? { "@type": "Brand", name: selectedProduct.brand } : undefined,
+      ...(Array.isArray(selectedProduct.categories) && selectedProduct.categories[0]
+        ? { category: selectedProduct.categories[0] }
+        : {}),
+      ...(selectedProduct.brand
+        ? {
+            brand: { "@type": "Brand", name: selectedProduct.brand },
+            manufacturer: { "@type": "Organization", name: selectedProduct.brand }
+          }
+        : {}),
       offers: {
         "@type": "Offer",
         url: canonicalHref,
@@ -2546,7 +2649,8 @@ function App() {
         itemCondition: "https://schema.org/NewCondition",
         seller: {
           "@type": "Organization",
-          name: siteName
+          name: siteName,
+          url: window.location.origin
         }
       }
     });
@@ -4237,6 +4341,63 @@ function App() {
     }
   }
 
+  async function handleCancelOrder(orderId, refund = false) {
+    try {
+      await cancelOrder(auth.token, orderId, refund);
+      await refreshOrders(auth.token);
+      refreshServerNotifications(auth.token);
+      setAdminMessage(refund ? "Pedido cancelado y reembolso iniciado en Mercado Pago." : "Pedido cancelado.");
+    } catch (error) {
+      setAdminMessage(error.message);
+      throw error;
+    }
+  }
+
+  async function handleRefundOrder(orderId) {
+    try {
+      await refundOrder(auth.token, orderId);
+      await refreshOrders(auth.token);
+      setAdminMessage("Reembolso iniciado correctamente en Mercado Pago.");
+    } catch (error) {
+      setAdminMessage(error.message);
+      throw error;
+    }
+  }
+
+  async function handleArchiveOrder(orderId) {
+    try {
+      await archiveOrder(auth.token, orderId);
+      setAdminOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setAdminMessage("Pedido archivado.");
+    } catch (error) {
+      setAdminMessage(error.message);
+    }
+  }
+
+  async function handleUpdateOrderNotes(orderId, notes) {
+    try {
+      await updateOrderNotes(auth.token, orderId, notes);
+    } catch (error) {
+      setAdminMessage(error.message);
+      throw error;
+    }
+  }
+
+  async function handleExportOrdersCsv() {
+    return exportOrdersCsv(auth.token);
+  }
+
+  async function handleEditOrder(orderId, payload) {
+    try {
+      await editOrder(auth.token, orderId, payload);
+      await refreshOrders(auth.token);
+      setAdminMessage("Pedido actualizado correctamente.");
+    } catch (error) {
+      setAdminMessage(error.message);
+      throw error;
+    }
+  }
+
   async function handleEnsureOrderInvoice(orderId) {
     try {
       const data = await ensureOrderInvoice(auth.token, orderId);
@@ -5682,6 +5843,12 @@ function App() {
               onOrderStatusChange={handleOrderStatusChange}
               onVerifyPayment={handleVerifyPayment}
               onSyncPayment={handleSyncPayment}
+              onCancelOrder={handleCancelOrder}
+              onRefundOrder={handleRefundOrder}
+              onArchiveOrder={handleArchiveOrder}
+              onEditOrder={handleEditOrder}
+              onUpdateOrderNotes={handleUpdateOrderNotes}
+              onExportOrdersCsv={handleExportOrdersCsv}
               onEnsureOrderInvoice={handleEnsureOrderInvoice}
               onLoadVariants={handleLoadVariants}
               onCreateVariant={handleCreateVariant}

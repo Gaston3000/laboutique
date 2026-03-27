@@ -3,6 +3,19 @@ import { categoryTree } from "./categoryTree";
 import TicketsPanel from "./TicketsPanel";
 import AnalyticsDatePicker from "./AnalyticsDatePicker";
 
+const SHIPPING_METHOD_LABELS = {
+  shipping: "Envío a domicilio",
+  pickup: "Retiro en el local",
+  "retiro en local": "Retiro en el local",
+  "envio a domicilio": "Envío a domicilio",
+  "envío a domicilio": "Envío a domicilio",
+};
+
+function getShippingMethodLabel(raw) {
+  if (!raw) return "";
+  return SHIPPING_METHOD_LABELS[raw.trim().toLowerCase()] || raw;
+}
+
 function flattenCategoryNames(nodes, output = []) {
   for (const node of nodes) {
     if (typeof node === "string") {
@@ -234,7 +247,15 @@ function formatOrderDateTime(value) {
     return String(value);
   }
 
-  return parsed.toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+  return parsed.toLocaleString("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
 }
 
 function formatCustomerDateTime(value) {
@@ -344,17 +365,39 @@ const ORDER_STATUS_LABELS = {
   cancelado: "Cancelado",
 };
 
+// Espejo del state machine del backend para el dropdown (sin "cancelado" — va por Más acciones)
+const VALID_TRANSITIONS = {
+  nuevo:        ["pago", "preparado"],
+  pago:         ["preparado"],
+  preparado:    ["listo_retiro", "enviado"],
+  listo_retiro: ["entregado"],
+  enviado:      ["entregado"],
+  entregado:    [],
+  cancelado:    [],
+};
+
 function getOrderStatusFlow(shippingMethod, customerAddress) {
   const method = String(shippingMethod || "").trim().toLowerCase();
   const isPickup = method === "pickup" || String(customerAddress || "").toLowerCase().includes("retiro en el local");
+  // "cancelado" se maneja solo desde "Más acciones", NO aparece en el dropdown de estado
   if (isPickup) {
-    return ["nuevo", "pago", "preparado", "listo_retiro", "entregado", "cancelado"];
+    return ["nuevo", "pago", "preparado", "listo_retiro", "entregado"];
   }
-  return ["nuevo", "pago", "preparado", "enviado", "entregado", "cancelado"];
+  return ["nuevo", "pago", "preparado", "enviado", "entregado"];
 }
 
-function derivePaymentBadge(orderStatus) {
+function derivePaymentBadge(orderStatus, paymentMethod) {
   const s = String(orderStatus || "").trim().toLowerCase();
+  const isCash = !paymentMethod || String(paymentMethod || "").trim().toLowerCase() === "cash";
+
+  // Pedidos cash/contra entrega: el pago ocurre al retirar, no antes
+  // Solo se marcan como "Pagado" si el status es explícitamente "pago" o posterior Y llegaron a listo_retiro/entregado
+  if (isCash) {
+    if (s === "entregado") return "Pagado";
+    if (s === "cancelado") return "Cancelado";
+    return "Pago al retirar";
+  }
+
   if (["pago", "preparado", "listo_retiro", "enviado", "entregado"].includes(s)) {
     return "Pagado";
   }
@@ -1457,6 +1500,12 @@ export default function AdminPanel({
   onOrderStatusChange,
   onVerifyPayment,
   onSyncPayment,
+  onCancelOrder,
+  onRefundOrder,
+  onArchiveOrder,
+  onEditOrder,
+  onUpdateOrderNotes,
+  onExportOrdersCsv,
   onEnsureOrderInvoice,
   onLoadVariants,
   onCreateVariant,
@@ -1576,6 +1625,14 @@ export default function AdminPanel({
   const [fulfillmentConfirmMarkPaid, setFulfillmentConfirmMarkPaid] = useState(false);
   const [fulfillmentConfirmSendReadyEmail, setFulfillmentConfirmSendReadyEmail] = useState(false);
   const [isSubmittingFulfillmentConfirm, setIsSubmittingFulfillmentConfirm] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null); // { title, message, confirmLabel, isDanger, onConfirm }
+  const [isConfirmModalLoading, setIsConfirmModalLoading] = useState(false);
+  const [editOrderModal, setEditOrderModal] = useState(null); // null | { order, form }
+  const [isEditOrderLoading, setIsEditOrderLoading] = useState(false);
+  const [editOrderError, setEditOrderError] = useState("");
+  const [editOrderProductSearch, setEditOrderProductSearch] = useState("");
+  const [orderNotesState, setOrderNotesState] = useState({}); // { [orderId]: { text, saving, saved } }
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
   const [isOrderFiltersOpen, setIsOrderFiltersOpen] = useState(false);
   const [orderCreatedDateMode, setOrderCreatedDateMode] = useState("all");
   const [orderCreatedDateFromFilter, setOrderCreatedDateFromFilter] = useState("");
@@ -1583,6 +1640,7 @@ export default function AdminPanel({
   const [orderFulfillmentFilter, setOrderFulfillmentFilter] = useState("all");
   const [orderProductFilter, setOrderProductFilter] = useState("");
   const [orderShippingMethodFilter, setOrderShippingMethodFilter] = useState("all");
+  const [orderCustomerSearch, setOrderCustomerSearch] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const orderActionsRef = useRef(null);
@@ -2515,6 +2573,10 @@ export default function AdminPanel({
       count += 1;
     }
 
+    if (orderCustomerSearch.trim()) {
+      count += 1;
+    }
+
     return count;
   }, [
     orderCreatedDateMode,
@@ -2522,11 +2584,12 @@ export default function AdminPanel({
     orderCreatedDateToFilter,
     orderFulfillmentFilter,
     orderProductFilter,
-    orderShippingMethodFilter
+    orderShippingMethodFilter,
+    orderCustomerSearch
   ]);
   const ordersSummary = useMemo(() => {
     const totalRevenue = orders.reduce((acc, order) => acc + Number(order.total || 0), 0);
-    const paidCount = orders.filter((order) => derivePaymentBadge(order.status) === "Pagado").length;
+    const paidCount = orders.filter((order) => derivePaymentBadge(order.status, order.paymentMethod) === "Pagado").length;
     const withShippingCount = orders.filter((order) => Number(order.shippingCost || 0) > 0).length;
 
     return {
@@ -2572,6 +2635,14 @@ export default function AdminPanel({
         return false;
       }
 
+      if (orderCustomerSearch.trim()) {
+        const needle = orderCustomerSearch.trim().toLowerCase();
+        const haystack = String(order.customerName || "").toLowerCase();
+        if (!haystack.includes(needle)) {
+          return false;
+        }
+      }
+
       return true;
     });
   }, [
@@ -2581,7 +2652,8 @@ export default function AdminPanel({
     orderCreatedDateToFilter,
     orderFulfillmentFilter,
     orderProductFilter,
-    orderShippingMethodFilter
+    orderShippingMethodFilter,
+    orderCustomerSearch
   ]);
   const visibleOrders = filteredOrders;
   const selectedOrders = useMemo(
@@ -3292,9 +3364,17 @@ export default function AdminPanel({
     }
 
     if (actionKey === "cancel_order") {
-      await onOrderStatusChange(order.id, "cancelado");
-      setOrderActionMessage(`Pedido #${orderNumber} cancelado.`);
       setIsOrderActionsOpen(false);
+      setConfirmModal({
+        title: `Cancelar pedido #${orderNumber}`,
+        message: "Esta acción no se puede deshacer. El pedido pasará a estado Cancelado y se enviará un email al cliente.",
+        confirmLabel: "Cancelar pedido",
+        isDanger: true,
+        onConfirm: async () => {
+          await onCancelOrder(order.id, false);
+          setOrderActionMessage(`Pedido #${orderNumber} cancelado.`);
+        }
+      });
       return;
     }
 
@@ -3322,9 +3402,18 @@ export default function AdminPanel({
     }
 
     if (actionKey === "cancel_and_refund") {
-      await onOrderStatusChange(order.id, "cancelado");
-      setOrderActionMessage(`Pedido #${orderNumber} cancelado. Iniciá el reembolso desde la opción "Reembolsar".`);
       setIsOrderActionsOpen(false);
+      const totalStr = Number(order.total || 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      setConfirmModal({
+        title: `Cancelar y reembolsar pedido #${orderNumber}`,
+        message: `Se cancelará el pedido y se iniciará el reembolso de $${totalStr} ARS en Mercado Pago. El dinero puede demorar 1 a 15 días hábiles en acreditarse según el banco del cliente.`,
+        confirmLabel: "Confirmar y reembolsar",
+        isDanger: true,
+        onConfirm: async () => {
+          await onCancelOrder(order.id, true);
+          setOrderActionMessage(`Pedido #${orderNumber} cancelado y reembolso iniciado.`);
+        }
+      });
       return;
     }
 
@@ -3398,6 +3487,60 @@ export default function AdminPanel({
       openPrintableOrderDocument(order, "receipt");
       setOrderActionMessage("Recibo generado en una pestaña nueva.");
       setIsOrderActionsOpen(false);
+      return;
+    }
+
+    if (actionKey === "refund") {
+      setIsOrderActionsOpen(false);
+      const totalStr = Number(order.total || 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      setConfirmModal({
+        title: `Reembolsar y cancelar pedido #${orderNumber}`,
+        message: `Al confirmar se ejecutará la siguiente secuencia:\n\n1️⃣ Se procesará el reembolso de $${totalStr} ARS directamente en Mercado Pago.\n2️⃣ El pedido pasará automáticamente a estado Cancelado.\n3️⃣ Se enviará un email de cancelación al cliente.\n\nEl dinero puede demorar entre 1 y 15 días hábiles en acreditarse según el banco del cliente. Esta acción no se puede deshacer.`,
+        confirmLabel: "Sí, reembolsar y cancelar",
+        isDanger: true,
+        onConfirm: async () => {
+          await onCancelOrder(order.id, true);
+          setOrderActionMessage(`✅ Pedido #${orderNumber}: reembolso iniciado y pedido cancelado.`);
+        }
+      });
+      return;
+    }
+
+    if (actionKey === "archive") {
+      setIsOrderActionsOpen(false);
+      setConfirmModal({
+        title: `Archivar pedido #${orderNumber}`,
+        message: "El pedido dejará de aparecer en la lista principal. Podés verlo activando el filtro \"Mostrar archivados\".",
+        confirmLabel: "Archivar pedido",
+        isDanger: false,
+        onConfirm: async () => {
+          await onArchiveOrder(order.id);
+        }
+      });
+      return;
+    }
+
+    if (actionKey === "edit") {
+      setIsOrderActionsOpen(false);
+      setEditOrderError("");
+      setEditOrderProductSearch("");
+      setEditOrderModal({
+        order,
+        form: {
+          items: Array.isArray(order.lines)
+            ? order.lines.map((l) => ({ ...l }))
+            : [],
+          customerName:    order.customerName    || "",
+          contactEmail:    order.contactEmail    || "",
+          customerPhone:   order.customerPhone   || "",
+          customerAddress: order.customerAddress || "",
+          shippingMethod:  order.shippingMethod  || "",
+          shippingZone:    order.shippingZone    || "",
+          shippingCost:    Number(order.shippingCost  || 0),
+          discount:        Number(order.discount       || 0),
+          surcharge:       0,
+        }
+      });
       return;
     }
 
@@ -5561,8 +5704,6 @@ export default function AdminPanel({
           </>
         ) : activeSection === "Pedidos" ? (
           <>
-            <p className="subtitle">Vista completa de pedidos con datos de cliente, pago, envío y líneas importadas desde Wix.</p>
-
             {!selectedOrder && (
               <div className="admin-orders-summary-grid">
                 <article className="admin-orders-summary-card">
@@ -5624,14 +5765,42 @@ export default function AdminPanel({
                           </div>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          className="admin-inventory-filter-btn"
-                          onClick={() => setIsOrderFiltersOpen((current) => !current)}
-                          aria-expanded={isOrderFiltersOpen}
-                        >
-                          Filtros {orderActiveFiltersCount > 0 ? `(${orderActiveFiltersCount})` : ""}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="admin-inventory-filter-btn"
+                            onClick={() => setIsOrderFiltersOpen((current) => !current)}
+                            aria-expanded={isOrderFiltersOpen}
+                          >
+                            Filtros {orderActiveFiltersCount > 0 ? `(${orderActiveFiltersCount})` : ""}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-inventory-filter-btn admin-export-csv-btn"
+                            disabled={isExportingCsv}
+                            onClick={async () => {
+                              setIsExportingCsv(true);
+                              try {
+                                const blob = await onExportOrdersCsv();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = `pedidos-${new Date().toISOString().slice(0, 10)}.csv`;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                URL.revokeObjectURL(url);
+                              } catch (err) {
+                                alert(err.message || "No se pudo exportar el CSV");
+                              } finally {
+                                setIsExportingCsv(false);
+                              }
+                            }}
+                            title="Descargar todos los pedidos como CSV (Excel)"
+                          >
+                            {isExportingCsv ? "Exportando…" : "⬇️ Exportar CSV"}
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -5723,6 +5892,17 @@ export default function AdminPanel({
 
                       <div className="admin-orders-filters-grid">
                         <label className="admin-inventory-filter-field">
+                          <span>Cliente</span>
+                          <input
+                            type="search"
+                            value={orderCustomerSearch}
+                            onChange={(event) => setOrderCustomerSearch(event.target.value)}
+                            placeholder="Buscar por nombre"
+                            aria-label="Buscar pedidos por nombre de cliente"
+                          />
+                        </label>
+
+                        <label className="admin-inventory-filter-field">
                           <span>Estado de cumplimiento</span>
                           <select
                             value={orderFulfillmentFilter}
@@ -5763,7 +5943,7 @@ export default function AdminPanel({
                             <option value="all">Todos</option>
                             {orderShippingMethodOptions.map((shippingMethod) => (
                               <option key={`order-shipping-${shippingMethod}`} value={shippingMethod}>
-                                {shippingMethod}
+                                {getShippingMethodLabel(shippingMethod)}
                               </option>
                             ))}
                           </select>
@@ -5780,6 +5960,7 @@ export default function AdminPanel({
                           setOrderFulfillmentFilter("all");
                           setOrderProductFilter("");
                           setOrderShippingMethodFilter("all");
+                          setOrderCustomerSearch("");
                         }}
                       >
                         Limpiar filtros
@@ -5822,7 +6003,7 @@ export default function AdminPanel({
                       {visibleOrders.map((order) => {
                         const totalItems = Number(order.itemsCount || 0) || (order.lines || []).reduce((acc, line) => acc + Number(line.quantity || 0), 0);
                         const currency = order.currency || "ARS";
-                        const paymentLabel = derivePaymentBadge(order.status);
+                        const paymentLabel = derivePaymentBadge(order.status, order.paymentMethod);
                         const fulfillmentLabel = deriveFulfillmentBadge(order.status, order.shippingMethod, order.customerAddress);
                         return (
                           <tr
@@ -5933,7 +6114,7 @@ export default function AdminPanel({
               (() => {
                 const order = selectedOrder;
                 const currency = order.currency || "ARS";
-                const paymentLabel = derivePaymentBadge(order.status);
+                const paymentLabel = derivePaymentBadge(order.status, order.paymentMethod);
                 const fulfillmentLabel = deriveFulfillmentBadge(order.status, order.shippingMethod, order.customerAddress);
                 const statusFlow = getOrderStatusFlow(order.shippingMethod, order.customerAddress);
                 const orderItems = Array.isArray(order.lines) ? order.lines : [];
@@ -5971,24 +6152,42 @@ export default function AdminPanel({
                           value={order.status}
                           onChange={(event) => {
                             const newStatus = event.target.value;
+                            const orderNumber = order.wixOrderNumber || order.id;
+
                             if (newStatus === "cancelado") {
-                              const confirmed = window.confirm(`¿Estás seguro de cancelar el pedido #${order.wixOrderNumber || order.id}? Esta acción no se puede deshacer fácilmente.`);
-                              if (!confirmed) {
-                                event.target.value = order.status;
-                                return;
-                              }
+                              // Resetear el select visualmente y abrir modal
+                              event.target.value = order.status;
+                              setConfirmModal({
+                                title: `Cancelar pedido #${orderNumber}`,
+                                message: "Esta acción no se puede deshacer. El pedido pasará a estado Cancelado y se enviará un email al cliente.",
+                                confirmLabel: "Cancelar pedido",
+                                isDanger: true,
+                                onConfirm: async () => {
+                                  await onCancelOrder(order.id, false);
+                                  setOrderActionMessage(`❌ Pedido #${orderNumber} cancelado.`);
+                                }
+                              });
+                              return;
                             }
+
                             setOrderActionMessage(`Actualizando a "${ORDER_STATUS_LABELS[newStatus]}"...`);
                             onOrderStatusChange(order.id, newStatus).then(() => {
-                              setOrderActionMessage(`${ORDER_STATUS_ICONS[newStatus]} Pedido #${order.wixOrderNumber || order.id} → ${ORDER_STATUS_LABELS[newStatus]}`);
+                              setOrderActionMessage(`${ORDER_STATUS_ICONS[newStatus]} Pedido #${orderNumber} → ${ORDER_STATUS_LABELS[newStatus]}`);
                             }).catch((err) => {
                               setOrderActionMessage(`Error: ${err.message}`);
                             });
                           }}
                         >
-                          {statusFlow.map((status) => (
-                            <option key={status} value={status}>{ORDER_STATUS_ICONS[status]} {ORDER_STATUS_LABELS[status] || status}</option>
-                          ))}
+                          {statusFlow.map((status) => {
+                            const isCurrent = status === order.status;
+                            const isReachable = (VALID_TRANSITIONS[order.status] || []).includes(status);
+                            const isDisabled = !isCurrent && !isReachable;
+                            return (
+                              <option key={status} value={status} disabled={isDisabled}>
+                                {ORDER_STATUS_ICONS[status]} {ORDER_STATUS_LABELS[status] || status}{isDisabled ? " (no disponible)" : ""}
+                              </option>
+                            );
+                          })}
                         </select>
                         <div className="admin-order-actions-wrap" ref={orderActionsRef}>
                           <button
@@ -6253,6 +6452,56 @@ export default function AdminPanel({
                             <div><span>Tracking</span><strong>{order.trackingNumber || "-"}</strong></div>
                             <div><span>Nota del cliente</span><p>{order.customerNote || "Sin nota"}</p></div>
                             <div><span>Dato adicional</span><p>{order.purchaseExtraData || "Sin información adicional"}</p></div>
+                            <div className="admin-order-internal-notes-wrap">
+                              <span>📝 Notas internas</span>
+                              <textarea
+                                className="admin-order-internal-notes-input"
+                                placeholder="Ej: Cliente solicitó entrega por la tarde…"
+                                rows={2}
+                                value={
+                                  orderNotesState[order.id]?.text !== undefined
+                                    ? orderNotesState[order.id].text
+                                    : (order.internalNotes || "")
+                                }
+                                onChange={(e) => setOrderNotesState((prev) => ({
+                                  ...prev,
+                                  [order.id]: { text: e.target.value, saving: false, saved: false }
+                                }))}
+                              />
+                              <div className="admin-order-internal-notes-actions">
+                                {orderNotesState[order.id]?.saved && (
+                                  <span className="admin-order-notes-saved">✓ Guardado</span>
+                                )}
+                                <button
+                                  type="button"
+                                  className="admin-order-notes-save-btn"
+                                  disabled={orderNotesState[order.id]?.saving}
+                                  onClick={async () => {
+                                    const text = orderNotesState[order.id]?.text !== undefined
+                                      ? orderNotesState[order.id].text
+                                      : (order.internalNotes || "");
+                                    setOrderNotesState((prev) => ({
+                                      ...prev,
+                                      [order.id]: { ...prev[order.id], saving: true, saved: false }
+                                    }));
+                                    try {
+                                      await onUpdateOrderNotes(order.id, text);
+                                      setOrderNotesState((prev) => ({
+                                        ...prev,
+                                        [order.id]: { text, saving: false, saved: true }
+                                      }));
+                                    } catch {
+                                      setOrderNotesState((prev) => ({
+                                        ...prev,
+                                        [order.id]: { ...prev[order.id], saving: false }
+                                      }));
+                                    }
+                                  }}
+                                >
+                                  {orderNotesState[order.id]?.saving ? "Guardando…" : "Guardar nota"}
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </article>
                       </aside>
@@ -7835,6 +8084,428 @@ export default function AdminPanel({
                 disabled={isSubmittingFulfillmentConfirm}
               >
                 {isSubmittingFulfillmentConfirm ? "Guardando..." : "Marcar como cumplido"}
+              </button>
+            </div>
+          </article>
+        </div>
+      )}
+
+      {editOrderModal && (() => {
+        const { order, form } = editOrderModal;
+        const orderNumber = order.wixOrderNumber || order.id;
+
+        function setForm(updater) {
+          setEditOrderModal((prev) => prev
+            ? { ...prev, form: typeof updater === "function" ? updater(prev.form) : { ...prev.form, ...updater } }
+            : prev
+          );
+        }
+
+        function updateItem(index, field, value) {
+          setForm((f) => {
+            const items = f.items.map((item, i) =>
+              i === index ? { ...item, [field]: value } : item
+            );
+            return { ...f, items };
+          });
+        }
+
+        function removeItem(index) {
+          setForm((f) => ({ ...f, items: f.items.filter((_, i) => i !== index) }));
+        }
+
+        function addProductFromSearch(product) {
+          setForm((f) => ({
+            ...f,
+            items: [
+              ...f.items,
+              {
+                productId:   product.id,
+                variantId:   null,
+                productName: product.name,
+                quantity:    1,
+                unitPrice:   Number(product.price || 0),
+                variant:     "",
+                sku:         product.sku || ""
+              }
+            ]
+          }));
+          setEditOrderProductSearch("");
+        }
+
+        const subtotal = form.items.reduce((s, i) => s + Number(i.quantity || 0) * Number(i.unitPrice || 0), 0);
+        const total    = subtotal - Number(form.discount || 0) + Number(form.shippingCost || 0) + Number(form.surcharge || 0);
+
+        const searchLower = editOrderProductSearch.toLowerCase().trim();
+        const productSuggestions = searchLower.length >= 2
+          ? (products || [])
+              .filter((p) =>
+                String(p.name || "").toLowerCase().includes(searchLower) ||
+                String(p.sku  || "").toLowerCase().includes(searchLower)
+              )
+              .slice(0, 5)
+          : [];
+
+        const cannotEdit = order.status === "cancelado" || order.status === "entregado";
+
+        return (
+          <div
+            className="admin-edit-order-backdrop"
+            role="presentation"
+            onClick={() => { if (!isEditOrderLoading) setEditOrderModal(null); }}
+          >
+            <div
+              className="admin-edit-order-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Editar pedido #${orderNumber}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="aeom-header">
+                <h3 className="aeom-title">Editar pedido <span className="aeom-title-num">#{orderNumber}</span></h3>
+                <button
+                  type="button"
+                  className="aeom-close"
+                  onClick={() => setEditOrderModal(null)}
+                  disabled={isEditOrderLoading}
+                  aria-label="Cerrar"
+                >✕</button>
+              </div>
+
+              {cannotEdit && (
+                <div className="aeom-blocked-notice">
+                  No se puede editar un pedido en estado <strong>{order.status}</strong>.
+                </div>
+              )}
+
+              {!cannotEdit && (
+                <div className="aeom-body">
+                  {/* ── Sección Ítems ── */}
+                  <section className="aeom-section">
+                    <h4 className="aeom-section-title">Ítems</h4>
+                    <div className="aeom-items-list">
+                      {form.items.length === 0 && (
+                        <p className="aeom-empty-items">Sin ítems. Agregá al menos uno.</p>
+                      )}
+                      {form.items.map((item, idx) => (
+                        <div key={idx} className="aeom-item-row">
+                          <span className="aeom-item-name" title={item.productName}>{item.productName}</span>
+                          {item.variant && <span className="aeom-item-variant">{item.variant}</span>}
+                          <label className="aeom-item-label">
+                            <span>Cant.</span>
+                            <input
+                              type="number"
+                              className="aeom-item-input aeom-item-qty"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => updateItem(idx, "quantity", Math.max(1, Number(e.target.value) || 1))}
+                              disabled={isEditOrderLoading}
+                            />
+                          </label>
+                          <label className="aeom-item-label">
+                            <span>Precio $</span>
+                            <input
+                              type="number"
+                              className="aeom-item-input aeom-item-price"
+                              min="0"
+                              step="1"
+                              value={item.unitPrice}
+                              onChange={(e) => updateItem(idx, "unitPrice", Math.max(0, Number(e.target.value) || 0))}
+                              disabled={isEditOrderLoading}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="aeom-item-remove"
+                            onClick={() => removeItem(idx)}
+                            disabled={isEditOrderLoading}
+                            title="Eliminar ítem"
+                          >🗑</button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Buscador de productos */}
+                    <div className="aeom-add-product-wrap">
+                      <input
+                        type="text"
+                        className="aeom-add-product-search"
+                        placeholder="+ Agregar producto por nombre o SKU…"
+                        value={editOrderProductSearch}
+                        onChange={(e) => setEditOrderProductSearch(e.target.value)}
+                        disabled={isEditOrderLoading}
+                      />
+                      {productSuggestions.length > 0 && (
+                        <div className="aeom-product-suggestions">
+                          {productSuggestions.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className="aeom-product-suggestion-item"
+                              onClick={() => addProductFromSearch(p)}
+                              disabled={isEditOrderLoading}
+                            >
+                              <span className="aeom-sugg-name">{p.name}</span>
+                              <span className="aeom-sugg-price">${Number(p.price || 0).toLocaleString("es-AR")}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* ── Sección Contacto ── */}
+                  <section className="aeom-section">
+                    <h4 className="aeom-section-title">Contacto</h4>
+                    <div className="aeom-fields-grid">
+                      <label className="aeom-field">
+                        <span>Nombre</span>
+                        <input
+                          type="text"
+                          value={form.customerName}
+                          onChange={(e) => setForm({ customerName: e.target.value })}
+                          disabled={isEditOrderLoading}
+                        />
+                      </label>
+                      <label className="aeom-field">
+                        <span>Email</span>
+                        <input
+                          type="email"
+                          value={form.contactEmail}
+                          onChange={(e) => setForm({ contactEmail: e.target.value })}
+                          disabled={isEditOrderLoading}
+                        />
+                      </label>
+                      <label className="aeom-field">
+                        <span>Teléfono</span>
+                        <input
+                          type="text"
+                          value={form.customerPhone}
+                          onChange={(e) => setForm({ customerPhone: e.target.value })}
+                          disabled={isEditOrderLoading}
+                        />
+                      </label>
+                      <label className="aeom-field aeom-field--full">
+                        <span>Dirección</span>
+                        <input
+                          type="text"
+                          value={form.customerAddress}
+                          onChange={(e) => setForm({ customerAddress: e.target.value })}
+                          disabled={isEditOrderLoading}
+                        />
+                      </label>
+                    </div>
+                  </section>
+
+                  {/* ── Sección Entrega ── */}
+                  <section className="aeom-section">
+                    <h4 className="aeom-section-title">Entrega</h4>
+                    <div className="aeom-fields-grid">
+                      <label className="aeom-field">
+                        <span>Método</span>
+                        <select
+                          value={form.shippingMethod}
+                          onChange={(e) => setForm({ shippingMethod: e.target.value })}
+                          disabled={isEditOrderLoading}
+                        >
+                          <option value="">— sin definir —</option>
+                          <option value="envio">Envío a domicilio</option>
+                          <option value="retiro">Retiro en tienda</option>
+                        </select>
+                      </label>
+                      <label className="aeom-field">
+                        <span>Zona</span>
+                        <input
+                          type="text"
+                          value={form.shippingZone}
+                          onChange={(e) => setForm({ shippingZone: e.target.value })}
+                          disabled={isEditOrderLoading}
+                        />
+                      </label>
+                      <label className="aeom-field">
+                        <span>Costo de envío $</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={form.shippingCost}
+                          onChange={(e) => setForm({ shippingCost: Math.max(0, Number(e.target.value) || 0) })}
+                          disabled={isEditOrderLoading}
+                        />
+                      </label>
+                    </div>
+                  </section>
+
+                  {/* ── Sección Ajuste de precio ── */}
+                  <section className="aeom-section">
+                    <h4 className="aeom-section-title">Ajuste de precio</h4>
+                    <div className="aeom-fields-grid">
+                      <label className="aeom-field">
+                        <span>Descuento − $</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={form.discount}
+                          onChange={(e) => setForm({ discount: Math.max(0, Number(e.target.value) || 0) })}
+                          disabled={isEditOrderLoading}
+                        />
+                      </label>
+                      <label className="aeom-field">
+                        <span>Cargo adicional + $</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={form.surcharge}
+                          onChange={(e) => setForm({ surcharge: Math.max(0, Number(e.target.value) || 0) })}
+                          disabled={isEditOrderLoading}
+                        />
+                      </label>
+                    </div>
+                  </section>
+
+                  {/* ── Totales ── */}
+                  <section className="aeom-section aeom-totals">
+                    <div className="aeom-totals-row">
+                      <span>Subtotal</span>
+                      <span>${subtotal.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    {Number(form.shippingCost) > 0 && (
+                      <div className="aeom-totals-row">
+                        <span>Envío</span>
+                        <span>+${Number(form.shippingCost).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    {Number(form.discount) > 0 && (
+                      <div className="aeom-totals-row aeom-totals-discount">
+                        <span>Descuento</span>
+                        <span>−${Number(form.discount).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    {Number(form.surcharge) > 0 && (
+                      <div className="aeom-totals-row">
+                        <span>Cargo adicional</span>
+                        <span>+${Number(form.surcharge).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="aeom-totals-divider" />
+                    <div className="aeom-totals-row aeom-totals-total">
+                      <span>Total</span>
+                      <span>${total.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ARS</span>
+                    </div>
+                    {total < 0 && (
+                      <p className="aeom-total-warning">El total no puede ser negativo.</p>
+                    )}
+                  </section>
+
+                  {editOrderError && (
+                    <p className="aeom-error">{editOrderError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="aeom-footer">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setEditOrderModal(null)}
+                  disabled={isEditOrderLoading}
+                >
+                  Cancelar
+                </button>
+                {!cannotEdit && (
+                  <button
+                    type="button"
+                    className="aeom-save-btn"
+                    disabled={isEditOrderLoading || form.items.length === 0 || total < 0}
+                    onClick={async () => {
+                      setEditOrderError("");
+                      setIsEditOrderLoading(true);
+                      try {
+                        await onEditOrder(order.id, {
+                          customerName:    form.customerName,
+                          contactEmail:    form.contactEmail,
+                          customerPhone:   form.customerPhone,
+                          customerAddress: form.customerAddress,
+                          shippingMethod:  form.shippingMethod,
+                          shippingZone:    form.shippingZone,
+                          shippingCost:    form.shippingCost,
+                          discount:        form.discount,
+                          surcharge:       form.surcharge,
+                          items:           form.items.map((i) => ({
+                            productId:   i.productId   || null,
+                            variantId:   i.variantId   || null,
+                            productName: i.productName,
+                            quantity:    Number(i.quantity),
+                            unitPrice:   Number(i.unitPrice),
+                            variant:     i.variant || "",
+                            sku:         i.sku     || ""
+                          }))
+                        });
+                        setEditOrderModal(null);
+                      } catch (err) {
+                        setEditOrderError(err.message || "Error al guardar el pedido.");
+                      } finally {
+                        setIsEditOrderLoading(false);
+                      }
+                    }}
+                  >
+                    {isEditOrderLoading ? "Guardando…" : "Guardar cambios"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {confirmModal && (
+        <div
+          className="admin-confirm-modal-backdrop"
+          role="presentation"
+          onClick={() => { if (!isConfirmModalLoading) setConfirmModal(null); }}
+        >
+          <article
+            className="admin-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="admin-confirm-modal-title">{confirmModal.title}</h3>
+            <div className="admin-confirm-modal-message">
+              {String(confirmModal.message || "").split("\n").map((line, i) =>
+                line.trim() === "" ? <br key={i} /> : <p key={i} style={{ margin: "4px 0" }}>{line}</p>
+              )}
+            </div>
+            <div className="admin-confirm-modal-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setConfirmModal(null)}
+                disabled={isConfirmModalLoading}
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                className={`admin-confirm-modal-cta${confirmModal.isDanger ? " is-danger" : ""}`}
+                disabled={isConfirmModalLoading}
+                onClick={async () => {
+                  setIsConfirmModalLoading(true);
+                  try {
+                    await confirmModal.onConfirm();
+                  } catch {
+                    /* error ya manejado en el handler */
+                  } finally {
+                    setIsConfirmModalLoading(false);
+                    setConfirmModal(null);
+                  }
+                }}
+              >
+                {isConfirmModalLoading ? "Procesando..." : confirmModal.confirmLabel}
               </button>
             </div>
           </article>
