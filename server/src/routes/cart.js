@@ -356,33 +356,21 @@ async function createMercadoPagoPreference(req, { orderId, customerName, orderLi
 
   const items = buildMercadoPagoItems({ orderId, orderLines, shippingCost, discount });
 
-  const backUrls = clientUrl
+  // back_urls apuntan al backend (URL pública) que luego redirige al frontend
+  const backUrls = publicBaseUrl
     ? {
-      success: `${clientUrl}/?checkout=success&order=${orderId}`,
-      failure: `${clientUrl}/?checkout=failure&order=${orderId}`,
-      pending: `${clientUrl}/?checkout=pending&order=${orderId}`
+      success: `${publicBaseUrl}/api/cart/checkout/success?order=${orderId}`,
+      failure: `${publicBaseUrl}/api/cart/checkout/failure?order=${orderId}`,
+      pending: `${publicBaseUrl}/api/cart/checkout/pending?order=${orderId}`
     }
     : null;
-
-  const isLocalClientUrl = (() => {
-    if (!clientUrl) {
-      return true;
-    }
-
-    try {
-      const hostname = new URL(clientUrl).hostname.toLowerCase();
-      return hostname === "localhost" || hostname === "127.0.0.1";
-    } catch {
-      return true;
-    }
-  })();
 
   const payload = {
     external_reference: String(orderId),
     statement_descriptor: "BOUTTIQUE LIMPIEZA",
     notification_url: notificationUrl,
     ...(backUrls ? { back_urls: backUrls } : {}),
-    ...((backUrls && !isLocalClientUrl) ? { auto_return: "approved" } : {}),
+    ...(backUrls ? { auto_return: "approved" } : {}),
     payer: {
       name: customerName
     },
@@ -1330,6 +1318,30 @@ cartRouter.post("/sync-payment/:orderId", requireAuth, requireAdmin, async (req,
     console.error(`⚠️ Error sincronizando pago para pedido #${orderId}:`, err.message);
     return res.status(500).json({ error: "Error al sincronizar pago con Mercado Pago" });
   }
+});
+
+// ── Redirects de Mercado Pago ────────────────────────────────────────────────
+// MP redirige al backend (URL pública), el backend reenvía al frontend
+
+cartRouter.get("/checkout/success", (req, res) => {
+  const clientUrl = resolveClientBaseUrl(req);
+  const order = String(req.query.order || "").trim();
+  const dest = `${clientUrl}/?checkout=success${order ? `&order=${order}` : ""}`;
+  return res.redirect(302, dest);
+});
+
+cartRouter.get("/checkout/failure", (req, res) => {
+  const clientUrl = resolveClientBaseUrl(req);
+  const order = String(req.query.order || "").trim();
+  const dest = `${clientUrl}/?checkout=failure${order ? `&order=${order}` : ""}`;
+  return res.redirect(302, dest);
+});
+
+cartRouter.get("/checkout/pending", (req, res) => {
+  const clientUrl = resolveClientBaseUrl(req);
+  const order = String(req.query.order || "").trim();
+  const dest = `${clientUrl}/?checkout=pending${order ? `&order=${order}` : ""}`;
+  return res.redirect(302, dest);
 });
 
 export default cartRouter;
