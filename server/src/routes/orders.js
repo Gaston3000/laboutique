@@ -7,7 +7,6 @@ const ordersRouter = Router();
 const allowedStatuses = [
   "nuevo",
   "pago",
-  "confirmado",
   "preparado",
   "listo_retiro",
   "enviado",
