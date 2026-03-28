@@ -1762,6 +1762,73 @@ adminRouter.get("/analytics/user-sessions", requireAuth, requireAdmin, async (re
     const totalCartAdds = sessions.reduce((sum, s) => sum + s.cartAdds, 0);
     const totalProductViews = sessions.reduce((sum, s) => sum + s.productViews, 0);
     const totalCheckouts = sessions.reduce((sum, s) => sum + s.checkouts, 0);
+    const totalPageViews = sessions.reduce((sum, s) => sum + s.pageViews, 0);
+    const totalSearches = sessions.reduce((sum, s) => sum + s.searches, 0);
+
+    // ── Funnel data
+    const sessionsWithProductView = sessions.filter((s) => s.productViews > 0).length;
+    const sessionsWithCartAdd = sessions.filter((s) => s.cartAdds > 0).length;
+    const sessionsWithCheckout = sessions.filter((s) => s.checkouts > 0).length;
+
+    // ── Demographics
+    const deviceCounts = {};
+    const browserCounts = {};
+    const osCounts = {};
+    const sourceCounts = {};
+    const hourCounts = Array(24).fill(0);
+    for (const s of sessions) {
+      deviceCounts[s.deviceType] = (deviceCounts[s.deviceType] || 0) + 1;
+      browserCounts[s.browserName] = (browserCounts[s.browserName] || 0) + 1;
+      osCounts[s.osName] = (osCounts[s.osName] || 0) + 1;
+      sourceCounts[s.source] = (sourceCounts[s.source] || 0) + 1;
+      if (s.sessionStart) {
+        const hour = new Date(s.sessionStart).getHours();
+        hourCounts[hour]++;
+      }
+    }
+    const toSorted = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+
+    // ── Per-user aggregated
+    const userMap = new Map();
+    for (const s of sessions) {
+      const key = s.isLoggedIn ? `user:${s.userId}` : `visitor:${s.visitorId}`;
+      if (!userMap.has(key)) {
+        userMap.set(key, {
+          key,
+          userId: s.userId,
+          userName: s.userName,
+          userEmail: s.userEmail,
+          isLoggedIn: s.isLoggedIn,
+          visitorId: s.visitorId,
+          sessionCount: 0,
+          totalEvents: 0,
+          totalPageViews: 0,
+          totalProductViews: 0,
+          totalCartAdds: 0,
+          totalCheckouts: 0,
+          totalSearches: 0,
+          totalDuration: 0,
+          lastSeen: null,
+          devices: new Set()
+        });
+      }
+      const u = userMap.get(key);
+      u.sessionCount++;
+      u.totalEvents += s.totalEvents;
+      u.totalPageViews += s.pageViews;
+      u.totalProductViews += s.productViews;
+      u.totalCartAdds += s.cartAdds;
+      u.totalCheckouts += s.checkouts;
+      u.totalSearches += s.searches;
+      u.totalDuration += s.durationSeconds;
+      u.devices.add(s.deviceType);
+      if (!u.lastSeen || new Date(s.sessionEnd) > new Date(u.lastSeen)) {
+        u.lastSeen = s.sessionEnd;
+      }
+    }
+    const users = [...userMap.values()]
+      .sort((a, b) => b.totalEvents - a.totalEvents)
+      .map((u) => ({ ...u, devices: [...u.devices] }));
 
     return res.json({
       range: {
@@ -1775,8 +1842,24 @@ adminRouter.get("/analytics/user-sessions", requireAuth, requireAdmin, async (re
         avgDurationSeconds: avgDuration,
         totalCartAdds,
         totalProductViews,
-        totalCheckouts
+        totalCheckouts,
+        totalPageViews,
+        totalSearches
       },
+      funnel: {
+        sessions: totalSessions,
+        productViews: sessionsWithProductView,
+        cartAdds: sessionsWithCartAdd,
+        checkouts: sessionsWithCheckout
+      },
+      demographics: {
+        devices: toSorted(deviceCounts),
+        browsers: toSorted(browserCounts),
+        os: toSorted(osCounts),
+        sources: toSorted(sourceCounts),
+        hourly: hourCounts
+      },
+      users,
       sessions
     });
   } catch (err) {

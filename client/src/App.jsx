@@ -78,6 +78,7 @@ const AccountPanel = lazy(() => import("./components/AccountPanel"));
 const LoginModal = lazy(() => import("./components/LoginModal"));
 const SmartOrderPanel = lazy(() => import("./components/SmartOrderPanel"));
 const WelcomeDiscountModal = lazy(() => import("./components/WelcomeDiscountModal"));
+import CookieConsent, { hasCookieConsent } from "./components/CookieConsent";
 
 import PurchaseSuccessModal from "./components/PurchaseSuccessModal";
 import { categoryDescendantsMap } from "./components/categoryTree";
@@ -2829,7 +2830,7 @@ function App() {
   const lastTrackedPageKeyRef = useRef("");
 
   function sendAnalytics(eventType, metadata = {}) {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !hasCookieConsent()) {
       return;
     }
 
@@ -9303,6 +9304,8 @@ function App() {
         onOpenCart={openCartDrawer}
       />
       </Suspense>
+
+      <CookieConsent />
     </div>
   );
 }

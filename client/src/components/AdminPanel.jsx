@@ -1589,6 +1589,7 @@ export default function AdminPanel({
   const [expandedSessionId, setExpandedSessionId] = useState(null);
   const [userActivityFilter, setUserActivityFilter] = useState("all");
   const [isUserActivityFilterOpen, setIsUserActivityFilterOpen] = useState(false);
+  const [userActivityTab, setUserActivityTab] = useState("sessions");
   const userActivityFilterRef = useRef(null);
   const [removingCategoryProductId, setRemovingCategoryProductId] = useState(null);
   const [categoryRemovalUndo, setCategoryRemovalUndo] = useState(null);
@@ -7560,7 +7561,7 @@ export default function AdminPanel({
                       <header className="admin-user-activity-header">
                         <div className="admin-user-activity-header-left">
                           <h2>Actividad de Usuarios</h2>
-                          <p>Movimientos detallados por sesión con línea de tiempo de acciones</p>
+                          <p>Análisis detallado del comportamiento de usuarios en tu sitio</p>
                         </div>
                         <div className="admin-user-activity-header-actions">
                           <div className="admin-user-activity-filter-dropdown" ref={userActivityFilterRef}>
@@ -7609,6 +7610,26 @@ export default function AdminPanel({
                         <p className="admin-user-activity-empty">No se pudieron cargar los datos de actividad.</p>
                       ) : (
                         <>
+                          {/* ── Funnel de conversión ── */}
+                          {userActivityData.funnel && (
+                            <div className="admin-user-activity-funnel">
+                              {[
+                                { icon: "👁️", value: userActivityData.funnel.sessions, label: "Sesiones", rate: null },
+                                { icon: "🔍", value: userActivityData.funnel.productViews, label: "Vieron producto", rate: userActivityData.funnel.sessions > 0 ? Math.round((userActivityData.funnel.productViews / userActivityData.funnel.sessions) * 100) : 0 },
+                                { icon: "🛒", value: userActivityData.funnel.cartAdds, label: "Agregaron al carrito", rate: userActivityData.funnel.productViews > 0 ? Math.round((userActivityData.funnel.cartAdds / userActivityData.funnel.productViews) * 100) : 0 },
+                                { icon: "💳", value: userActivityData.funnel.checkouts, label: "Iniciaron checkout", rate: userActivityData.funnel.cartAdds > 0 ? Math.round((userActivityData.funnel.checkouts / userActivityData.funnel.cartAdds) * 100) : 0 }
+                              ].map((step, i) => (
+                                <div key={i} className="admin-user-activity-funnel-step">
+                                  <div className="admin-user-activity-funnel-icon">{step.icon}</div>
+                                  <span className="admin-user-activity-funnel-value">{formatAnalyticsNumber(step.value)}</span>
+                                  <span className="admin-user-activity-funnel-label">{step.label}</span>
+                                  {step.rate !== null && <span className="admin-user-activity-funnel-rate">{step.rate}%</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* ── Summary cards ── */}
                           <div className="admin-user-activity-summary-grid">
                             <article className="admin-user-activity-summary-card">
                               <span className="admin-user-activity-summary-icon">📊</span>
@@ -7661,156 +7682,391 @@ export default function AdminPanel({
                             </article>
                           </div>
 
-                          {(() => {
-                            const allSessions = userActivityData.sessions || [];
-                            const filteredCount = allSessions.filter((s) => {
-                              if (userActivityFilter === "logged_in") return s.isLoggedIn;
-                              if (userActivityFilter === "anonymous") return !s.isLoggedIn;
-                              return true;
-                            }).length;
-                            return (
-                              <div className="admin-user-activity-sessions-count">
-                                Mostrando <strong>{filteredCount}</strong> de {allSessions.length} sesiones
-                                {userActivityFilter !== "all" && (
-                                  <button type="button" className="admin-user-activity-show-all-btn" onClick={() => setUserActivityFilter("all")}>
-                                    Ver todas
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })()}
+                          {/* ── Tabs ── */}
+                          <div className="admin-user-activity-tabs">
+                            <button type="button" className={`admin-user-activity-tab${userActivityTab === "sessions" ? " is-active" : ""}`} onClick={() => setUserActivityTab("sessions")}>
+                              📋 Sesiones
+                            </button>
+                            <button type="button" className={`admin-user-activity-tab${userActivityTab === "users" ? " is-active" : ""}`} onClick={() => setUserActivityTab("users")}>
+                              👥 Por usuario
+                            </button>
+                            <button type="button" className={`admin-user-activity-tab${userActivityTab === "insights" ? " is-active" : ""}`} onClick={() => setUserActivityTab("insights")}>
+                              📊 Insights
+                            </button>
+                          </div>
 
-                          <div className="admin-user-activity-sessions-list">
-                            {(userActivityData.sessions || [])
-                              .filter((session) => {
-                                if (userActivityFilter === "logged_in") return session.isLoggedIn;
-                                if (userActivityFilter === "anonymous") return !session.isLoggedIn;
-                                return true;
-                              })
-                              .map((session, sessionIndex) => {
-                                const isExpanded = expandedSessionId === session.sessionId;
-                                const shortVisitorId = session.visitorId ? session.visitorId.slice(-6).toUpperCase() : "???";
+                          {/* ── Tab: Sesiones ── */}
+                          {userActivityTab === "sessions" && (
+                            <>
+                              {(() => {
+                                const allSessions = userActivityData.sessions || [];
+                                const filteredCount = allSessions.filter((s) => {
+                                  if (userActivityFilter === "logged_in") return s.isLoggedIn;
+                                  if (userActivityFilter === "anonymous") return !s.isLoggedIn;
+                                  return true;
+                                }).length;
                                 return (
-                                  <article
-                                    key={`${session.sessionId}-${sessionIndex}`}
-                                    className={`admin-user-activity-session-card${isExpanded ? " is-expanded" : ""}`}
-                                  >
-                                    <div
-                                      className="admin-user-activity-session-header"
-                                      onClick={() => setExpandedSessionId(isExpanded ? null : session.sessionId)}
-                                    >
-                                      <div className="admin-user-activity-session-row1">
-                                        <div className="admin-user-activity-session-user">
-                                          <span className={`admin-user-activity-session-badge${session.isLoggedIn ? " is-logged-in" : " is-anonymous"}`}>
-                                            {session.isLoggedIn ? "🔐" : "👤"}
-                                          </span>
-                                          <div className="admin-user-activity-session-user-info">
-                                            <strong>
-                                              {session.isLoggedIn
-                                                ? (session.userName || session.userEmail || `Usuario #${session.userId}`)
-                                                : `Visitante #${shortVisitorId}`}
-                                            </strong>
-                                            {session.isLoggedIn && session.userEmail && (
-                                              <span className="admin-user-activity-session-email">{session.userEmail}</span>
-                                            )}
-                                            {!session.isLoggedIn && (
-                                              <span className="admin-user-activity-session-email">
-                                                {session.source && session.source !== "directo" ? `vía ${session.source}` : "visita directa"} · {session.osName || ""}
+                                  <div className="admin-user-activity-sessions-count">
+                                    Mostrando <strong>{filteredCount}</strong> de {allSessions.length} sesiones
+                                    {userActivityFilter !== "all" && (
+                                      <button type="button" className="admin-user-activity-show-all-btn" onClick={() => setUserActivityFilter("all")}>
+                                        Ver todas
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
+                              <div className="admin-user-activity-sessions-list">
+                                {(userActivityData.sessions || [])
+                                  .filter((session) => {
+                                    if (userActivityFilter === "logged_in") return session.isLoggedIn;
+                                    if (userActivityFilter === "anonymous") return !session.isLoggedIn;
+                                    return true;
+                                  })
+                                  .map((session, sessionIndex) => {
+                                    const isExpanded = expandedSessionId === session.sessionId;
+                                    const shortVisitorId = session.visitorId ? session.visitorId.slice(-6).toUpperCase() : "???";
+                                    return (
+                                      <article
+                                        key={`${session.sessionId}-${sessionIndex}`}
+                                        className={`admin-user-activity-session-card${isExpanded ? " is-expanded" : ""}`}
+                                      >
+                                        <div
+                                          className="admin-user-activity-session-header"
+                                          onClick={() => setExpandedSessionId(isExpanded ? null : session.sessionId)}
+                                        >
+                                          <div className="admin-user-activity-session-row1">
+                                            <div className="admin-user-activity-session-user">
+                                              <span className={`admin-user-activity-session-badge${session.isLoggedIn ? " is-logged-in" : " is-anonymous"}`}>
+                                                {session.isLoggedIn ? "🔐" : "👤"}
                                               </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                        <div className="admin-user-activity-session-meta">
-                                          <span className="admin-user-activity-session-meta-item" title="Dispositivo">
-                                            {session.deviceType === "mobile" ? "📱" : session.deviceType === "tablet" ? "📟" : "💻"} {session.browserName}
-                                          </span>
-                                          <span className="admin-user-activity-session-meta-item" title="Duración">
-                                            ⏱️ {formatAnalyticsDuration(session.durationSeconds)}
-                                          </span>
-                                          <span className="admin-user-activity-session-meta-item" title="Eventos">
-                                            📈 {session.totalEvents} eventos
-                                          </span>
-                                          <span className="admin-user-activity-session-meta-item" title="Fecha">
-                                            📅 {formatCustomerDateTime(session.sessionStart)}
-                                          </span>
-                                        </div>
-                                        <span className="admin-user-activity-session-chevron">{isExpanded ? "▲" : "▼"}</span>
-                                      </div>
-
-                                      {(session.pageViews > 0 || session.productViews > 0 || session.cartAdds > 0 || session.searches > 0 || session.checkouts > 0 || session.categorySelects > 0) && (
-                                        <div className="admin-user-activity-session-row2">
-                                          {session.pageViews > 0 && <span className="admin-user-activity-action-pill pv">👁️ {session.pageViews} vistas</span>}
-                                          {session.productViews > 0 && <span className="admin-user-activity-action-pill prod">🔍 {session.productViews} productos</span>}
-                                          {session.cartAdds > 0 && <span className="admin-user-activity-action-pill cart">🛒 {session.cartAdds} al carrito</span>}
-                                          {session.searches > 0 && <span className="admin-user-activity-action-pill search">🔎 {session.searches} búsquedas</span>}
-                                          {session.checkouts > 0 && <span className="admin-user-activity-action-pill checkout">💳 {session.checkouts} checkout</span>}
-                                          {session.categorySelects > 0 && <span className="admin-user-activity-action-pill cat">🗂️ {session.categorySelects} categorías</span>}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {isExpanded && (
-                                      <div className="admin-user-activity-timeline">
-                                        <div className="admin-user-activity-timeline-line" />
-                                        {(session.timeline || []).map((event, eventIndex) => (
-                                          <div key={`${session.sessionId}-evt-${eventIndex}`} className="admin-user-activity-timeline-event">
-                                            <div className={`admin-user-activity-timeline-dot ${event.eventType}`} />
-                                            <div className="admin-user-activity-timeline-content">
-                                              <div className="admin-user-activity-timeline-event-header">
-                                                <span className="admin-user-activity-timeline-event-type">
-                                                  {event.eventType === "page_view" ? "👁️ Vista de página"
-                                                    : event.eventType === "product_view" ? "🔍 Vio producto"
-                                                    : event.eventType === "add_to_cart" ? "🛒 Agregó al carrito"
-                                                    : event.eventType === "remove_from_cart" ? "❌ Quitó del carrito"
-                                                    : event.eventType === "open_cart" ? "🧺 Abrió carrito"
-                                                    : event.eventType === "clear_cart" ? "🗑️ Vació carrito"
-                                                    : event.eventType === "search" ? "🔎 Búsqueda"
-                                                    : event.eventType === "category_select" ? "🗂️ Seleccionó categoría"
-                                                    : event.eventType === "begin_checkout" ? "💳 Inició checkout"
-                                                    : event.eventType === "login" ? "🔐 Inició sesión"
-                                                    : event.eventType === "register" ? "✨ Se registró"
-                                                    : `⚡ ${event.eventType}`}
-                                                </span>
-                                                <time className="admin-user-activity-timeline-time">
-                                                  {new Date(event.at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                                                </time>
-                                              </div>
-                                              <div className="admin-user-activity-timeline-details">
-                                                {event.path && event.path !== "/" && (
-                                                  <span className="admin-user-activity-timeline-path">📄 {normalizeAnalyticsPath(event.path)}</span>
+                                              <div className="admin-user-activity-session-user-info">
+                                                <strong>
+                                                  {session.isLoggedIn
+                                                    ? (session.userName || session.userEmail || `Usuario #${session.userId}`)
+                                                    : `Visitante #${shortVisitorId}`}
+                                                </strong>
+                                                {session.isLoggedIn && session.userEmail && (
+                                                  <span className="admin-user-activity-session-email">{session.userEmail}</span>
                                                 )}
-                                                {event.metadata?.productName && (
-                                                  <span className="admin-user-activity-timeline-product">🏷️ {event.metadata.productName}</span>
-                                                )}
-                                                {event.metadata?.query && (
-                                                  <span className="admin-user-activity-timeline-search">"{event.metadata.query}"</span>
-                                                )}
-                                                {event.metadata?.categoryName && (
-                                                  <span className="admin-user-activity-timeline-category">{event.metadata.categoryName}</span>
-                                                )}
-                                                {event.metadata?.quantity && (
-                                                  <span className="admin-user-activity-timeline-qty">×{event.metadata.quantity}</span>
+                                                {!session.isLoggedIn && (
+                                                  <span className="admin-user-activity-session-email">
+                                                    {session.source && session.source !== "directo" ? `vía ${session.source}` : "visita directa"} · {session.osName || ""}
+                                                  </span>
                                                 )}
                                               </div>
                                             </div>
+                                            <div className="admin-user-activity-session-meta">
+                                              <span className="admin-user-activity-session-meta-item" title="Dispositivo">
+                                                {session.deviceType === "mobile" ? "📱" : session.deviceType === "tablet" ? "📟" : "💻"} {session.browserName}
+                                              </span>
+                                              <span className="admin-user-activity-session-meta-item" title="Duración">
+                                                ⏱️ {formatAnalyticsDuration(session.durationSeconds)}
+                                              </span>
+                                              <span className="admin-user-activity-session-meta-item" title="Eventos">
+                                                📈 {session.totalEvents} eventos
+                                              </span>
+                                              <span className="admin-user-activity-session-meta-item" title="Fecha">
+                                                📅 {formatCustomerDateTime(session.sessionStart)}
+                                              </span>
+                                            </div>
+                                            <span className="admin-user-activity-session-chevron">{isExpanded ? "▲" : "▼"}</span>
                                           </div>
-                                        ))}
-                                        {(!session.timeline || session.timeline.length === 0) && (
-                                          <p className="admin-user-activity-timeline-empty">No hay eventos detallados para esta sesión.</p>
+
+                                          {(session.pageViews > 0 || session.productViews > 0 || session.cartAdds > 0 || session.searches > 0 || session.checkouts > 0 || session.categorySelects > 0) && (
+                                            <div className="admin-user-activity-session-row2">
+                                              {session.pageViews > 0 && <span className="admin-user-activity-action-pill pv">👁️ {session.pageViews} vistas</span>}
+                                              {session.productViews > 0 && <span className="admin-user-activity-action-pill prod">🔍 {session.productViews} productos</span>}
+                                              {session.cartAdds > 0 && <span className="admin-user-activity-action-pill cart">🛒 {session.cartAdds} al carrito</span>}
+                                              {session.searches > 0 && <span className="admin-user-activity-action-pill search">🔎 {session.searches} búsquedas</span>}
+                                              {session.checkouts > 0 && <span className="admin-user-activity-action-pill checkout">💳 {session.checkouts} checkout</span>}
+                                              {session.categorySelects > 0 && <span className="admin-user-activity-action-pill cat">🗂️ {session.categorySelects} categorías</span>}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {isExpanded && (
+                                          <div className="admin-user-activity-timeline">
+                                            <div className="admin-user-activity-timeline-line" />
+                                            {(session.timeline || []).map((event, eventIndex) => (
+                                              <div key={`${session.sessionId}-evt-${eventIndex}`} className="admin-user-activity-timeline-event">
+                                                <div className={`admin-user-activity-timeline-dot ${event.eventType}`} />
+                                                <div className="admin-user-activity-timeline-content">
+                                                  <div className="admin-user-activity-timeline-event-header">
+                                                    <span className="admin-user-activity-timeline-event-type">
+                                                      {event.eventType === "page_view" ? "👁️ Vista de página"
+                                                        : event.eventType === "product_view" ? "🔍 Vio producto"
+                                                        : event.eventType === "add_to_cart" ? "🛒 Agregó al carrito"
+                                                        : event.eventType === "remove_from_cart" ? "❌ Quitó del carrito"
+                                                        : event.eventType === "open_cart" ? "🧺 Abrió carrito"
+                                                        : event.eventType === "clear_cart" ? "🗑️ Vació carrito"
+                                                        : event.eventType === "search" ? "🔎 Búsqueda"
+                                                        : event.eventType === "category_select" ? "🗂️ Seleccionó categoría"
+                                                        : event.eventType === "begin_checkout" ? "💳 Inició checkout"
+                                                        : event.eventType === "login" ? "🔐 Inició sesión"
+                                                        : event.eventType === "register" ? "✨ Se registró"
+                                                        : `⚡ ${event.eventType}`}
+                                                    </span>
+                                                    <time className="admin-user-activity-timeline-time">
+                                                      {new Date(event.at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                                                    </time>
+                                                  </div>
+                                                  <div className="admin-user-activity-timeline-details">
+                                                    {event.path && event.path !== "/" && (
+                                                      <span className="admin-user-activity-timeline-path">📄 {normalizeAnalyticsPath(event.path)}</span>
+                                                    )}
+                                                    {event.metadata?.productName && (
+                                                      <span className="admin-user-activity-timeline-product">🏷️ {event.metadata.productName}</span>
+                                                    )}
+                                                    {event.metadata?.query && (
+                                                      <span className="admin-user-activity-timeline-search">"{event.metadata.query}"</span>
+                                                    )}
+                                                    {event.metadata?.categoryName && (
+                                                      <span className="admin-user-activity-timeline-category">{event.metadata.categoryName}</span>
+                                                    )}
+                                                    {event.metadata?.quantity && (
+                                                      <span className="admin-user-activity-timeline-qty">×{event.metadata.quantity}</span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ))}
+                                            {(!session.timeline || session.timeline.length === 0) && (
+                                              <p className="admin-user-activity-timeline-empty">No hay eventos detallados para esta sesión.</p>
+                                            )}
+                                          </div>
                                         )}
+                                      </article>
+                                    );
+                                  })}
+                                {(userActivityData.sessions || []).filter((session) => {
+                                  if (userActivityFilter === "logged_in") return session.isLoggedIn;
+                                  if (userActivityFilter === "anonymous") return !session.isLoggedIn;
+                                  return true;
+                                }).length === 0 && (
+                                  <p className="admin-user-activity-empty">No hay sesiones para el filtro seleccionado.</p>
+                                )}
+                              </div>
+                            </>
+                          )}
+
+                          {/* ── Tab: Por usuario ── */}
+                          {userActivityTab === "users" && (
+                            <div className="admin-user-activity-users-list">
+                              {(userActivityData.users || [])
+                                .filter((u) => {
+                                  if (userActivityFilter === "logged_in") return u.isLoggedIn;
+                                  if (userActivityFilter === "anonymous") return !u.isLoggedIn;
+                                  return true;
+                                })
+                                .map((user, i) => {
+                                  const shortId = user.visitorId ? user.visitorId.slice(-6).toUpperCase() : "???";
+                                  return (
+                                    <article key={user.key || i} className="admin-user-activity-user-card">
+                                      <div className={`admin-user-activity-user-avatar${user.isLoggedIn ? "" : " is-anonymous"}`}>
+                                        {user.isLoggedIn
+                                          ? (user.userName || user.userEmail || "U").charAt(0).toUpperCase()
+                                          : "#"}
                                       </div>
-                                    )}
-                                  </article>
-                                );
-                              })}
-                            {(userActivityData.sessions || []).filter((session) => {
-                              if (userActivityFilter === "logged_in") return session.isLoggedIn;
-                              if (userActivityFilter === "anonymous") return !session.isLoggedIn;
-                              return true;
-                            }).length === 0 && (
-                              <p className="admin-user-activity-empty">No hay sesiones para el filtro seleccionado.</p>
-                            )}
-                          </div>
+                                      <div className="admin-user-activity-user-info">
+                                        <p className="admin-user-activity-user-name">
+                                          {user.isLoggedIn ? (user.userName || user.userEmail || `Usuario #${user.userId}`) : `Visitante #${shortId}`}
+                                        </p>
+                                        <p className="admin-user-activity-user-email">
+                                          {user.isLoggedIn && user.userEmail ? user.userEmail : `${user.devices?.join(", ") || "desktop"} · ${user.sessionCount} ${user.sessionCount === 1 ? "sesión" : "sesiones"}`}
+                                          {user.lastSeen && ` · Última vez: ${formatCustomerDateTime(user.lastSeen)}`}
+                                        </p>
+                                      </div>
+                                      <div className="admin-user-activity-user-stats">
+                                        <div className="admin-user-activity-user-stat">
+                                          <strong>{user.sessionCount}</strong>
+                                          <span>Sesiones</span>
+                                        </div>
+                                        <div className="admin-user-activity-user-stat">
+                                          <strong>{user.totalEvents}</strong>
+                                          <span>Eventos</span>
+                                        </div>
+                                        <div className="admin-user-activity-user-stat">
+                                          <strong>{user.totalPageViews}</strong>
+                                          <span>Vistas</span>
+                                        </div>
+                                        <div className="admin-user-activity-user-stat">
+                                          <strong>{user.totalCartAdds}</strong>
+                                          <span>Carrito</span>
+                                        </div>
+                                        <div className="admin-user-activity-user-stat">
+                                          <strong>{user.totalCheckouts}</strong>
+                                          <span>Checkout</span>
+                                        </div>
+                                      </div>
+                                    </article>
+                                  );
+                                })}
+                              {(userActivityData.users || []).length === 0 && (
+                                <p className="admin-user-activity-empty">No hay usuarios para el período seleccionado.</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ── Tab: Insights / Demographics ── */}
+                          {userActivityTab === "insights" && userActivityData.demographics && (
+                            <div className="admin-user-activity-demographics">
+                              {/* Dispositivos */}
+                              <div className="admin-user-activity-demo-card">
+                                <h4>📱 Dispositivos</h4>
+                                <div className="admin-user-activity-demo-bar-list">
+                                  {(userActivityData.demographics.devices || []).map((d) => {
+                                    const max = Math.max(...(userActivityData.demographics.devices || []).map((x) => x.count), 1);
+                                    const label = d.name === "mobile" ? "Móvil" : d.name === "desktop" ? "Escritorio" : d.name === "tablet" ? "Tablet" : d.name;
+                                    return (
+                                      <div key={d.name} className="admin-user-activity-demo-bar-item">
+                                        <div className="admin-user-activity-demo-bar-label">
+                                          <span>{label}</span>
+                                          <span>{d.count} ({Math.round((d.count / (userActivityData.summary?.totalSessions || 1)) * 100)}%)</span>
+                                        </div>
+                                        <div className="admin-user-activity-demo-bar-track">
+                                          <div className="admin-user-activity-demo-bar-fill" style={{ width: `${(d.count / max) * 100}%` }} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Navegadores */}
+                              <div className="admin-user-activity-demo-card">
+                                <h4>🌐 Navegadores</h4>
+                                <div className="admin-user-activity-demo-bar-list">
+                                  {(userActivityData.demographics.browsers || []).slice(0, 5).map((b) => {
+                                    const max = Math.max(...(userActivityData.demographics.browsers || []).map((x) => x.count), 1);
+                                    return (
+                                      <div key={b.name} className="admin-user-activity-demo-bar-item">
+                                        <div className="admin-user-activity-demo-bar-label">
+                                          <span>{b.name}</span>
+                                          <span>{b.count} ({Math.round((b.count / (userActivityData.summary?.totalSessions || 1)) * 100)}%)</span>
+                                        </div>
+                                        <div className="admin-user-activity-demo-bar-track">
+                                          <div className="admin-user-activity-demo-bar-fill" style={{ width: `${(b.count / max) * 100}%` }} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Sistemas operativos */}
+                              <div className="admin-user-activity-demo-card">
+                                <h4>💻 Sistemas operativos</h4>
+                                <div className="admin-user-activity-demo-bar-list">
+                                  {(userActivityData.demographics.os || []).slice(0, 5).map((o) => {
+                                    const max = Math.max(...(userActivityData.demographics.os || []).map((x) => x.count), 1);
+                                    return (
+                                      <div key={o.name} className="admin-user-activity-demo-bar-item">
+                                        <div className="admin-user-activity-demo-bar-label">
+                                          <span>{o.name}</span>
+                                          <span>{o.count} ({Math.round((o.count / (userActivityData.summary?.totalSessions || 1)) * 100)}%)</span>
+                                        </div>
+                                        <div className="admin-user-activity-demo-bar-track">
+                                          <div className="admin-user-activity-demo-bar-fill" style={{ width: `${(o.count / max) * 100}%` }} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Fuentes de tráfico */}
+                              <div className="admin-user-activity-demo-card">
+                                <h4>🔗 Fuentes de tráfico</h4>
+                                <div className="admin-user-activity-demo-bar-list">
+                                  {(userActivityData.demographics.sources || []).slice(0, 6).map((s) => {
+                                    const max = Math.max(...(userActivityData.demographics.sources || []).map((x) => x.count), 1);
+                                    return (
+                                      <div key={s.name} className="admin-user-activity-demo-bar-item">
+                                        <div className="admin-user-activity-demo-bar-label">
+                                          <span>{s.name}</span>
+                                          <span>{s.count} ({Math.round((s.count / (userActivityData.summary?.totalSessions || 1)) * 100)}%)</span>
+                                        </div>
+                                        <div className="admin-user-activity-demo-bar-track">
+                                          <div className="admin-user-activity-demo-bar-fill" style={{ width: `${(s.count / max) * 100}%` }} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Horarios pico */}
+                              <div className="admin-user-activity-demo-card" style={{ gridColumn: "1 / -1" }}>
+                                <h4>🕐 Actividad por hora del día</h4>
+                                <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100, padding: "8px 0" }}>
+                                  {(userActivityData.demographics.hourly || Array(24).fill(0)).map((count, hour) => {
+                                    const max = Math.max(...(userActivityData.demographics.hourly || [1]), 1);
+                                    const pct = (count / max) * 100;
+                                    return (
+                                      <div key={hour} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                        <div
+                                          title={`${hour}:00 — ${count} sesiones`}
+                                          style={{
+                                            width: "100%",
+                                            height: `${Math.max(pct, 4)}%`,
+                                            background: pct > 60 ? "linear-gradient(180deg, #2563eb, #1d4ed8)" : pct > 30 ? "linear-gradient(180deg, #60a5fa, #3b82f6)" : "#e5e7eb",
+                                            borderRadius: 3,
+                                            transition: "height 0.4s ease"
+                                          }}
+                                        />
+                                        <span style={{ fontSize: "0.58rem", color: "#9ca3af" }}>{hour}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Tasa de conversión global */}
+                              <div className="admin-user-activity-demo-card">
+                                <h4>📈 Métricas clave</h4>
+                                <div className="admin-user-activity-demo-bar-list">
+                                  <div className="admin-user-activity-demo-bar-item">
+                                    <div className="admin-user-activity-demo-bar-label">
+                                      <span>Tasa de rebote</span>
+                                      <span>{userActivityData.summary?.totalSessions > 0 ? Math.round(((userActivityData.sessions || []).filter((s) => s.totalEvents <= 1).length / userActivityData.summary.totalSessions) * 100) : 0}%</span>
+                                    </div>
+                                  </div>
+                                  <div className="admin-user-activity-demo-bar-item">
+                                    <div className="admin-user-activity-demo-bar-label">
+                                      <span>Tasa de conversión</span>
+                                      <span>{userActivityData.summary?.totalSessions > 0 ? Math.round((userActivityData.summary.totalCheckouts / userActivityData.summary.totalSessions) * 100) : 0}%</span>
+                                    </div>
+                                  </div>
+                                  <div className="admin-user-activity-demo-bar-item">
+                                    <div className="admin-user-activity-demo-bar-label">
+                                      <span>Páginas / sesión (prom.)</span>
+                                      <span>{userActivityData.summary?.totalSessions > 0 ? (userActivityData.summary.totalPageViews / userActivityData.summary.totalSessions).toFixed(1) : 0}</span>
+                                    </div>
+                                  </div>
+                                  <div className="admin-user-activity-demo-bar-item">
+                                    <div className="admin-user-activity-demo-bar-label">
+                                      <span>Búsquedas / sesión (prom.)</span>
+                                      <span>{userActivityData.summary?.totalSessions > 0 ? ((userActivityData.summary.totalSearches || 0) / userActivityData.summary.totalSessions).toFixed(1) : 0}</span>
+                                    </div>
+                                  </div>
+                                  <div className="admin-user-activity-demo-bar-item">
+                                    <div className="admin-user-activity-demo-bar-label">
+                                      <span>Usuarios únicos</span>
+                                      <span>{(userActivityData.users || []).length}</span>
+                                    </div>
+                                  </div>
+                                  <div className="admin-user-activity-demo-bar-item">
+                                    <div className="admin-user-activity-demo-bar-label">
+                                      <span>% usuarios registrados</span>
+                                      <span>{(userActivityData.users || []).length > 0 ? Math.round(((userActivityData.users || []).filter((u) => u.isLoggedIn).length / (userActivityData.users || []).length) * 100) : 0}%</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
