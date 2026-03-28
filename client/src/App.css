@@ -20388,3 +20388,62 @@ body:has(.checkout-details-view) .site-footer {
   font-style: normal;
   font-size: 0.8rem;
 }
+
+/* ─── Modal: Repetir pedido con carrito existente ─── */
+.repeat-order-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.repeat-order-modal {
+  background: #fff;
+  border-radius: 18px;
+  padding: 28px 24px 20px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.repeat-order-modal h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111;
+  margin: 0;
+}
+.repeat-order-modal p {
+  font-size: 0.95rem;
+  color: #444;
+  margin: 0;
+  line-height: 1.5;
+}
+.repeat-order-modal-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.repeat-order-modal-actions .secondary-btn,
+.repeat-order-modal-actions .primary-btn {
+  flex: 1;
+  min-width: 140px;
+  justify-content: center;
+}
+.repeat-order-modal-cancel {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.88rem;
+  cursor: pointer;
+  text-align: center;
+  padding: 4px;
+}
+.repeat-order-modal-cancel:hover {
+  color: #555;
+}
+

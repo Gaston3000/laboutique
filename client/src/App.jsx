@@ -1137,6 +1137,7 @@ function App() {
   const [isWithdrawalSubmitting, setIsWithdrawalSubmitting] = useState(false);
   const [isCartPromoOpen, setIsCartPromoOpen] = useState(false);
   const [isClearCartConfirmOpen, setIsClearCartConfirmOpen] = useState(false);
+  const [repeatOrderModal, setRepeatOrderModal] = useState(null); // { order } when open
   const [isCartNoteOpen, setIsCartNoteOpen] = useState(false);
   const [isCheckoutPromoOpen, setIsCheckoutPromoOpen] = useState(false);
   const [isAdminNotificationsOpen, setIsAdminNotificationsOpen] = useState(false);
@@ -4251,10 +4252,14 @@ function App() {
     }
   }
 
-  async function handleRepeatOrder(order) {
+  function doRepeatOrder(order, replaceCart = false) {
     if (!order?.lines?.length) return;
     const repeatableLines = order.lines.filter((l) => l.productId);
     if (!repeatableLines.length) return;
+
+    if (replaceCart) {
+      clearCart();
+    }
 
     const productMap = new Map((products || []).map((p) => [p.id, p]));
     let addedCount = 0;
@@ -4280,6 +4285,20 @@ function App() {
     if (addedCount > 0) {
       openCartDrawer();
     }
+  }
+
+  async function handleRepeatOrder(order) {
+    if (!order?.lines?.length) return;
+    const repeatableLines = order.lines.filter((l) => l.productId);
+    if (!repeatableLines.length) return;
+
+    // Si hay productos en el carrito, preguntar qué hacer
+    if (cart.length > 0) {
+      setRepeatOrderModal({ order });
+      return;
+    }
+
+    doRepeatOrder(order, false);
   }
 
   async function handleOrderStatusChange(orderId, status, opts = {}) {
@@ -5764,6 +5783,35 @@ function App() {
               </div>
             )}
           </aside>
+        </div>
+      )}
+
+      {/* ── Modal: Repetir pedido con carrito existente ── */}
+      {repeatOrderModal && (
+        <div className="repeat-order-modal-backdrop" onClick={() => setRepeatOrderModal(null)}>
+          <div className="repeat-order-modal" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h3>¿Qué hacemos con tu carrito actual?</h3>
+            <p>Ya tenés <strong>{cart.length} {cart.length === 1 ? "producto" : "productos"}</strong> en el carrito. ¿Querés sumar los productos de este pedido o empezar de cero?</p>
+            <div className="repeat-order-modal-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => { doRepeatOrder(repeatOrderModal.order, false); setRepeatOrderModal(null); }}
+              >
+                ➕ Sumar al carrito
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => { doRepeatOrder(repeatOrderModal.order, true); setRepeatOrderModal(null); }}
+              >
+                🔄 Reemplazar carrito
+              </button>
+            </div>
+            <button type="button" className="repeat-order-modal-cancel" onClick={() => setRepeatOrderModal(null)}>
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
 
