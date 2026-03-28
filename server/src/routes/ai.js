@@ -114,6 +114,9 @@ aiRouter.post("/smart-order", async (req, res) => {
     if (error.status === 429) {
       return res.status(503).json({ error: "El servicio de IA está temporalmente sin disponibilidad. Intentá más tarde." });
     }
+    if (error.status === 400 && error.message?.includes("credit balance")) {
+      return res.status(503).json({ error: "El servicio de IA no está disponible en este momento. Intentá más tarde." });
+    }
     return res.status(500).json({ error: "No se pudo procesar tu pedido. Intentá de nuevo." });
   }
 });

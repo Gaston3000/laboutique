@@ -27,7 +27,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load .env from server directory
-dotenv.config({ path: path.join(__dirname, "../.env") });
+dotenv.config({ path: path.join(__dirname, "../.env"), override: true });
 
 // ── Validación de variables de entorno críticas ─────────────────────────────
 function validateRequiredEnvVars() {
@@ -91,6 +91,15 @@ const checkoutLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Demasiados intentos de compra. Esperá unos minutos." }
+});
+
+// IA / Smart Order: 10 pedidos por 15 minutos por IP (protege costos)
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados pedidos inteligentes. Esperá unos minutos antes de intentar de nuevo." }
 });
 
 // API general: 300 requests por minuto (protección broad)
@@ -467,6 +476,7 @@ app.use("/api/health", healthRouter);
 app.post("/api/auth/login",    loginLimiter);
 app.post("/api/auth/register", registerLimiter);
 app.post("/api/cart/checkout", checkoutLimiter);
+app.post("/api/ai/smart-order", aiLimiter);
 
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);

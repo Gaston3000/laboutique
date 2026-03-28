@@ -5790,22 +5790,31 @@ function App() {
       {repeatOrderModal && (
         <div className="repeat-order-modal-backdrop" onClick={() => setRepeatOrderModal(null)}>
           <div className="repeat-order-modal" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="repeat-order-modal-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="32" height="32">
+                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                <path d="M3 6h18" />
+                <path d="M16 10a4 4 0 0 1-8 0" />
+              </svg>
+            </div>
             <h3>¿Qué hacemos con tu carrito actual?</h3>
             <p>Ya tenés <strong>{cart.length} {cart.length === 1 ? "producto" : "productos"}</strong> en el carrito. ¿Querés sumar los productos de este pedido o empezar de cero?</p>
             <div className="repeat-order-modal-actions">
               <button
                 type="button"
-                className="secondary-btn"
+                className="repeat-order-btn repeat-order-btn--add"
                 onClick={() => { doRepeatOrder(repeatOrderModal.order, false); setRepeatOrderModal(null); }}
               >
-                ➕ Sumar al carrito
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" width="18" height="18"><path d="M12 5v14M5 12h14" /></svg>
+                Sumar al carrito
               </button>
               <button
                 type="button"
-                className="primary-btn"
+                className="repeat-order-btn repeat-order-btn--replace"
                 onClick={() => { doRepeatOrder(repeatOrderModal.order, true); setRepeatOrderModal(null); }}
               >
-                🔄 Reemplazar carrito
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+                Reemplazar carrito
               </button>
             </div>
             <button type="button" className="repeat-order-modal-cancel" onClick={() => setRepeatOrderModal(null)}>
@@ -8312,7 +8321,7 @@ function App() {
 
               {isInicioActive && <BrandsCarousel onSelectBrand={handleSelectBrandFromCarousel} />}
 
-              {isInicioActive && (!auth.user || myOrders.length === 0) && (
+              {isInicioActive && (!auth.user || (myOrders.length === 0 && !auth.user?.welcomeDiscountUsed)) && (
                 <WelcomePromoSpotlight
                   onActivate={handleActivateWelcomePromo}
                   isActive={auth.user?.welcomeDiscountActive || false}
