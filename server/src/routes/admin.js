@@ -1809,7 +1809,12 @@ adminRouter.get("/analytics/user-sessions", requireAuth, requireAdmin, async (re
           totalSearches: 0,
           totalDuration: 0,
           lastSeen: null,
-          devices: new Set()
+          firstSeen: null,
+          devices: new Set(),
+          browsers: new Set(),
+          osSystems: new Set(),
+          sources: new Set(),
+          sessions: []
         });
       }
       const u = userMap.get(key);
@@ -1822,13 +1827,35 @@ adminRouter.get("/analytics/user-sessions", requireAuth, requireAdmin, async (re
       u.totalSearches += s.searches;
       u.totalDuration += s.durationSeconds;
       u.devices.add(s.deviceType);
+      u.browsers.add(s.browserName);
+      u.osSystems.add(s.osName);
+      if (s.source) u.sources.add(s.source);
+      u.sessions.push({
+        sessionId: s.sessionId,
+        start: s.sessionStart,
+        duration: s.durationSeconds,
+        deviceType: s.deviceType,
+        browserName: s.browserName,
+        osName: s.osName,
+        source: s.source,
+        events: s.totalEvents,
+        pageViews: s.pageViews,
+        productViews: s.productViews,
+        cartAdds: s.cartAdds,
+        checkouts: s.checkouts,
+        searches: s.searches,
+        timeline: s.timeline
+      });
       if (!u.lastSeen || new Date(s.sessionEnd) > new Date(u.lastSeen)) {
         u.lastSeen = s.sessionEnd;
+      }
+      if (!u.firstSeen || new Date(s.sessionStart) < new Date(u.firstSeen)) {
+        u.firstSeen = s.sessionStart;
       }
     }
     const users = [...userMap.values()]
       .sort((a, b) => b.totalEvents - a.totalEvents)
-      .map((u) => ({ ...u, devices: [...u.devices] }));
+      .map((u) => ({ ...u, devices: [...u.devices], browsers: [...u.browsers], osSystems: [...u.osSystems], sources: [...u.sources] }));
 
     return res.json({
       range: {

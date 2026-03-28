@@ -1590,6 +1590,10 @@ export default function AdminPanel({
   const [userActivityFilter, setUserActivityFilter] = useState("all");
   const [isUserActivityFilterOpen, setIsUserActivityFilterOpen] = useState(false);
   const [userActivityTab, setUserActivityTab] = useState("sessions");
+  const [userActivityDateFrom, setUserActivityDateFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
+  });
+  const [userActivityDateTo, setUserActivityDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const userActivityFilterRef = useRef(null);
   const [removingCategoryProductId, setRemovingCategoryProductId] = useState(null);
   const [categoryRemovalUndo, setCategoryRemovalUndo] = useState(null);
@@ -4367,8 +4371,7 @@ export default function AdminPanel({
     setIsUserActivityOpen(true);
     setIsUserActivityLoading(true);
     try {
-      const periodOrRange = analyticsDateRange || analyticsPeriod || "30d";
-      const data = await onFetchUserSessions(periodOrRange);
+      const data = await onFetchUserSessions({ from: userActivityDateFrom, to: userActivityDateTo });
       const hasRealSessions = Array.isArray(data?.sessions) && data.sessions.length > 0;
       setUserActivityData(hasRealSessions ? data : generateMockUserSessions());
     } catch {
@@ -4381,8 +4384,7 @@ export default function AdminPanel({
   async function handleRefreshUserActivity() {
     setIsUserActivityLoading(true);
     try {
-      const periodOrRange = analyticsDateRange || analyticsPeriod || "30d";
-      const data = await onFetchUserSessions(periodOrRange);
+      const data = await onFetchUserSessions({ from: userActivityDateFrom, to: userActivityDateTo });
       const hasRealSessions = Array.isArray(data?.sessions) && data.sessions.length > 0;
       setUserActivityData(hasRealSessions ? data : generateMockUserSessions());
     } catch {
@@ -7563,6 +7565,17 @@ export default function AdminPanel({
                           <h2>Actividad de Usuarios</h2>
                           <p>Análisis detallado del comportamiento de usuarios en tu sitio</p>
                         </div>
+                        <div className="admin-user-activity-date-range">
+                          <AnalyticsDatePicker
+                            value="30d"
+                            disabled={isUserActivityLoading}
+                            onChange={(range) => {
+                              if (range?.from) setUserActivityDateFrom(new Date(range.from).toISOString().slice(0, 10));
+                              if (range?.to) setUserActivityDateTo(new Date(range.to).toISOString().slice(0, 10));
+                              setTimeout(handleRefreshUserActivity, 50);
+                            }}
+                          />
+                        </div>
                         <div className="admin-user-activity-header-actions">
                           <div className="admin-user-activity-filter-dropdown" ref={userActivityFilterRef}>
                             <button
@@ -7621,66 +7634,15 @@ export default function AdminPanel({
                               ].map((step, i) => (
                                 <div key={i} className="admin-user-activity-funnel-step">
                                   <div className="admin-user-activity-funnel-icon">{step.icon}</div>
-                                  <span className="admin-user-activity-funnel-value">{formatAnalyticsNumber(step.value)}</span>
-                                  <span className="admin-user-activity-funnel-label">{step.label}</span>
-                                  {step.rate !== null && <span className="admin-user-activity-funnel-rate">{step.rate}%</span>}
+                                  <div className="admin-user-activity-funnel-text">
+                                    <span className="admin-user-activity-funnel-value">{formatAnalyticsNumber(step.value)}</span>
+                                    <span className="admin-user-activity-funnel-label">{step.label}</span>
+                                    {step.rate !== null && <span className="admin-user-activity-funnel-rate">{step.rate}%</span>}
+                                  </div>
                                 </div>
                               ))}
                             </div>
                           )}
-
-                          {/* ── Summary cards ── */}
-                          <div className="admin-user-activity-summary-grid">
-                            <article className="admin-user-activity-summary-card">
-                              <span className="admin-user-activity-summary-icon">📊</span>
-                              <div>
-                                <strong>{formatAnalyticsNumber(userActivityData.summary?.totalSessions || 0)}</strong>
-                                <span>Sesiones totales</span>
-                              </div>
-                            </article>
-                            <article className="admin-user-activity-summary-card">
-                              <span className="admin-user-activity-summary-icon">🔐</span>
-                              <div>
-                                <strong>{formatAnalyticsNumber(userActivityData.summary?.loggedInSessions || 0)}</strong>
-                                <span>Sesiones logueadas</span>
-                              </div>
-                            </article>
-                            <article className="admin-user-activity-summary-card">
-                              <span className="admin-user-activity-summary-icon">👤</span>
-                              <div>
-                                <strong>{formatAnalyticsNumber(userActivityData.summary?.anonymousSessions || 0)}</strong>
-                                <span>Sesiones anónimas</span>
-                              </div>
-                            </article>
-                            <article className="admin-user-activity-summary-card">
-                              <span className="admin-user-activity-summary-icon">⏱️</span>
-                              <div>
-                                <strong>{formatAnalyticsDuration(userActivityData.summary?.avgDurationSeconds || 0)}</strong>
-                                <span>Duración promedio</span>
-                              </div>
-                            </article>
-                            <article className="admin-user-activity-summary-card">
-                              <span className="admin-user-activity-summary-icon">🛒</span>
-                              <div>
-                                <strong>{formatAnalyticsNumber(userActivityData.summary?.totalCartAdds || 0)}</strong>
-                                <span>Agregados al carrito</span>
-                              </div>
-                            </article>
-                            <article className="admin-user-activity-summary-card">
-                              <span className="admin-user-activity-summary-icon">👁️</span>
-                              <div>
-                                <strong>{formatAnalyticsNumber(userActivityData.summary?.totalProductViews || 0)}</strong>
-                                <span>Productos vistos</span>
-                              </div>
-                            </article>
-                            <article className="admin-user-activity-summary-card">
-                              <span className="admin-user-activity-summary-icon">💳</span>
-                              <div>
-                                <strong>{formatAnalyticsNumber(userActivityData.summary?.totalCheckouts || 0)}</strong>
-                                <span>Inicios de checkout</span>
-                              </div>
-                            </article>
-                          </div>
 
                           {/* ── Tabs ── */}
                           <div className="admin-user-activity-tabs">
@@ -7694,6 +7656,9 @@ export default function AdminPanel({
                               📊 Insights
                             </button>
                           </div>
+
+                          {/* ── Tab content wrapper ── */}
+                          <div className="admin-user-activity-tab-body">
 
                           {/* ── Tab: Sesiones ── */}
                           {userActivityTab === "sessions" && (
@@ -7862,44 +7827,144 @@ export default function AdminPanel({
                                 })
                                 .map((user, i) => {
                                   const shortId = user.visitorId ? user.visitorId.slice(-6).toUpperCase() : "???";
+                                  const isExpanded = expandedSessionId === user.key;
+                                  const deviceLabel = (d) => d === "mobile" ? "📱 Móvil" : d === "tablet" ? "📟 Tablet" : "💻 Escritorio";
                                   return (
-                                    <article key={user.key || i} className="admin-user-activity-user-card">
-                                      <div className={`admin-user-activity-user-avatar${user.isLoggedIn ? "" : " is-anonymous"}`}>
-                                        {user.isLoggedIn
-                                          ? (user.userName || user.userEmail || "U").charAt(0).toUpperCase()
-                                          : "#"}
+                                    <article key={user.key || i} className={`admin-user-activity-user-card${isExpanded ? " is-expanded" : ""}`}>
+                                      <div className="admin-user-activity-user-card-header" onClick={() => setExpandedSessionId(isExpanded ? null : user.key)}>
+                                        <div className={`admin-user-activity-user-avatar${user.isLoggedIn ? "" : " is-anonymous"}`}>
+                                          {user.isLoggedIn
+                                            ? (user.userName || user.userEmail || "U").charAt(0).toUpperCase()
+                                            : "#"}
+                                        </div>
+                                        <div className="admin-user-activity-user-info">
+                                          <p className="admin-user-activity-user-name">
+                                            {user.isLoggedIn ? (user.userName || user.userEmail || `Usuario #${user.userId}`) : `Visitante #${shortId}`}
+                                          </p>
+                                          <p className="admin-user-activity-user-email">
+                                            {user.isLoggedIn && user.userEmail ? user.userEmail : `${(user.devices || []).map((d) => d === "mobile" ? "📱" : d === "tablet" ? "📟" : "💻").join(" ")} · ${user.sessionCount} ${user.sessionCount === 1 ? "sesión" : "sesiones"}`}
+                                          </p>
+                                        </div>
+                                        <div className="admin-user-activity-user-stats">
+                                          <div className="admin-user-activity-user-stat">
+                                            <strong>{user.sessionCount}</strong>
+                                            <span>Sesiones</span>
+                                          </div>
+                                          <div className="admin-user-activity-user-stat">
+                                            <strong>{user.totalEvents}</strong>
+                                            <span>Clics</span>
+                                          </div>
+                                          <div className="admin-user-activity-user-stat">
+                                            <strong>{user.totalProductViews}</strong>
+                                            <span>Productos</span>
+                                          </div>
+                                          <div className="admin-user-activity-user-stat">
+                                            <strong>{user.totalCartAdds}</strong>
+                                            <span>Carrito</span>
+                                          </div>
+                                          <div className="admin-user-activity-user-stat">
+                                            <strong>{user.totalCheckouts}</strong>
+                                            <span>Checkout</span>
+                                          </div>
+                                        </div>
+                                        <span className="admin-user-activity-session-chevron">{isExpanded ? "▲" : "▼"}</span>
                                       </div>
-                                      <div className="admin-user-activity-user-info">
-                                        <p className="admin-user-activity-user-name">
-                                          {user.isLoggedIn ? (user.userName || user.userEmail || `Usuario #${user.userId}`) : `Visitante #${shortId}`}
-                                        </p>
-                                        <p className="admin-user-activity-user-email">
-                                          {user.isLoggedIn && user.userEmail ? user.userEmail : `${user.devices?.join(", ") || "desktop"} · ${user.sessionCount} ${user.sessionCount === 1 ? "sesión" : "sesiones"}`}
-                                          {user.lastSeen && ` · Última vez: ${formatCustomerDateTime(user.lastSeen)}`}
-                                        </p>
-                                      </div>
-                                      <div className="admin-user-activity-user-stats">
-                                        <div className="admin-user-activity-user-stat">
-                                          <strong>{user.sessionCount}</strong>
-                                          <span>Sesiones</span>
+
+                                      {isExpanded && (
+                                        <div className="admin-user-activity-user-detail">
+                                          {/* Perfil del usuario */}
+                                          <div className="admin-user-activity-user-profile-grid">
+                                            <div className="admin-user-activity-user-profile-item">
+                                              <span className="admin-user-activity-user-profile-label">Dispositivos</span>
+                                              <span className="admin-user-activity-user-profile-value">{(user.devices || []).map((d) => deviceLabel(d)).join(", ") || "—"}</span>
+                                            </div>
+                                            <div className="admin-user-activity-user-profile-item">
+                                              <span className="admin-user-activity-user-profile-label">Navegadores</span>
+                                              <span className="admin-user-activity-user-profile-value">{(user.browsers || []).join(", ") || "—"}</span>
+                                            </div>
+                                            <div className="admin-user-activity-user-profile-item">
+                                              <span className="admin-user-activity-user-profile-label">Sistema operativo</span>
+                                              <span className="admin-user-activity-user-profile-value">{(user.osSystems || []).join(", ") || "—"}</span>
+                                            </div>
+                                            <div className="admin-user-activity-user-profile-item">
+                                              <span className="admin-user-activity-user-profile-label">Fuentes</span>
+                                              <span className="admin-user-activity-user-profile-value">{(user.sources || []).join(", ") || "directo"}</span>
+                                            </div>
+                                            <div className="admin-user-activity-user-profile-item">
+                                              <span className="admin-user-activity-user-profile-label">Primera visita</span>
+                                              <span className="admin-user-activity-user-profile-value">{user.firstSeen ? formatCustomerDateTime(user.firstSeen) : "—"}</span>
+                                            </div>
+                                            <div className="admin-user-activity-user-profile-item">
+                                              <span className="admin-user-activity-user-profile-label">Última visita</span>
+                                              <span className="admin-user-activity-user-profile-value">{user.lastSeen ? formatCustomerDateTime(user.lastSeen) : "—"}</span>
+                                            </div>
+                                            <div className="admin-user-activity-user-profile-item">
+                                              <span className="admin-user-activity-user-profile-label">Tiempo total</span>
+                                              <span className="admin-user-activity-user-profile-value">{formatAnalyticsDuration(user.totalDuration)}</span>
+                                            </div>
+                                            <div className="admin-user-activity-user-profile-item">
+                                              <span className="admin-user-activity-user-profile-label">Búsquedas</span>
+                                              <span className="admin-user-activity-user-profile-value">{user.totalSearches}</span>
+                                            </div>
+                                          </div>
+
+                                          {/* Sesiones del usuario */}
+                                          <h4 className="admin-user-activity-user-sessions-title">Historial de sesiones</h4>
+                                          <div className="admin-user-activity-user-sessions-list">
+                                            {(user.sessions || []).map((sess, si) => (
+                                              <div key={sess.sessionId || si} className="admin-user-activity-user-session-row">
+                                                <div className="admin-user-activity-user-session-meta">
+                                                  <span>{sess.deviceType === "mobile" ? "📱" : sess.deviceType === "tablet" ? "📟" : "💻"} {sess.browserName} · {sess.osName}</span>
+                                                  <span>📅 {formatCustomerDateTime(sess.start)}</span>
+                                                  <span>⏱️ {formatAnalyticsDuration(sess.duration)}</span>
+                                                  {sess.source && sess.source !== "directo" && <span>🔗 {sess.source}</span>}
+                                                </div>
+                                                <div className="admin-user-activity-user-session-pills">
+                                                  {sess.pageViews > 0 && <span className="admin-user-activity-action-pill pv">👁️ {sess.pageViews}</span>}
+                                                  {sess.productViews > 0 && <span className="admin-user-activity-action-pill prod">🔍 {sess.productViews}</span>}
+                                                  {sess.cartAdds > 0 && <span className="admin-user-activity-action-pill cart">🛒 {sess.cartAdds}</span>}
+                                                  {sess.searches > 0 && <span className="admin-user-activity-action-pill search">🔎 {sess.searches}</span>}
+                                                  {sess.checkouts > 0 && <span className="admin-user-activity-action-pill checkout">💳 {sess.checkouts}</span>}
+                                                </div>
+                                                {/* Timeline de la sesión */}
+                                                {(sess.timeline || []).length > 0 && (
+                                                  <div className="admin-user-activity-timeline" style={{ marginTop: 8, paddingLeft: 8 }}>
+                                                    <div className="admin-user-activity-timeline-line" />
+                                                    {(sess.timeline).map((event, ei) => (
+                                                      <div key={ei} className="admin-user-activity-timeline-event">
+                                                        <div className={`admin-user-activity-timeline-dot ${event.eventType}`} />
+                                                        <div className="admin-user-activity-timeline-content">
+                                                          <div className="admin-user-activity-timeline-event-header">
+                                                            <span className="admin-user-activity-timeline-event-type">
+                                                              {event.eventType === "page_view" ? "👁️ Vista"
+                                                                : event.eventType === "product_view" ? "🔍 Producto"
+                                                                : event.eventType === "add_to_cart" ? "🛒 Carrito"
+                                                                : event.eventType === "search" ? "🔎 Búsqueda"
+                                                                : event.eventType === "begin_checkout" ? "💳 Checkout"
+                                                                : event.eventType === "category_select" ? "🗂️ Categoría"
+                                                                : `⚡ ${event.eventType}`}
+                                                            </span>
+                                                            <time className="admin-user-activity-timeline-time">
+                                                              {new Date(event.at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                                                            </time>
+                                                          </div>
+                                                          {(event.metadata?.productName || event.metadata?.query || event.metadata?.categoryName) && (
+                                                            <div className="admin-user-activity-timeline-details">
+                                                              {event.metadata?.productName && <span className="admin-user-activity-timeline-product">🏷️ {event.metadata.productName}</span>}
+                                                              {event.metadata?.query && <span className="admin-user-activity-timeline-search">"{event.metadata.query}"</span>}
+                                                              {event.metadata?.categoryName && <span className="admin-user-activity-timeline-category">{event.metadata.categoryName}</span>}
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
                                         </div>
-                                        <div className="admin-user-activity-user-stat">
-                                          <strong>{user.totalEvents}</strong>
-                                          <span>Eventos</span>
-                                        </div>
-                                        <div className="admin-user-activity-user-stat">
-                                          <strong>{user.totalPageViews}</strong>
-                                          <span>Vistas</span>
-                                        </div>
-                                        <div className="admin-user-activity-user-stat">
-                                          <strong>{user.totalCartAdds}</strong>
-                                          <span>Carrito</span>
-                                        </div>
-                                        <div className="admin-user-activity-user-stat">
-                                          <strong>{user.totalCheckouts}</strong>
-                                          <span>Checkout</span>
-                                        </div>
-                                      </div>
+                                      )}
                                     </article>
                                   );
                                 })}
@@ -8067,6 +8132,8 @@ export default function AdminPanel({
                               </div>
                             </div>
                           )}
+
+                          </div>{/* end admin-user-activity-tab-body */}
                         </>
                       )}
                     </div>

@@ -6806,9 +6806,8 @@ html {
   backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 30px 20px;
-  overflow-y: auto;
+  align-items: center;
+  padding: 16px 20px;
   animation: fadeInOverlay 0.2s ease-out;
 }
 
@@ -6819,12 +6818,16 @@ html {
 
 .admin-user-activity-panel {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1200px;
+  height: calc(100vh - 32px);
+  max-height: 960px;
   background: #fafbfd;
   border-radius: 20px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(37, 99, 235, 0.1);
   animation: slideUpPanel 0.3s ease-out;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes slideUpPanel {
@@ -6834,26 +6837,53 @@ html {
 
 .admin-user-activity-header {
   background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
-  padding: 22px 28px;
+  padding: 14px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .admin-user-activity-header-left h2 {
   color: #fff;
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 800;
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   letter-spacing: -0.02em;
 }
 
 .admin-user-activity-header-left p {
   color: rgba(255, 255, 255, 0.78);
-  font-size: 0.84rem;
+  font-size: 0.76rem;
   font-weight: 500;
   margin: 0;
+}
+
+.admin-user-activity-date-range {
+  flex-shrink: 0;
+}
+.admin-user-activity-date-range .adp-trigger {
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.35);
+  color: #fff;
+  border-radius: 10px;
+}
+.admin-user-activity-date-range .adp-trigger:hover {
+  background: rgba(255,255,255,0.28);
+}
+.admin-user-activity-date-range .adp-trigger-icon,
+.admin-user-activity-date-range .adp-trigger-chevron {
+  color: rgba(255,255,255,0.85);
+}
+.admin-user-activity-date-range .adp-trigger-text {
+  color: #fff;
+  font-weight: 600;
+}
+.admin-user-activity-date-range .adp-dropdown {
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  z-index: 10001;
 }
 
 .admin-user-activity-header-actions {
@@ -7109,7 +7139,7 @@ html {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 60vh;
+  flex: 1;
   overflow-y: auto;
 }
 
@@ -7119,6 +7149,7 @@ html {
   border-radius: 14px;
   overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.15s;
+  flex-shrink: 0;
 }
 
 .admin-user-activity-session-card:hover {
@@ -20606,69 +20637,85 @@ body:has(.checkout-details-view) .site-footer {
 /* ─── Enhanced User Activity: Funnel ─── */
 .admin-user-activity-funnel {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 0;
-  padding: 20px 24px;
+  padding: 10px 24px;
   background: linear-gradient(135deg, #f0f7ff 0%, #dbeafe 100%);
   border-bottom: 1px solid #bfdbfe;
 }
 .admin-user-activity-funnel-step {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
   position: relative;
-  padding: 12px 8px;
+  padding: 6px 8px;
 }
 .admin-user-activity-funnel-step:not(:last-child)::after {
   content: "";
   position: absolute;
   right: -6px;
   top: 50%;
-  transform: translateY(-50%);
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-right: 2px solid #93c5fd;
   border-bottom: 2px solid #93c5fd;
   transform: translateY(-50%) rotate(-45deg);
   z-index: 1;
 }
 .admin-user-activity-funnel-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: #fff;
+  flex-shrink: 0;
 }
 .admin-user-activity-funnel-step:nth-child(1) .admin-user-activity-funnel-icon { background: linear-gradient(135deg, #2563eb, #60a5fa); }
 .admin-user-activity-funnel-step:nth-child(2) .admin-user-activity-funnel-icon { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
 .admin-user-activity-funnel-step:nth-child(3) .admin-user-activity-funnel-icon { background: linear-gradient(135deg, #2563eb, #1e40af); }
 .admin-user-activity-funnel-step:nth-child(4) .admin-user-activity-funnel-icon { background: linear-gradient(135deg, #1d4ed8, #2563eb); }
 .admin-user-activity-funnel-step:nth-child(5) .admin-user-activity-funnel-icon { background: linear-gradient(135deg, #059669, #10b981); }
+.admin-user-activity-funnel-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
 .admin-user-activity-funnel-value {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 800;
   color: #1e1b4b;
   letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 .admin-user-activity-funnel-label {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: #6b7280;
-  text-align: center;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 .admin-user-activity-funnel-rate {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 600;
   color: #2563eb;
   background: rgba(37,99,235,0.08);
-  padding: 2px 8px;
+  padding: 1px 6px;
   border-radius: 20px;
+  align-self: flex-start;
+}
+
+/* ─── Enhanced User Activity: Tab Body (scrollable content area) ─── */
+.admin-user-activity-tab-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ─── Enhanced User Activity: Tab Bar ─── */
@@ -20680,8 +20727,8 @@ body:has(.checkout-details-view) .site-footer {
   background: #fff;
 }
 .admin-user-activity-tab {
-  padding: 12px 20px;
-  font-size: 0.88rem;
+  padding: 8px 18px;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #6b7280;
   background: none;
@@ -20704,7 +20751,7 @@ body:has(.checkout-details-view) .site-footer {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: calc(100vh - 380px);
+  flex: 1;
   overflow-y: auto;
 }
 .admin-user-activity-user-card {
@@ -20713,10 +20760,10 @@ body:has(.checkout-details-view) .site-footer {
   border-radius: 14px;
   padding: 16px 18px;
   display: flex;
-  align-items: center;
-  gap: 14px;
-  cursor: pointer;
+  flex-direction: column;
+  gap: 0;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 .admin-user-activity-user-card:hover {
   border-color: #93c5fd;
@@ -20774,13 +20821,110 @@ body:has(.checkout-details-view) .site-footer {
   color: #9ca3af;
 }
 
+/* ─── Enhanced User Activity: Expandable User Cards ─── */
+.admin-user-activity-user-card.is-expanded {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 20px rgba(37,99,235,0.10);
+}
+.admin-user-activity-user-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  cursor: pointer;
+}
+.admin-user-activity-user-card-header .admin-user-activity-user-stats {
+  margin-left: auto;
+}
+.admin-user-activity-user-detail {
+  width: 100%;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #e5e7eb;
+  animation: fadeSlideDown .2s ease;
+}
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.admin-user-activity-user-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+  margin-bottom: 18px;
+}
+.admin-user-activity-user-profile-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-user-activity-user-profile-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.admin-user-activity-user-profile-value {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+.admin-user-activity-user-sessions-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #374151;
+  margin: 0 0 10px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.admin-user-activity-user-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.admin-user-activity-user-session-row {
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.admin-user-activity-user-session-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.admin-user-activity-user-session-meta strong {
+  color: #374151;
+  font-weight: 700;
+}
+.admin-user-activity-user-session-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.admin-user-activity-user-session-pills .admin-user-activity-pill {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+
 /* ─── Enhanced User Activity: Demographics ─── */
 .admin-user-activity-demographics {
   padding: 16px 24px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
-  max-height: calc(100vh - 380px);
+  flex: 1;
   overflow-y: auto;
 }
 .admin-user-activity-demo-card {
