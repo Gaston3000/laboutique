@@ -1,22 +1,27 @@
 import { Router } from "express";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { query } from "../db.js";
 
 const aiRouter = Router();
 
-let openai = null;
-function getOpenAI() {
-  if (!openai) {
-    if (!process.env.OPENAI_API_KEY) {
+let anthropic = null;
+function getAnthropic() {
+  if (!anthropic) {
+    if (!process.env.ANTHROPIC_API_KEY) {
       return null;
     }
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   }
-  return openai;
+  return anthropic;
 }
 
 function buildProductCatalog(products) {
-  return products.map((p) => `[${p.id}] ${p.name} — ${p.brand || "Sin marca"} — $${Number(p.price_ars).toLocaleString("es-AR")} — Cat: ${(p.categories || []).join(", ") || "General"} — Stock: ${p.stock}`).join("\n");
+  return products
+    .map(
+      (p) =>
+        `[${p.id}] ${p.name} — ${p.brand || "Sin marca"} — $${Number(p.price_ars).toLocaleString("es-AR")} — Cat: ${(p.categories || []).join(", ") || "General"} — Stock: ${p.stock}`
+    )
+    .join("\n");
 }
 
 const SYSTEM_PROMPT = `Sos un asistente de compras de "La Boutique de la Limpieza", un ecommerce argentino de productos de limpieza, perfumería y hogar.
@@ -58,7 +63,7 @@ aiRouter.post("/smart-order", async (req, res) => {
     return res.status(400).json({ error: "El mensaje es demasiado largo (máx. 500 caracteres)" });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(503).json({ error: "El servicio de IA no está configurado" });
   }
 
@@ -72,21 +77,21 @@ aiRouter.post("/smart-order", async (req, res) => {
 
     const catalog = buildProductCatalog(productsResult.rows);
 
-    const completion = await getOpenAI().chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.3,
+    const client = getAnthropic();
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5",
       max_tokens: 800,
-      messages: [
-        { role: "system", content: `${SYSTEM_PROMPT}\n\nCATÁLOGO DISPONIBLE:\n${catalog}` },
-        { role: "user", content: userMessage }
-      ]
+      system: `${SYSTEM_PROMPT}\n\nCATÁLOGO DISPONIBLE:\n${catalog}`,
+      messages: [{ role: "user", content: userMessage }]
     });
 
-    const raw = completion.choices[0]?.message?.content || "";
+    const raw = response.content[0]?.type === "text" ? response.content[0].text : "";
 
     let parsed;
     try {
-      parsed = JSON.parse(raw);
+      // Strip markdown code blocks if present
+      const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+      parsed = JSON.parse(cleaned);
     } catch {
       return res.json({ message: raw, products: [] });
     }

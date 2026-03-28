@@ -1596,6 +1596,10 @@ function App() {
       return;
     }
 
+    if (activeSection === "account") {
+      refreshMyOrders(auth.token).catch(() => {});
+    }
+
     if (auth.user.role === "admin") {
       if (activeSection !== "admin") {
         return;
@@ -1632,8 +1636,6 @@ function App() {
         setAuthError("Tu sesión venció o es inválida. Volvé a iniciar sesión.");
       }
     });
-
-    refreshMyOrders(auth.token).catch(() => {});
   }, [auth.token, auth.user?.id, auth.user?.role, activeSection]);
 
   useEffect(() => {

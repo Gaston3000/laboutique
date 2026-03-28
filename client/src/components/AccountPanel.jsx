@@ -831,19 +831,13 @@ export default function AccountPanel({
     <section className="account-view" aria-label="Mi cuenta">
       <header className="account-view-header">
         <h1>Mi cuenta</h1>
-        <div className="account-top-actions">
-          <button type="button" className="secondary-btn" onClick={onGoHome}>
-            Volver al inicio
-          </button>
-          <button type="button" className="secondary-btn" onClick={onGoCart}>
-            Ir al carrito
-          </button>
-          {isAdmin && (
+        {isAdmin && (
+          <div className="account-top-actions">
             <button type="button" className="secondary-btn" onClick={onGoAdmin}>
               Panel admin
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </header>
 
       {isAdmin && (

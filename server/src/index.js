@@ -38,6 +38,7 @@ function validateRequiredEnvVars() {
     { key: "MERCADOPAGO_WEBHOOK_SECRET", fatal: false },
     { key: "RESEND_API_KEY",             fatal: false },
     { key: "CLIENT_URL",                 fatal: false },
+    { key: "ANTHROPIC_API_KEY",          fatal: false },
   ];
 
   let hasFatal = false;
